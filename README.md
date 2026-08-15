@@ -56,4 +56,5 @@ some require every participant's consent. Only record where you lawfully may.
 
 ## License
 
-[MIT](LICENSE) © 2026 Doug Hatcher
+Copyright © 2026 Doug Hatcher. All rights reserved. This source is private and
+not licensed for redistribution — see [LICENSE](LICENSE).

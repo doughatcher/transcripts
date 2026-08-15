@@ -1,0 +1,25 @@
+Transcripts — third-party components
+====================================
+
+The iOS app has no third-party dependencies. The list below applies to the
+macOS build only.
+
+FluidAudio — https://github.com/FluidInference/FluidAudio
+    Speaker diarization. NOTE: the Core ML model weights it downloads are
+    licensed separately from the library, and their terms must be confirmed
+    before commercial distribution. See docs/APP-STORE.md.
+
+mlx-swift, mlx-swift-examples — https://github.com/ml-explore
+    MIT. In-process LLM inference for the summarization tier.
+
+swift-transformers, swift-jinja — https://github.com/huggingface
+    Apache License 2.0. Requires this NOTICE to be preserved.
+
+swift-collections, swift-numerics — https://github.com/apple
+    Apache License 2.0.
+
+GzipSwift — https://github.com/1024jp/GzipSwift
+    zlib/BSD.
+
+Models downloaded at runtime (macOS only) carry their own terms; a model is not
+covered by the licence of the library that loads it.

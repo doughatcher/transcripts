@@ -73,5 +73,6 @@ date. Because the app collects nothing, changes are expected to be rare.
 
 Questions about this policy: **superterran@gmail.com**
 
-Transcripts is open source. If you would rather verify this than take our word
-for it, the source is available and contains no networking code.
+Everything above is a description of how the app is built, not a promise about
+how it is operated — there is no server to operate. If any of it ever stops
+being true, it will stop being true here first.

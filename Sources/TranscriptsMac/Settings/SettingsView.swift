@@ -565,17 +565,14 @@ struct SettingsView: View {
 struct AboutTab: View {
     @EnvironmentObject private var controller: AppController
 
-    private static let repoURL = URL(string: "https://github.com/hatcher-ltd/transcripts")!
-    private static let issuesURL = URL(string: "https://github.com/hatcher-ltd/transcripts/issues")!
-    /// Fine-grained PAT creation, pre-named/described. (GitHub can't pre-set the
-    /// repo/permission from the URL — those are spelled out in the UI steps.)
-    private static let contributingURL = URL(string: "https://github.com/hatcher-ltd/transcripts/blob/main/CONTRIBUTING.md")!
-    private static let contributorsURL = URL(string: "https://github.com/hatcher-ltd/transcripts/graphs/contributors")!
+    // The source is private, so nothing here links to a repository — a "source
+    // code" button onto a 404 is worse than no button. Support is a mail link
+    // rather than an issue tracker for the same reason.
+    private static let siteURL = URL(string: "https://transcripts.hatcher.ltd")!
+    private static let guideURL = URL(string: "https://transcripts.hatcher.ltd/guide")!
+    private static let supportURL = URL(string: "mailto:support@hatcher.ltd?subject=Transcripts")!
 
     private static let author = "Doug Hatcher"
-    /// Curated contributor names beyond the primary author; the GitHub link below
-    /// mirrors the live list.
-    private static let contributors = ["Tyler Craft"]
 
     private var version: String {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
@@ -599,11 +596,9 @@ struct AboutTab: View {
                 Toggle("Ride the beta train — offer pre-release builds", isOn: Binding(
                     get: { controller.config.includePrereleases },
                     set: { controller.config.includePrereleases = $0 }))
-                Text("Update checks will include pre-releases (e.g. 0.8.1-beta.1) before they're blessed as stable. Betas are field-tested by the authors first, but expect rough edges.")
+                Text("Update checks will include pre-releases (e.g. 0.8.1-beta.1) before they're blessed as stable. Betas are field-tested first, but expect rough edges.")
                     .font(.caption2).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-
-                Text("Built by **Hatcher**. Internal tool — not for external distribution.")
 
                 GroupBox {
                     VStack(alignment: .leading, spacing: 10) {
@@ -625,7 +620,7 @@ struct AboutTab: View {
                             bullet("A local Ollama server is used for summaries only if you explicitly run one.")
                             bullet("Recordings and transcripts are stored locally — in your knowledge vault and under ~/Library/Application Support/Transcripts. Nothing leaves your Mac unless you move it.")
                             bullet("Microphone and Screen Recording access are granted by you via macOS; Transcripts never bypasses those prompts.")
-                            bullet("Open source and auditable — review every line at the link below.")
+                            bullet("No accounts, no analytics, no telemetry. The only network request Transcripts makes on its own is the update check.")
                         }
                     }
                     .padding(.vertical, 4)
@@ -634,22 +629,19 @@ struct AboutTab: View {
 
                 GroupBox {
                     VStack(alignment: .leading, spacing: 10) {
-                        Label("Open source", systemImage: "person.2")
+                        Label("About", systemImage: "info.circle")
                             .font(.headline)
-                        Text("Author: \(Self.author)   ·   Contributors: \(Self.contributors.joined(separator: ", "))")
+                        Text("Transcripts is made by \(Self.author).")
                             .font(.callout)
                         HStack(spacing: 18) {
-                            Link(destination: Self.repoURL) {
-                                Label("Source code", systemImage: "chevron.left.forwardslash.chevron.right")
+                            Link(destination: Self.siteURL) {
+                                Label("Website", systemImage: "globe")
                             }
-                            Link(destination: Self.issuesURL) {
-                                Label("Report an issue", systemImage: "ladybug")
+                            Link(destination: Self.guideURL) {
+                                Label("User guide", systemImage: "book")
                             }
-                            Link(destination: Self.contributingURL) {
-                                Label("Contribution guide", systemImage: "hands.sparkles")
-                            }
-                            Link(destination: Self.contributorsURL) {
-                                Label("All contributors", systemImage: "person.3")
+                            Link(destination: Self.supportURL) {
+                                Label("Support", systemImage: "envelope")
                             }
                         }
                         .padding(.top, 2)
