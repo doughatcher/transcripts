@@ -111,7 +111,16 @@ else
   echo "▶ Skipping notarization (NOTARIZE=0) — NOT publishable"
 fi
 
-# --- 4. Zip + checksum -------------------------------------------------------
+# --- 4. Site first, THEN artifacts into it -----------------------------------
+# Order matters and got this wrong once: build.py wipes site/public before
+# rendering, so writing the zip and the appcast first meant the site build
+# deleted both — deploying a page whose download button 404s. The site is
+# rendered first now, and the artifacts land in the finished directory.
+echo "▶ Building site"
+python3 site/build.py >/dev/null
+echo "  ✓ site rendered"
+
+# --- 5. Zip + checksum -------------------------------------------------------
 mkdir -p "$SITE"
 ZIP="$SITE/$ZIP_NAME"
 rm -f "$ZIP"
@@ -120,7 +129,7 @@ SHA="$(shasum -a 256 "$ZIP" | awk '{print $1}')"
 SIZE="$(stat -f%z "$ZIP")"
 echo "▶ $ZIP_NAME — $(( SIZE / 1024 / 1024 )) MB, sha256 ${SHA:0:16}…"
 
-# --- 5. Appcast --------------------------------------------------------------
+# --- 6. Appcast --------------------------------------------------------------
 # Read by the in-app updater AND the Homebrew cask. Notes come from the guide's
 # changelog if present, so release notes are written where the docs live.
 NOTES="$(sed -n "/^## $VERSION\$/,/^## /p" docs/guide/changelog.md 2>/dev/null | sed '1d;$d' | sed 's/"/\\"/g' | tr '\n' ' ' || true)"
@@ -141,7 +150,7 @@ echo "  ✓ appcast.json"
 # Stable alias so the site's download button never needs editing.
 cp "$ZIP" "$SITE/$APP_NAME-macos.zip"
 
-# --- 6. Homebrew cask --------------------------------------------------------
+# --- 7. Homebrew cask --------------------------------------------------------
 # Written here rather than hand-maintained in the tap, so the checksum can never
 # disagree with the artifact it describes.
 mkdir -p "$ROOT/dist"
@@ -175,10 +184,6 @@ cask "transcripts" do
 end
 RUBY
 echo "  ✓ dist/transcripts.rb"
-
-# --- 7. Site -----------------------------------------------------------------
-python3 site/build.py >/dev/null
-echo "  ✓ site rebuilt"
 
 cat <<DONE
 
