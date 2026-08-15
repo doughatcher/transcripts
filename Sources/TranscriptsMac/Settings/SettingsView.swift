@@ -571,6 +571,10 @@ struct AboutTab: View {
     private static let siteURL = URL(string: "https://transcripts.hatcher.ltd")!
     private static let guideURL = URL(string: "https://transcripts.hatcher.ltd/guide")!
     private static let supportURL = URL(string: "mailto:support@hatcher.ltd?subject=Transcripts")!
+    /// Public tracker. The source is private, so this is a repository with no
+    /// code in it — reporters can still see what is already known rather than
+    /// each discovering it alone down a mail thread.
+    private static let issuesURL = URL(string: "https://github.com/hatcher-ltd/transcripts-support/issues")!
 
     private static let author = "Doug Hatcher"
 
@@ -639,6 +643,9 @@ struct AboutTab: View {
                             }
                             Link(destination: Self.guideURL) {
                                 Label("User guide", systemImage: "book")
+                            }
+                            Link(destination: Self.issuesURL) {
+                                Label("Report an issue", systemImage: "ladybug")
                             }
                             Link(destination: Self.supportURL) {
                                 Label("Support", systemImage: "envelope")

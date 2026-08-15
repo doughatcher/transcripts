@@ -23,6 +23,23 @@ ROOT = Path(__file__).resolve().parent.parent
 GUIDE_SRC = ROOT / "docs" / "guide"
 OUT = ROOT / "site" / "public"
 
+
+def mac_version() -> str:
+    """The shipping macOS version, read from the one place that sets it.
+
+    project.yml is the source of truth — release.sh edits it and xcodegen builds
+    from it — so the page cannot advertise a version the artifact isn't. A
+    hardcoded string in the HTML is how a site ends up offering 0.1.0 of a build
+    that says 1.0.0 on its About tab.
+    """
+    spec = (ROOT / "project.yml").read_text()
+    block = spec.split("  TranscriptsMac:", 1)
+    if len(block) == 2:
+        m = re.search(r'MARKETING_VERSION: "([^"]+)"', block[1])
+        if m:
+            return m.group(1)
+    return "0.0.0"
+
 # Guide order is editorial, not alphabetical — it is the order you meet the app.
 GUIDE_PAGES = [
     ("index", "Getting started"),
@@ -171,7 +188,9 @@ def page(title: str, body: str, *, nav: str = "", cls: str = "") -> str:
 <main>{nav}{body}</main>
 <footer>
   <p>Transcripts is made by <a href="https://hatcher.ltd">Doug Hatcher</a>.
-     <a href="/guide/privacy/">Privacy</a> · <a href="mailto:support@hatcher.ltd">Support</a></p>
+     <a href="/guide/privacy/">Privacy</a> ·
+     <a href="https://github.com/hatcher-ltd/transcripts-support/issues">Report an issue</a> ·
+     <a href="mailto:support@hatcher.ltd">Support</a></p>
 </footer>
 </body>
 </html>
@@ -192,10 +211,15 @@ def build():
     if images.exists():
         shutil.copytree(images, OUT / "guide" / "images")
 
-    # Landing page
+    # Landing page. Version placeholders are filled from project.yml so the
+    # download link and the badge always name the build that release.sh made.
+    version = mac_version()
     landing = (ROOT / "site" / "index.html").read_text()
+    landing = landing.replace("{{VERSION}}", version)
+    landing = landing.replace("{{ZIP}}", f"Transcripts-{version}.zip")
     (OUT / "index.html").write_text(page("Transcripts — voice notes, transcribed on your device",
                                          landing, cls="landing"))
+    print(f"  · version {version}")
 
     # Guide
     links = "".join(

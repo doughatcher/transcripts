@@ -56,6 +56,21 @@ own.
 
 See [iPhone, iPad and Mac](/guide/handoff/) for how the handoff works.
 
+## If something goes wrong
+
+Bugs and feature requests go to the [public issue
+tracker](https://github.com/hatcher-ltd/transcripts-support/issues). It is worth
+filing there rather than emailing: you can see what is already known, and
+whether someone else has hit the same thing.
+
+Transcripts collects nothing about your usage, so a report really is all the
+information there is — the templates ask for the version and your OS for that
+reason. Please don't paste transcript contents; nothing about diagnosing a bug
+needs them.
+
+For anything you would rather not post publicly, email
+[support@hatcher.ltd](mailto:support@hatcher.ltd).
+
 ---
 
-Next: [Recording](/guide/recording/)
+Next: [Installing](/guide/install/)
