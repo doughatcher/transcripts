@@ -1455,6 +1455,11 @@ final class AppController: ObservableObject {
 
             var recording = Recording(audioURL: local, startedAt: capture.startedAt, endedAt: ended)
             recording.title = capture.titleHint
+            if let sid = capture.sessionID {
+                remoteTags[recordID] = RemoteSession.Item(
+                    id: recordID, sessionID: sid, label: capture.sessionLabel,
+                    startedAt: capture.startedAt, duration: capture.duration)
+            }
             Log.write("device inbox: importing \(capture.audioFilename) from \(capture.deviceName)")
 
             // The device's draft is deliberately NOT seeded as the transcript —
@@ -1465,6 +1470,33 @@ final class AppController: ObservableObject {
             archiveIngested(item)
         }
         refreshRecents()
+        // After the batch, not per capture: an evening arrives as several files
+        // and the run is only whole once they are all in.
+        Task { await reconcileRemoteSessions() }
+    }
+
+    /// Tagged captures seen this launch, keyed by recording id.
+    ///
+    /// Deliberately not persisted. A run's completion is remembered instead
+    /// (see `SessionManager.firedRuns`), which is the fact that actually needs
+    /// to survive; re-deriving the items from a fresh ingest is cheap and
+    /// self-correcting.
+    private var remoteTags: [UUID: RemoteSession.Item] = [:]
+
+    private func reconcileRemoteSessions() async {
+        guard !remoteTags.isEmpty else { return }
+        await sessions.reconcileRemote(items: Array(remoteTags.values)) { [weak self] run, profile in
+            guard let self else { return }
+            // Reuse the same completion path as a locally-run session, so a
+            // publish script cannot tell the difference between an evening
+            // recorded here and one recorded on the phone.
+            var synthetic = ActiveSession(
+                profileID: profile.id, startedAt: run.startedAt, label: run.label,
+                recordingIDs: run.items.map(\.id))
+            synthetic.endedAt = run.endedAt
+            synthetic.endReason = run.reason
+            await self.runSessionCompletion(synthetic, profile)
+        }
     }
 
     /// Moves an imported capture out of `Inbox/` so the device side can see it

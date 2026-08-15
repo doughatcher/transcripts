@@ -215,3 +215,114 @@ import Testing
         #expect(v["slug"]?.hasSuffix("-dnd") == true)
     }
 }
+
+/// Reconstructing a session from recordings tagged on another device.
+///
+/// The distinguishing property, and the reason these exist: the answer must not
+/// depend on when the Mac happens to wake. A Mac that opens on Tuesday morning
+/// and one that opened at 10pm Monday must reach the same conclusion about
+/// Monday's game.
+@Suite struct RemoteSessionTests {
+    let cal = Calendar(identifier: .gregorian)
+    func at(_ day: Int, _ h: Int, _ m: Int = 0) -> Date {
+        DateComponents(calendar: cal, year: 2026, month: 8, day: day, hour: h, minute: m).date!
+    }
+    func profile(idle: TimeInterval = 3600, stop: String? = nil) -> SessionProfile {
+        SessionProfile(id: "dnd", name: "D&D", idleTimeout: idle, hardStop: stop)
+    }
+    func item(_ start: Date, _ minutes: Double, label: String? = nil) -> RemoteSession.Item {
+        RemoteSession.Item(id: UUID(), sessionID: "dnd", label: label,
+                           startedAt: start, duration: minutes * 60)
+    }
+
+    /// One evening: four takes with ordinary breaks. One run, not four.
+    @Test func anEveningIsOneRun() {
+        let items = [item(at(17, 18), 40, label: "Session 42"),
+                     item(at(17, 18, 50), 35),
+                     item(at(17, 20), 45),
+                     item(at(17, 20, 50), 30)]
+        let runs = RemoteSession.runs(from: items, profile: profile(),
+                                      now: at(18, 9), calendar: cal)
+        #expect(runs.count == 1)
+        #expect(runs[0].items.count == 4)
+        #expect(runs[0].label == "Session 42")
+        #expect(runs[0].isClosed)
+        #expect(runs[0].endedAt == at(17, 21, 20))
+    }
+
+    /// Two different evenings, ingested in one batch after the Mac was away all
+    /// week, must not be merged into one enormous session.
+    @Test func separateEveningsAreSeparateRuns() {
+        let items = [item(at(10, 18), 60), item(at(10, 19, 30), 45),
+                     item(at(17, 18), 60), item(at(17, 19, 30), 45)]
+        let runs = RemoteSession.runs(from: items, profile: profile(),
+                                      now: at(18, 9), calendar: cal)
+        #expect(runs.count == 2)
+        #expect(runs.allSatisfy { $0.isClosed })
+        #expect(runs[0].startedAt == at(10, 18))
+        #expect(runs[1].startedAt == at(17, 18))
+    }
+
+    /// The property that matters most: waking later must not change the answer.
+    @Test func theAnswerDoesNotDependOnWhenTheMacWakes() {
+        let items = [item(at(17, 18), 40), item(at(17, 19), 50)]
+        let soon = RemoteSession.runs(from: items, profile: profile(),
+                                      now: at(17, 23), calendar: cal)
+        let muchLater = RemoteSession.runs(from: items, profile: profile(),
+                                           now: at(24, 11), calendar: cal)
+        #expect(soon == muchLater)
+        #expect(soon.count == 1)
+        #expect(soon[0].endedAt == at(17, 19, 50))
+    }
+
+    /// A run whose last recording is recent stays open — the evening may still
+    /// be going, and completing it now would publish half a game.
+    @Test func aRecentRunStaysOpen() {
+        let items = [item(at(17, 18), 40), item(at(17, 19), 30)]
+        let runs = RemoteSession.runs(from: items, profile: profile(),
+                                      now: at(17, 19, 45), calendar: cal)
+        #expect(runs.count == 1)
+        #expect(!runs[0].isClosed)
+    }
+
+    /// The gap is measured end-to-start. A single three-hour recording is not
+    /// three hours of silence.
+    @Test func aLongRecordingIsNotAGap() {
+        let items = [item(at(17, 18), 180), item(at(17, 21, 10), 20)]
+        let runs = RemoteSession.runs(from: items, profile: profile(idle: 3600),
+                                      now: at(18, 9), calendar: cal)
+        #expect(runs.count == 1)
+    }
+
+    /// A recording made after the backstop belongs to the next evening.
+    @Test func hardStopSplitsRuns() {
+        let items = [item(at(17, 21), 60), item(at(17, 23, 45), 30)]
+        let runs = RemoteSession.runs(from: items, profile: profile(idle: 0, stop: "23:30"),
+                                      now: at(18, 9), calendar: cal)
+        #expect(runs.count == 2)
+        #expect(runs[0].reason == .hardStop)
+    }
+
+    @Test func otherSessionsAreIgnored() {
+        var other = item(at(17, 18), 30)
+        other = RemoteSession.Item(id: other.id, sessionID: "standup",
+                                   startedAt: other.startedAt, duration: other.duration)
+        let runs = RemoteSession.runs(from: [item(at(17, 19), 30), other],
+                                      profile: profile(), now: at(18, 9), calendar: cal)
+        #expect(runs.count == 1)
+        #expect(runs[0].items.count == 1)
+    }
+
+    /// The key must be stable across recomputation — it is what stops an
+    /// evening being published twice.
+    @Test func runKeyIsStable() {
+        let items = [item(at(17, 18), 40)]
+        let a = RemoteSession.runs(from: items, profile: profile(), now: at(18, 9), calendar: cal)[0]
+        let b = RemoteSession.runs(from: items, profile: profile(), now: at(19, 9), calendar: cal)[0]
+        #expect(RemoteSession.key(for: a) == RemoteSession.key(for: b))
+    }
+
+    @Test func noTaggedRecordingsMeansNoRuns() {
+        #expect(RemoteSession.runs(from: [], profile: profile(), now: at(18, 9), calendar: cal).isEmpty)
+    }
+}
