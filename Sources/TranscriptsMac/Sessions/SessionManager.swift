@@ -65,7 +65,7 @@ final class SessionManager: ObservableObject {
     }
 
     @discardableResult
-    func start(profileID: String) -> Bool {
+    func start(profileID: String, label: String? = nil) -> Bool {
         guard let p = profiles().first(where: { $0.id == profileID }) else {
             Log.write("session: no profile '\(profileID)' in routing.json")
             return false
@@ -74,12 +74,14 @@ final class SessionManager: ObservableObject {
         // rather than orphaning it — its hook still deserves to run.
         if active?.isRunning == true { end(reason: .explicit) }
 
-        let s = ActiveSession(profileID: p.id, startedAt: Date())
+        let trimmed = label?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let s = ActiveSession(profileID: p.id, startedAt: Date(),
+                              label: (trimmed?.isEmpty == false) ? trimmed : nil)
         active = s
         profile = p
         try? store.save(s)
         startTicking()
-        Log.write("session: started '\(p.id)'")
+        Log.write("session: started '\(p.id)'\(s.label.map { " — \($0)" } ?? "")")
         return true
     }
 

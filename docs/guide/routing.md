@@ -126,8 +126,9 @@ pipeline's external stages use:
 
 | Variable | |
 | --- | --- |
-| `${sessionID}` · `${sessionName}` | from the profile |
-| `${slug}` | `2026-08-17-dnd` — date plus id, stable for the whole session |
+| `${sessionID}` · `${sessionName}` | from the profile — the *kind* of session |
+| `${sessionLabel}` | what you called this particular one, if you passed a label |
+| `${slug}` | `2026-08-17-session-42-the-sunken-keep` — the date plus the label, falling back to the id |
 | `${startedAt}` · `${endedAt}` | ISO 8601 |
 | `${endReason}` | `explicit`, `idle` or `hardStop` |
 | `${recordingCount}` | how many recordings the session gathered |
@@ -146,18 +147,36 @@ an error state hours later. Check `~/Library/Logs/Transcripts.log`.
 
 ### Starting one
 
-From the menu, or from Shortcuts — Transcripts provides **Start Session** and
-**End Session** actions. Because they are Shortcuts actions they can be
-automated: a calendar trigger, or a `launchd` job running
+From the menu — **Start session**, which appears once you have a profile — or
+from Shortcuts, where Transcripts provides **Start Session** and **End Session**
+actions.
+
+The Start action takes three things:
+
+- **Session** — which profile, picked from your `routing.json`.
+- **Label** — optional free text naming *this* occasion: "Session 42, The Sunken
+  Keep". It shows in the menu, arrives as `${sessionLabel}`, and shapes
+  `${slug}` — so a journal folder gets named after the night rather than after
+  the campaign.
+- **Start recording** — on by default. Turn it off if you would rather let call
+  detection decide, or if your trigger is only a clock and might fire before you
+  have arrived.
+
+Because these are Shortcuts actions they automate. The best trigger is a
+**location and a time together** — arriving at the place where you play, on the
+evening you play — because that fires when you are already at the table. A
+time-only automation is the case where you might want the recording toggle off.
+
+On iPhone and iPad this is a personal automation. On the Mac, a `launchd` job or
+a calendar event running:
 
 ```bash
 shortcuts run "Start Session"
 ```
 
-Starting a session does **not** start recording. It says "the evening has
-begun"; capture still starts when a call is detected or when you press record.
-An automation that fires while you are still walking to the table should not
-produce twenty minutes of hallway.
+Ending is symmetrical, and stops an in-progress recording first — a session that
+ended mid-take would otherwise complete without the very recording you were
+still making.
 
 ---
 

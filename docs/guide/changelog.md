@@ -17,7 +17,8 @@ The first release under this name.
 - Automatic filing into your vault by keyword and on-device model.
 - **Sessions**: group an evening's recordings under one name, with their own
   folder and an action that runs once when it ends. Start and end them from
-  Shortcuts, so a weekly game can record itself.
+  Shortcuts — with an optional label for the occasion and recording that begins
+  straight away — so a weekly game can record itself.
 - Defaults to iCloud Drive when you have it, so the Mac and the phone meet with
   nothing configured.
 
