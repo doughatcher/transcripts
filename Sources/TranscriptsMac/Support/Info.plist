@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Transcripts</string>
+	<key>CFBundleIconFile</key>
+	<string>Transcripts</string>
+	<key>CFBundleIdentifier</key>
+	<string>ltd.hatcher.transcripts</string>
+	<key>CFBundleName</key>
+	<string>Transcripts</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.8.2</string>
+	<key>CFBundleVersion</key>
+	<string>17</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Transcripts records meetings from your microphone to create transcripts.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Transcripts transcribes your recordings on-device to create meeting transcripts.</string>
+</dict>
+</plist>
