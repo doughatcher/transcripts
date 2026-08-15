@@ -153,6 +153,18 @@ final class RecorderModel: ObservableObject {
         // sidecar's id makes a re-send an overwrite on the Mac, not a duplicate.
         Task { await retryFailedExports() }
         refreshLibrary()
+        // The badge is deliberately not asked for until the app is actually
+        // backgrounded (see setBadge). Backgrounding mid-recording is that
+        // moment, and nothing else would ever come back around to it.
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.isRecording else { return }
+                self.setBadge(true)
+            }
+        }
     }
 
     /// Rescans the shared folder. Cheap enough to run whenever the app comes
@@ -224,6 +236,38 @@ final class RecorderModel: ObservableObject {
             try? await Task.sleep(nanoseconds: 200_000_000)
             if UIApplication.shared.applicationState == .active { return }
         }
+    }
+
+    // MARK: - Permissions
+
+    /// True until the microphone has been asked about at all.
+    ///
+    /// Derived from the live authorization state rather than a "seen it" flag,
+    /// so it is self-correcting: reinstall, or reset privacy settings, and the
+    /// explanation comes back exactly when the dialogs do. A denial does not
+    /// bring it back — that is a Settings trip, not a first run, and re-showing
+    /// a priming screen that can no longer prompt anything would be a dead end.
+    var needsPermissionPriming: Bool {
+        AVAudioApplication.shared.recordPermission == .undetermined
+    }
+
+    /// Requests microphone then speech, back to back, from the priming screen.
+    ///
+    /// Deliberately ignores both results. Denial is already handled where it
+    /// matters — `start()` reports a refused mic, and `startTranscribing()`
+    /// degrades to audio-only without speech — and gating the screen on consent
+    /// would strand a user who declined with no way past it.
+    func primePermissions() async {
+        _ = await withCheckedContinuation { cont in
+            AVAudioApplication.requestRecordPermission { cont.resume(returning: $0) }
+        }
+        _ = await withCheckedContinuation { cont in
+            SFSpeechRecognizer.requestAuthorization { cont.resume(returning: $0) }
+        }
+        // recordPermission is no longer .undetermined, so `needsPermissionPriming`
+        // has flipped — but it is a plain computed property and nothing has told
+        // SwiftUI. Nudge it, or the pane stays on screen after the dialogs go.
+        objectWillChange.send()
     }
 
     // MARK: - Capture
@@ -651,6 +695,12 @@ final class RecorderModel: ObservableObject {
             let center = UNUserNotificationCenter.current()
             let settings = await center.notificationSettings()
             if settings.authorizationStatus == .notDetermined {
+                // Only ask once the app is actually backgrounded, which is the
+                // only moment a badge can be seen or is worth anything. Asking
+                // at record-start put a third system dialog on top of the two
+                // the recording itself needs — and asked for a reassurance
+                // marker before there was anything to be reassured about.
+                guard UIApplication.shared.applicationState != .active else { return }
                 _ = try? await center.requestAuthorization(options: [.badge])
             }
             try? await center.setBadgeCount(on ? 1 : 0)

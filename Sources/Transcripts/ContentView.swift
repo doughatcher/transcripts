@@ -182,6 +182,11 @@ struct ContentView: View {
                 // actually thinking about where their recordings should live.
                 if model.destination.active == nil {
                     SetupPane(picking: $picking, managed: $pickingManaged)
+                } else if model.needsPermissionPriming {
+                    // Between "where do recordings go" and the record button,
+                    // because the alternative is three system dialogs stacked on
+                    // a user who tapped record expecting to record.
+                    PermissionsPane()
                 } else {
                     RecorderPane(picking: $picking, managed: $pickingManaged)
                 }
@@ -511,6 +516,106 @@ private struct TranscriptPane: View {
 }
 
 // MARK: - Detail panes
+
+/// Asks for the microphone and speech recognition *before* iOS does, and warns
+/// about what iOS is about to say.
+///
+/// Two problems this solves. First, permission prompts fired by tapping Record
+/// interrupt the one action the user came to perform. Second, and worse: the
+/// system's speech dialog states that speech data "will be sent to Apple to
+/// process your requests" — boilerplate shown to every app, and simply untrue
+/// here, because `startTranscribing()` sets `requiresOnDeviceRecognition` and
+/// refuses to run at all on a device without local support. We cannot edit
+/// Apple's dialog, so we get there first: told beforehand that the sentence is
+/// coming and does not apply, the user reads it as the formality it is instead
+/// of as a contradiction of everything the app claims.
+private struct PermissionsPane: View {
+    @EnvironmentObject private var model: RecorderModel
+    @State private var asking = false
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Spacer(minLength: 0)
+            Image(systemName: "waveform.badge.mic")
+                .font(.system(size: 52))
+                .foregroundStyle(.tint)
+
+            VStack(spacing: 6) {
+                Text("Two permissions and you're set")
+                    .font(.title2.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                Text("Both are used only while you are recording.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(spacing: 12) {
+                PermissionRow(icon: "mic.fill", title: "Microphone",
+                              detail: "Captures the audio. Without it there is no recording.")
+                PermissionRow(icon: "text.bubble.fill", title: "Speech Recognition",
+                              detail: "Writes down what it hears, on this device. Decline and you still get the recording — just no live text.")
+            }
+
+            // The whole point of this screen.
+            VStack(alignment: .leading, spacing: 6) {
+                Label("About the next screen", systemImage: "info.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+                Text("iOS will say speech data is “sent to Apple.” That is Apple's standard wording for every app that asks. Transcripts requires on-device recognition — if this device can't do it locally, live text switches off rather than send your audio anywhere.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
+
+            Button {
+                asking = true
+                Task {
+                    await model.primePermissions()
+                    asking = false
+                }
+            } label: {
+                Text(asking ? "Waiting…" : "Continue")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(asking)
+
+            Spacer(minLength: 0)
+        }
+        .padding(24)
+        .frame(maxWidth: 520)
+        .navigationTitle("Permissions")
+    }
+}
+
+private struct PermissionRow: View {
+    let icon: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(.tint)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.subheadline.weight(.semibold))
+                Text(detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
 
 /// First-run destination choice. Two doors to the same picker: the default one
 /// takes a parent folder and creates `Transcripts/` inside it, so the common case is
