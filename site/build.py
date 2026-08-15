@@ -45,6 +45,7 @@ GUIDE_PAGES = [
     ("index", "Getting started"),
     ("install", "Installing"),
     ("recording", "Recording"),
+    ("live", "The live transcript"),
     ("transcripts", "Your transcripts"),
     ("handoff", "iPhone, iPad and Mac"),
     ("settings", "Settings"),

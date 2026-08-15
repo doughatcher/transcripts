@@ -55,4 +55,4 @@ again.
 
 ---
 
-Next: [Your transcripts](/guide/transcripts/)
+Next: [The live transcript](/guide/live/)
