@@ -12,6 +12,14 @@
   </div>
   <p class="brew">Transcripts {{VERSION}} · macOS 14 or later · 9 MB<br>
      or <code>brew install --cask hatcher-ltd/tap/transcripts</code></p>
+  <p class="unsigned">
+    <strong>This beta build isn't notarized yet.</strong> macOS will refuse to
+    open it until Apple's developer certificate is in place. Until then, after
+    moving it to Applications, run once:<br>
+    <code>xattr -dr com.apple.quarantine /Applications/Transcripts.app</code><br>
+    If you'd rather not do that, wait for the next build — this note will
+    disappear when it does.
+  </p>
 </section>
 
 <section class="claims">

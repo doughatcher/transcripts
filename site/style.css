@@ -150,3 +150,13 @@ pre code { background: none; padding: 0; }
   margin: 1.5rem auto 0; color: var(--muted); font-size: .9rem;
 }
 .hero .brew code { font-size: .95em; }
+
+/* Temporary — removed once builds are notarized. Deliberately conspicuous:
+   a Gatekeeper refusal with no warning reads as "this app is broken or
+   malicious", which is a worse first impression than an honest caveat. */
+.hero .unsigned {
+  max-width: 34rem; margin: 2rem auto 0; padding: .9rem 1.1rem;
+  border: 1px solid var(--line); border-radius: 12px;
+  color: var(--muted); font-size: .85rem; line-height: 1.55; text-align: left;
+}
+.hero .unsigned code { display: inline-block; margin: .35rem 0; font-size: .95em; }
