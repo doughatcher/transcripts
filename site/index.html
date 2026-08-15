@@ -1,5 +1,11 @@
 <section class="hero">
-  <canvas id="wave" aria-hidden="true"></canvas>
+  <!-- The positioning is inline as well as in the stylesheet on purpose. A
+       canvas that falls into normal flow takes its attribute size as layout,
+       which shoves the whole page down — so if the stylesheet is ever missing,
+       stale or blocked, this element must still be incapable of moving
+       anything. Everything cosmetic stays in CSS. -->
+  <canvas id="wave" aria-hidden="true"
+          style="position:absolute;pointer-events:none;height:96px"></canvas>
   <img class="mark" src="/icon.png" alt="" width="96" height="96">
   <span class="beta">Beta · {{VERSION}}</span>
   <h1>Live transcripts of every meeting. Entirely on device.</h1>
