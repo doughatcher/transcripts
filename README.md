@@ -49,7 +49,7 @@ leave the device. Live transcription sets `requiresOnDeviceRecognition = true`
 and switches itself off on a device that can't recognize speech locally, rather
 than falling back to server-side recognition.
 
-Full policy: [docs/PRIVACY.md](docs/PRIVACY.md).
+Full policy: [docs/PRIVACY.md](docs/guide/privacy.md).
 
 Recording consent is your responsibility — laws vary by country and state, and
 some require every participant's consent. Only record where you lawfully may.

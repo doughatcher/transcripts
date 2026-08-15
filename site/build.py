@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""Render the marketing page and the user guide into site/public/.
+
+Deliberately not Hugo, which is the convention on hatcher.ltd. This is seven
+pages with no taxonomy, no feed and no pagination, and Hugo would need to be
+installed and given a theme to produce them. The Markdown in docs/guide/ is the
+portable layer — swap this renderer for Hugo later and the content is unchanged.
+
+The guide is written beside the code it documents, on purpose. Docs in a
+separate wiki rot because nothing forces them past a code change; docs in the
+repo show up in the same diff.
+
+    python3 site/build.py            # → site/public/
+    python3 site/build.py --serve    # build, then serve on :8000
+"""
+import html
+import re
+import shutil
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+GUIDE_SRC = ROOT / "docs" / "guide"
+OUT = ROOT / "site" / "public"
+
+# Guide order is editorial, not alphabetical — it is the order you meet the app.
+GUIDE_PAGES = [
+    ("index", "Getting started"),
+    ("recording", "Recording"),
+    ("transcripts", "Your transcripts"),
+    ("handoff", "iPhone, iPad and Mac"),
+    ("settings", "Settings"),
+    ("privacy", "Privacy"),
+]
+
+
+# --- A very small Markdown subset -------------------------------------------
+# Enough for the guide: headings, lists, code, links, emphasis, images, rules.
+# Anything fancier is a signal the guide is drifting toward prose it shouldn't be.
+
+def md(text: str) -> str:
+    out, lines = [], text.split("\n")
+    i, in_list, in_code = 0, False, False
+    while i < len(lines):
+        line = lines[i]
+
+        if line.startswith("```"):
+            if in_code:
+                out.append("</code></pre>")
+                in_code = False
+            else:
+                if in_list:
+                    out.append("</ul>"); in_list = False
+                out.append("<pre><code>")
+                in_code = True
+            i += 1
+            continue
+        if in_code:
+            out.append(html.escape(line))
+            i += 1
+            continue
+
+        if not line.strip():
+            if in_list:
+                out.append("</ul>"); in_list = False
+            i += 1
+            continue
+
+        if line.startswith("---"):
+            if in_list:
+                out.append("</ul>"); in_list = False
+            out.append("<hr>")
+            i += 1
+            continue
+
+        m = re.match(r"^(#{1,4})\s+(.*)", line)
+        if m:
+            if in_list:
+                out.append("</ul>"); in_list = False
+            level = len(m.group(1))
+            slug = re.sub(r"[^a-z0-9]+", "-", m.group(2).lower()).strip("-")
+            out.append(f'<h{level} id="{slug}">{inline(m.group(2))}</h{level}>')
+            i += 1
+            continue
+
+        m = re.match(r"^\s*[-*]\s+(.*)", line)
+        if m:
+            if not in_list:
+                out.append("<ul>"); in_list = True
+            # A list item continues onto indented following lines.
+            item = [m.group(1)]
+            i += 1
+            while i < len(lines) and lines[i].startswith("  ") and lines[i].strip() \
+                    and not re.match(r"^\s*[-*]\s+", lines[i]):
+                item.append(lines[i].strip())
+                i += 1
+            out.append(f"<li>{inline(' '.join(item))}</li>")
+            continue
+
+        if in_list:
+            out.append("</ul>"); in_list = False
+        # Consecutive non-blank lines are ONE paragraph. The guide is hard
+        # wrapped at 80 columns, so treating each line as its own <p> turned
+        # every paragraph into a column of orphaned sentences.
+        para = [line]
+        i += 1
+        while i < len(lines) and lines[i].strip() \
+                and not lines[i].startswith(("#", "```", "---")) \
+                and not re.match(r"^\s*[-*]\s+", lines[i]):
+            para.append(lines[i].strip())
+            i += 1
+        out.append(f"<p>{inline(' '.join(para))}</p>")
+
+    if in_list:
+        out.append("</ul>")
+    if in_code:
+        out.append("</code></pre>")
+    return "\n".join(out)
+
+
+def inline(s: str) -> str:
+    s = html.escape(s)
+    s = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", r'<img src="\2" alt="\1" loading="lazy">', s)
+    s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', s)
+    s = re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
+    s = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", s)
+    s = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", s)
+    return s
+
+
+# --- Shell -------------------------------------------------------------------
+
+def page(title: str, body: str, *, nav: str = "", cls: str = "") -> str:
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{html.escape(title)}</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/icon.png">
+</head>
+<body class="{cls}">
+<header class="top">
+  <a class="wordmark" href="/"><img src="/icon.png" alt="" width="28" height="28">Transcripts</a>
+  <nav><a href="/guide/">User guide</a><a href="/#download">Download</a></nav>
+</header>
+<main>{nav}{body}</main>
+<footer>
+  <p>Transcripts is made by <a href="https://hatcher.ltd">Doug Hatcher</a>.
+     <a href="/guide/privacy/">Privacy</a> · <a href="mailto:support@hatcher.ltd">Support</a></p>
+</footer>
+</body>
+</html>
+"""
+
+
+def build():
+    if OUT.exists():
+        shutil.rmtree(OUT)
+    (OUT / "guide").mkdir(parents=True)
+
+    # Assets
+    shutil.copy(ROOT / "site" / "style.css", OUT / "style.css")
+    icon = ROOT / "Sources/Transcripts/Assets.xcassets/AppIcon.appiconset/icon-1024.png"
+    if icon.exists():
+        shutil.copy(icon, OUT / "icon.png")
+    images = GUIDE_SRC / "images"
+    if images.exists():
+        shutil.copytree(images, OUT / "guide" / "images")
+
+    # Landing page
+    landing = (ROOT / "site" / "index.html").read_text()
+    (OUT / "index.html").write_text(page("Transcripts — voice notes, transcribed on your device",
+                                         landing, cls="landing"))
+
+    # Guide
+    links = "".join(
+        f'<a href="/guide/{"" if slug == "index" else slug + "/"}">{html.escape(title)}</a>'
+        for slug, title in GUIDE_PAGES)
+    nav = f'<nav class="guide-nav">{links}</nav>'
+    for slug, title in GUIDE_PAGES:
+        src = GUIDE_SRC / f"{slug}.md"
+        if not src.exists():
+            print(f"  ! missing {src.relative_to(ROOT)}")
+            continue
+        body = md(src.read_text())
+        dest = OUT / "guide" / ("index.html" if slug == "index" else f"{slug}/index.html")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(page(f"{title} — Transcripts guide", body, nav=nav, cls="guide"))
+        print(f"  ✓ /guide/{'' if slug == 'index' else slug + '/'}")
+
+    print(f"✓ built → {OUT.relative_to(ROOT)}")
+
+
+if __name__ == "__main__":
+    build()
+    if "--serve" in sys.argv:
+        import http.server, os, socketserver
+        os.chdir(OUT)
+        print("→ http://localhost:8000")
+        socketserver.TCPServer(("", 8000), http.server.SimpleHTTPRequestHandler).serve_forever()
