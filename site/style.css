@@ -72,7 +72,11 @@ main { padding: 0 1.5rem; }
   letter-spacing: -.03em; margin: 0 0 1rem;
 }
 .hero .sub { font-size: 1.2rem; color: var(--muted); margin: 0 auto 2rem; max-width: 34rem; }
-.hero .mark { width: 96px; height: 96px; border-radius: 22px; margin-bottom: 1.75rem; }
+
+/* Block, not inline. As inline elements the mark and the beta pill shared a
+   line box and were centred together — mark left of centre, pill right of it,
+   sitting on the mark's baseline rather than under it. */
+.hero .mark { display: block; width: 96px; height: 96px; border-radius: 22px; margin: 0 auto 1.5rem; }
 
 .badges { display: flex; gap: .75rem; justify-content: center; flex-wrap: wrap; }
 .btn {
