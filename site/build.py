@@ -177,7 +177,7 @@ def page(title: str, body: str, *, nav: str = "", cls: str = "") -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)}</title>
-<meta name="description" content="Voice notes and meeting transcripts, recorded and transcribed on your own device.">
+<meta name="description" content="Live transcripts of every meeting, recorded, transcribed and summarized entirely on your own Mac, iPhone and iPad.">
 <link rel="stylesheet" href="/style.css">
 <link rel="icon" href="/icon.png">
 {ANALYTICS}
@@ -219,7 +219,7 @@ def build():
     landing = (ROOT / "site" / "index.html").read_text()
     landing = landing.replace("{{VERSION}}", version)
     landing = landing.replace("{{ZIP}}", f"Transcripts-{version}.zip")
-    (OUT / "index.html").write_text(page("Transcripts — voice notes, transcribed on your device",
+    (OUT / "index.html").write_text(page("Transcripts — live meeting transcripts, entirely on device",
                                          landing, cls="landing"))
     print(f"  · version {version}")
 

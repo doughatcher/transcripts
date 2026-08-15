@@ -69,22 +69,22 @@ Paste into App Store Connect ▸ App Review Information ▸ Notes.
 
 **Name (30 char max):** `Transcripts`
 
-**Subtitle (30 char max):** `Voice notes, transcribed`
-*(24 chars. Alternates: `Record and read it live` (23), `Offline voice recorder` (22).)*
+**Subtitle (30 char max):** `Live meeting transcripts`
+*(24 chars. Alternates: `Transcripts, as you speak` (25), `Live notes for every call` (25).)*
 
 **Promotional text (170 char max, editable without a new build):**
 
-> Record a meeting, a lecture, or a thought. Read the words as you speak them.
-> Everything stays on your device — no account, no cloud, no tracking.
+> Live transcripts of every meeting, on all your devices. Records, transcribes
+> and summarizes on-device — no account, no cloud, nothing to set up.
 
 **Description:**
 
-> Transcripts is a voice recorder that writes down what you say, as you say it,
-> entirely on your device.
+> Transcripts writes down what you say, as you say it, on your own device.
 >
 > **Read it while you record**
 > Words appear on screen as you speak, using on-device speech recognition. No
-> waiting for a file to upload and come back as text.
+> waiting for a file to upload and come back as text — and on the Mac, the live
+> transcript is a plain file you can point an AI assistant at during the call.
 >
 > **It keeps recording**
 > Lock the screen, switch apps, take a call — capture continues, and a Live
@@ -97,10 +97,9 @@ Paste into App Store Connect ▸ App Review Information ▸ Notes.
 > nothing to export — the files are already yours.
 >
 > **Genuinely private**
-> Transcripts has no servers, no accounts, no analytics, and no advertising. It
-> contains no networking code at all. Your audio never leaves your device: the
-> app requires on-device speech recognition and will switch live text off
-> rather than send your recording to a server.
+> No servers, no accounts, no analytics, no advertising. Your audio never leaves
+> your device: the app requires on-device speech recognition and switches live
+> text off rather than send your recording anywhere.
 >
 > ---
 > Recording laws vary by location, and some places require the consent of

@@ -1,10 +1,12 @@
 <section class="hero">
   <img class="mark" src="/icon.png" alt="" width="96" height="96">
   <span class="beta">Beta · {{VERSION}}</span>
-  <h1>Voice notes, transcribed on your device.</h1>
+  <h1>Live transcripts of every meeting. Entirely on device.</h1>
   <p class="sub">
-    Record a meeting, a lecture, or a thought. Read the words as you speak them.
-    Nothing is uploaded, because there is nowhere to upload it to.
+    Transcripts notices the call has started, writes down what everyone says as
+    they say it, and files the result where you keep your notes — on your Mac,
+    your iPhone and your iPad. The recording, the transcription and the summary
+    all happen on the machine in front of you. Nothing is uploaded.
   </p>
   <div class="badges" id="download">
     <a class="btn" href="/{{ZIP}}">Download for Mac</a>
@@ -24,46 +26,62 @@
 
 <section class="claims">
   <div class="claim">
-    <h3>It stays on your Mac</h3>
-    <p>Transcription runs on Apple's on-device speech engine. Summaries use Apple
-       Intelligence when you have it, and a built-in summarizer when you don't.
-       No account, no server, no telemetry.</p>
+    <h3>Readable while it's still happening</h3>
+    <p>The transcript is written to a plain file, turn by turn, as people speak.
+       Point an AI assistant at it <em>during</em> the call — "read the live
+       transcript and draft the follow-up" — before anyone has hung up. It's a
+       file, so there's no integration to set up and no key to paste.</p>
+  </div>
+  <div class="claim">
+    <h3>It knows when the meeting started</h3>
+    <p>On the Mac, Transcripts watches for Teams, Zoom, Webex and Meet. When a
+       call begins it starts recording on its own, capturing your microphone and
+       the other participants as separate tracks — and stops when the call ends.
+       You don't have to remember.</p>
+  </div>
+  <div class="claim">
+    <h3>Summaries as deep as you want</h3>
+    <p>Apple Intelligence writes the title, the TL;DR, the key points and the
+       action items on-device. Point it at a local <strong>Ollama</strong> server
+       instead and you can run a far larger model. If neither is available there
+       is a built-in summarizer that always works, so a recording is never left
+       unprocessed.</p>
+  </div>
+  <div class="claim">
+    <h3>Who said what</h3>
+    <p>Your side of a call arrives on its own track, so it is never in doubt.
+       Turn on voice attribution and the other side is split into individual
+       people and named — from the transcript when someone is addressed, and by
+       voiceprint once you have confirmed them. Wrong guesses are correctable,
+       and each correction teaches it.</p>
+  </div>
+  <div class="claim">
+    <h3>A pipeline you can open up</h3>
+    <p>Every recording moves through five stages — encode, transcribe,
+       summarize, classify, persist — and you can replace any of them with a
+       script of your own. Most people never will. It is there because the
+       alternative to an escape hatch is a rewrite.</p>
   </div>
   <div class="claim">
     <h3>Your files, in your folder</h3>
-    <p>Recordings are ordinary <code>.m4a</code> audio with plain-text transcripts
-       beside them, in a folder you pick. There is no library to escape from and
-       nothing to export — the files are already yours.</p>
-  </div>
-  <div class="claim">
-    <h3>Readable while it's still happening</h3>
-    <p>The transcript is written to a plain file, turn by turn, as people speak —
-       so you can point an AI assistant at the meeting <em>during</em> it.
-       "Read the live transcript and draft the follow-up," before anyone has hung
-       up. Local file, local model, no integration to set up.</p>
-  </div>
-  <div class="claim">
-    <h3>Both sides of a call</h3>
-    <p>On the Mac, Transcripts captures your microphone and the other participants,
-       notices when a call starts, and can tell the voices apart afterwards.</p>
-  </div>
-  <div class="claim">
-    <h3>It follows you off the desk</h3>
-    <p>Record on iPhone or iPad and it appears on the Mac through the folder you
-       already share. Set up with iCloud on both and there is nothing to configure.</p>
+    <p>Ordinary <code>.m4a</code> audio with plain-text transcripts beside it, in
+       a folder you choose — iCloud, OneDrive, Dropbox, or just this Mac. No
+       library to escape from, nothing to export. Point the phone at the same
+       folder and the two halves join up with nothing configured.</p>
   </div>
 </section>
 
 <section class="shots">
   <img src="/guide/images/settings-general.png" alt="The General settings pane" loading="lazy">
   <img src="/guide/images/settings-voices.png" alt="The Voices settings pane, showing recognised speakers" loading="lazy">
-  <img src="/guide/images/settings-sorting.png" alt="The Sorting settings pane" loading="lazy">
+  <img src="/guide/images/settings-pipeline.png" alt="The Pipeline settings pane" loading="lazy">
 </section>
 
 <section class="note">
   <strong>This is a beta.</strong> It has been used daily for months in an earlier
-  form, but under this name it is new: expect rough edges, and please report
-  anything that misbehaves to <a href="mailto:support@hatcher.ltd">support@hatcher.ltd</a>.
+  form, but under this name it is new: expect rough edges, and please
+  <a href="https://github.com/hatcher-ltd/transcripts-support/issues">report
+  anything that misbehaves</a>.
   Recording laws vary by country and state, and some require the consent of everyone
   in the conversation — Transcripts gives you a recorder, and the rest is yours.
 </section>
