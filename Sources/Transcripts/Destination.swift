@@ -66,6 +66,12 @@ final class Destination: ObservableObject {
         case component.localizedCaseInsensitiveContains("onedrive"),
              component.localizedCaseInsensitiveContains("sharepoint"):
             base = "Work"
+        // What the picker calls "On My iPhone" is really the app group's
+        // "File Provider Storage" on disk. Showing that raw is how a perfectly
+        // ordinary choice — keep it on the phone — ends up labelled with an
+        // implementation detail.
+        case component == "File Provider Storage":
+            base = "This Device"
         default:
             base = component
         }

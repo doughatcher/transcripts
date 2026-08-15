@@ -33,6 +33,12 @@ targets:
       path: Sources/Transcripts/Info.plist
       properties:
         CFBundleDisplayName: Transcripts
+        # A manually-specified info plist does NOT inherit MARKETING_VERSION /
+        # CURRENT_PROJECT_VERSION the way GENERATE_INFOPLIST_FILE would — the
+        # keys silently default to 1.0/1, which is the version App Store Connect
+        # validates uploads against. Thread the build settings through by hand.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         # The entire point of a pocket recorder: capture survives the screen
         # locking and the user switching apps. An Info.plist key, not a
         # paid-membership entitlement, so it works under free provisioning.
@@ -80,12 +86,17 @@ targets:
       path: Sources/TranscriptsWidgets/Info.plist
       properties:
         CFBundleDisplayName: Transcripts
+        # Must match the host app's versions or the archive fails validation.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ltd.hatcher.transcripts.widgets
         GENERATE_INFOPLIST_FILE: NO
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
         CODE_SIGN_STYLE: Automatic
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "1,2"
