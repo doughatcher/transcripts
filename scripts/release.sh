@@ -39,8 +39,37 @@ fi
 # MARKETING_VERSION lives in project.yml, and a manually-specified Info.plist
 # does not inherit it — the keys are threaded through by hand there, so bumping
 # the spec is what actually moves CFBundleShortVersionString.
-echo "▶ Setting version $VERSION"
-/usr/bin/perl -pi -e "s/MARKETING_VERSION: \"[^\"]*\"/MARKETING_VERSION: \"$VERSION\"/g" project.yml
+#
+# The two platforms cannot share a version string. Apple requires
+# CFBundleShortVersionString to be three period-separated integers, so a
+# pre-release like 1.0.0-beta.1 is rejected outright by App Store Connect —
+# while the Mac's updater is deliberately pre-release aware and wants exactly
+# that. So: the Mac target gets the full version, the iOS targets get its
+# numeric core, and TestFlight iterations move the build number instead.
+IOS_VERSION="${VERSION%%-*}"
+IOS_BUILD="${IOS_BUILD:-1}"
+echo "▶ Version — macOS $VERSION · iOS $IOS_VERSION (build $IOS_BUILD)"
+
+python3 - "$VERSION" "$IOS_VERSION" "$IOS_BUILD" <<'PY'
+import re, sys
+version, ios_version, ios_build = sys.argv[1], sys.argv[2], sys.argv[3]
+spec = open("project.yml").read()
+
+# Targets appear in spec order: Transcripts (iOS), TranscriptsWidgets (iOS),
+# TranscriptsMac. Split on the target headers so each gets the right value
+# rather than a global replace stamping the Mac's string onto iOS.
+parts = re.split(r"(?m)^  (\w+):$", spec)
+out = [parts[0]]
+for name, body in zip(parts[1::2], parts[2::2]):
+    if name == "TranscriptsMac":
+        body = re.sub(r'MARKETING_VERSION: "[^"]*"', f'MARKETING_VERSION: "{version}"', body)
+    else:
+        body = re.sub(r'MARKETING_VERSION: "[^"]*"', f'MARKETING_VERSION: "{ios_version}"', body)
+        body = re.sub(r'CURRENT_PROJECT_VERSION: "[^"]*"', f'CURRENT_PROJECT_VERSION: "{ios_build}"', body)
+    out.append(f"  {name}:\n")
+    out.append(body)
+open("project.yml", "w").write("".join(out))
+PY
 xcodegen generate >/dev/null
 
 # --- 2. Build + bundle -------------------------------------------------------
@@ -158,7 +187,8 @@ cat <<DONE
   Publish:
     npx wrangler pages deploy site/public --project-name=transcripts
   Then copy the cask into the tap:
-    cp dist/transcripts.rb ../homebrew-tap/Casks/transcripts.rb && (cd ../homebrew-tap && git commit -am "transcripts $VERSION" && git push)
+    cp dist/transcripts.rb ../homebrew-tap/Casks/transcripts.rb \
+      && (cd ../homebrew-tap && git commit -am "transcripts $VERSION" && git push)
 
   Users then:
     brew install --cask hatcher-ltd/tap/transcripts
