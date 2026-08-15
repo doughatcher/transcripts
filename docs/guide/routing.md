@@ -191,4 +191,6 @@ still making.
 
 ---
 
+For every key and its default, see the [routing.json reference](/guide/reference/).
+
 Next: [iPhone, iPad and Mac](/guide/handoff/)

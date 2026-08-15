@@ -132,6 +132,43 @@ final class SessionManager: ObservableObject {
         Log.write("session: '\(p.id)' completed")
     }
 
+    // MARK: - Sessions recorded elsewhere
+
+    /// Completion keys already fired, so a run is never published twice.
+    ///
+    /// Kept in defaults rather than derived: the recordings that make up a run
+    /// stay on disk indefinitely, so "have I already done this one" cannot be
+    /// answered by their presence. Small and append-only — one short string per
+    /// completed evening.
+    private static let firedKey = "transcripts.sessions.completedRuns"
+    private var firedRuns: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: Self.firedKey) ?? []) }
+        set { UserDefaults.standard.set(Array(newValue), forKey: Self.firedKey) }
+    }
+
+    /// Groups recordings tagged by another device and completes the runs that
+    /// are finished.
+    ///
+    /// Called after ingesting device captures. The Mac may not have been awake
+    /// when any of this happened, which is the whole point: the evening is
+    /// reconstructed from the recordings rather than watched as it occurs.
+    func reconcileRemote(items: [RemoteSession.Item],
+                         complete: (RemoteSession.Run, SessionProfile) async -> Void) async {
+        for profile in profiles() {
+            for run in RemoteSession.runs(from: items, profile: profile, now: Date()) {
+                guard run.isClosed else { continue }          // may still be going
+                let key = RemoteSession.key(for: run)
+                guard !firedRuns.contains(key) else { continue }
+                // Recorded before running, not after: a crash mid-publish should
+                // cost one evening's hook rather than re-fire it on every launch
+                // for the rest of time. The log says what happened.
+                firedRuns.insert(key)
+                Log.write("session: '\(profile.id)' recorded elsewhere — \(run.items.count) recording(s), ended \(run.endedAt) (\(run.reason.rawValue))")
+                await complete(run, profile)
+            }
+        }
+    }
+
     // MARK: - The clock
 
     /// A minute is plenty: every end condition is measured in tens of minutes,

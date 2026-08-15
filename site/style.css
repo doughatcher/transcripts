@@ -8,7 +8,12 @@
   --line: #e6e6ec;
   --accent: #5b46e5;
   --accent-2: #7c3aed;
-  --code-bg: #f5f5f8;
+  --code-bg: #f7f7fa;
+  --code-tab: #eeeef4;
+  --tok-key: #7c3aed;
+  --tok-str: #0a7c5a;
+  --tok-num: #b25000;
+  --tok-kw:  #b02a8f;
   --max: 46rem;
 }
 
@@ -20,7 +25,12 @@
     --line: #26262e;
     --accent: #8b7cf6;
     --accent-2: #a78bfa;
-    --code-bg: #1a1a21;
+    --code-bg: #16161c;
+    --code-tab: #1e1e26;
+    --tok-key: #b7a6ff;
+    --tok-str: #6ee7b7;
+    --tok-num: #fbbf87;
+    --tok-kw:  #f0a6e0;
   }
 }
 
@@ -111,18 +121,63 @@ main { padding: 0 1.5rem; }
 
 /* --- guide ---------------------------------------------------------------- */
 
+/* Two columns on a wide screen: the sidebar is how you tell where you are in a
+   guide of eleven pages, which a wrapped row of links cannot do. The grid
+   collapses to one column before the sidebar starts squeezing the prose. */
+.guide main {
+  display: grid;
+  grid-template-columns: 15rem minmax(0, 1fr);
+  gap: 0 3rem;
+  max-width: 66rem;
+  margin: 0 auto;
+  align-items: start;
+}
+.guide-body { min-width: 0; }             /* lets code blocks scroll, not stretch */
+
 .guide-nav {
-  max-width: var(--max); margin: 2rem auto 0;
-  display: flex; flex-wrap: wrap; gap: .4rem .9rem;
-  padding-bottom: 1rem; border-bottom: 1px solid var(--line);
-  font-size: .93rem;
+  position: sticky; top: 5rem;
+  padding: 2.5rem 0 2rem;
+  font-size: .9rem;
+  max-height: calc(100vh - 6rem);
+  overflow-y: auto;
+}
+.nav-section + .nav-section { margin-top: 1.6rem; }
+.guide-nav h4 {
+  margin: 0 0 .5rem; font-size: .72rem; font-weight: 650;
+  letter-spacing: .07em; text-transform: uppercase; color: var(--muted);
+}
+.guide-nav ul { list-style: none; margin: 0; padding: 0; }
+.guide-nav li { margin: 0; }
+.guide-nav a {
+  display: block; padding: .3rem .7rem; margin-left: -.7rem;
+  border-radius: 7px; color: var(--muted); line-height: 1.4;
+}
+.guide-nav a:hover { color: var(--fg); background: var(--code-bg); text-decoration: none; }
+.guide-nav a.here {
+  color: var(--accent); background: var(--code-bg); font-weight: 550;
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
-.guide main > h1, .guide main > h2, .guide main > h3, .guide main > h4,
-.guide main > p, .guide main > ul, .guide main > pre, .guide main > hr,
-.guide main > img {
-  max-width: var(--max); margin-left: auto; margin-right: auto;
+@media (max-width: 56rem) {
+  /* Above the content rather than beside it, and not sticky — a sticky nav on a
+     short viewport eats the page. */
+  .guide main { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .guide-nav {
+    position: static; max-height: none; overflow: visible;
+    padding: 1.5rem 0 1rem; margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--line);
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: 1.25rem 1.5rem; align-items: start;
+  }
+  .nav-section + .nav-section { margin-top: 0; }   /* the grid gap spaces them */
 }
+
+.guide-body > h1, .guide-body > h2, .guide-body > h3, .guide-body > h4,
+.guide-body > p, .guide-body > ul, .guide-body > pre, .guide-body > hr,
+.guide-body > img, .guide-body > table {
+  max-width: var(--max); margin-left: 0; margin-right: 0;
+}
+.guide-body { padding: 2.5rem 0 1rem; }
 .guide h1 { font-size: 2rem; letter-spacing: -.025em; margin: 2.25rem auto 1rem; }
 .guide h2 { font-size: 1.3rem; letter-spacing: -.015em; margin: 2.5rem auto .6rem; }
 .guide h3 { font-size: 1.05rem; margin: 1.75rem auto .4rem; }
@@ -193,3 +248,66 @@ pre code { background: none; padding: 0; }
 @media (max-width: 40rem) {
   .hero { --wave-h: 260px; }
 }
+
+/* --- code blocks ---------------------------------------------------------- */
+
+/* A reference page is read by people who will copy from it, so the code wants
+   to look like code: a distinct ground, a language tab, and enough colour to
+   separate keys from values at a glance. Deliberately restrained — this is
+   documentation, not a terminal emulator. */
+.guide pre {
+  position: relative;
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1.1rem 1.1rem .95rem;
+  overflow-x: auto;
+  font-size: .84rem;
+  line-height: 1.65;
+  margin: 1.4rem 0;
+}
+.guide pre[class^="lang-"]::before {
+  content: attr(class);
+  position: absolute; top: 0; right: 0;
+  padding: .18rem .55rem;
+  font-size: .66rem; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted);
+  background: var(--code-tab);
+  border-left: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  border-radius: 0 10px 0 8px;
+}
+.guide pre.lang-json::before { content: "json"; }
+.guide pre.lang-bash::before { content: "bash"; }
+.guide pre.lang-swift::before { content: "swift"; }
+.guide pre code { background: none; padding: 0; font-size: inherit; }
+
+.tok-key { color: var(--tok-key); }
+.tok-str { color: var(--tok-str); }
+.tok-num { color: var(--tok-num); }
+.tok-lit { color: var(--tok-num); }
+.tok-kw  { color: var(--tok-kw); font-weight: 500; }
+.tok-var { color: var(--tok-key); }
+.tok-com { color: var(--muted); font-style: italic; }
+
+/* Schema tables. A reference page is mostly these, so they carry the weight:
+   left-aligned, ruled between rows only, and the first column monospaced
+   because it is always a key name. */
+.guide table {
+  width: 100%; max-width: var(--max); margin: 1.4rem auto;
+  border-collapse: collapse; font-size: .92rem;
+  display: block; overflow-x: auto;      /* narrow screens scroll the table, not the page */
+}
+.guide thead th {
+  text-align: left; font-weight: 600; font-size: .8rem;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--muted);
+  padding: 0 .8rem .5rem 0; border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.guide tbody td {
+  padding: .6rem .8rem .6rem 0; border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.guide tbody tr:last-child td { border-bottom: 0; }
+.guide tbody td:first-child { white-space: nowrap; }
+.guide tbody td:first-child code { background: none; padding: 0; color: var(--tok-key); }

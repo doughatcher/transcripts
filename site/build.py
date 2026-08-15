@@ -41,19 +41,32 @@ def mac_version() -> str:
             return m.group(1)
     return "0.0.0"
 
-# Guide order is editorial, not alphabetical — it is the order you meet the app.
-GUIDE_PAGES = [
-    ("index", "Getting started"),
-    ("install", "Installing"),
-    ("recording", "Recording"),
-    ("live", "The live transcript"),
-    ("transcripts", "Your transcripts"),
-    ("routing", "Sorting and sessions"),
-    ("handoff", "iPhone, iPad and Mac"),
-    ("settings", "Settings"),
-    ("privacy", "Privacy"),
-    ("changelog", "Changelog"),
+# Order is editorial, not alphabetical — it is the order you meet the app — and
+# grouped, because a flat list of eleven says nothing about what belongs with
+# what. Sections are the structure a reader uses to decide what to skip.
+GUIDE_SECTIONS = [
+    ("Start here", [
+        ("index", "Getting started"),
+        ("install", "Installing"),
+    ]),
+    ("Recording", [
+        ("recording", "Recording"),
+        ("live", "The live transcript"),
+        ("transcripts", "Your transcripts"),
+        ("handoff", "iPhone, iPad and Mac"),
+    ]),
+    ("Configuring", [
+        ("settings", "Settings"),
+        ("routing", "Sorting and sessions"),
+        ("reference", "routing.json reference"),
+    ]),
+    ("About", [
+        ("privacy", "Privacy"),
+        ("changelog", "Changelog"),
+    ]),
 ]
+
+GUIDE_PAGES = [pair for _, pages in GUIDE_SECTIONS for pair in pages]
 
 
 # --- A very small Markdown subset -------------------------------------------
@@ -62,7 +75,7 @@ GUIDE_PAGES = [
 
 def md(text: str) -> str:
     out, lines = [], text.split("\n")
-    i, in_list, in_code = 0, False, False
+    i, in_list, in_code, code_lang = 0, False, False, ""
     while i < len(lines):
         line = lines[i]
 
@@ -70,15 +83,18 @@ def md(text: str) -> str:
             if in_code:
                 out.append("</code></pre>")
                 in_code = False
+                code_lang = ""
             else:
                 if in_list:
                     out.append("</ul>"); in_list = False
-                out.append("<pre><code>")
+                code_lang = line[3:].strip().lower()
+                cls = f' class="lang-{code_lang}"' if code_lang else ""
+                out.append(f"<pre{cls}><code>")
                 in_code = True
             i += 1
             continue
         if in_code:
-            out.append(html.escape(line))
+            out.append(highlight(line, code_lang))
             i += 1
             continue
 
@@ -103,6 +119,40 @@ def md(text: str) -> str:
             slug = re.sub(r"[^a-z0-9]+", "-", m.group(2).lower()).strip("-")
             out.append(f'<h{level} id="{slug}">{inline(m.group(2))}</h{level}>')
             i += 1
+            continue
+
+        # Pipe tables. Added after writing a reference page full of them and
+        # finding every one rendered as literal pipes — a schema table is the
+        # one thing that page is for.
+        if line.lstrip().startswith("|") and i + 1 < len(lines) \
+                and re.match(r"^\s*\|[\s:|-]+\|\s*$", lines[i + 1]):
+            if in_list:
+                out.append("</ul>"); in_list = False
+
+            def cells(row: str) -> list[str]:
+                # An escaped \| is a literal pipe in a cell — "command \| null"
+                # is one type, not two. Splitting naively shifted every
+                # subsequent cell right and silently dropped the last one.
+                PIPE = "\x00"
+                row = row.replace("\\|", PIPE)
+                # Strip the outer pipes before splitting, so an empty leading or
+                # trailing cell is not invented.
+                return [c.strip().replace(PIPE, "|")
+                        for c in row.strip().strip("|").split("|")]
+
+            head = cells(line)
+            out.append("<table><thead><tr>")
+            out.extend(f"<th>{inline(c)}</th>" for c in head)
+            out.append("</tr></thead><tbody>")
+            i += 2
+            while i < len(lines) and lines[i].lstrip().startswith("|"):
+                row = cells(lines[i])
+                # Pad or trim to the header width so a miscounted row cannot
+                # break the table's shape.
+                row = (row + [""] * len(head))[:len(head)]
+                out.append("<tr>" + "".join(f"<td>{inline(c)}</td>" for c in row) + "</tr>")
+                i += 1
+            out.append("</tbody></table>")
             continue
 
         m = re.match(r"^\s*[-*]\s+(.*)", line)
@@ -138,6 +188,36 @@ def md(text: str) -> str:
     if in_code:
         out.append("</code></pre>")
     return "\n".join(out)
+
+
+# --- Syntax highlighting -----------------------------------------------------
+# Two languages, a few hundred tokens. A highlighter library would be a
+# dependency and a render-blocking script for that; these are line-oriented
+# regexes over already-escaped text, which is enough for JSON and shell and
+# cannot mangle anything it does not recognise.
+
+def highlight(line: str, lang: str) -> str:
+    esc = html.escape(line)
+    if lang == "json":
+        # Keys before values: the key pattern is anchored on the following colon,
+        # so a string value is never mistaken for one.
+        esc = re.sub(r'(&quot;[^&]*?&quot;)(\s*:)', r'<span class="tok-key">\1</span>\2', esc)
+        esc = re.sub(r'(:\s*)(&quot;.*?&quot;)', r'\1<span class="tok-str">\2</span>', esc)
+        esc = re.sub(r'\b(-?\d+\.?\d*)\b', r'<span class="tok-num">\1</span>', esc)
+        esc = re.sub(r'\b(true|false|null)\b', r'<span class="tok-lit">\1</span>', esc)
+        # A trailing // comment is not legal JSON, but the examples use them to
+        # annotate; they are marked as comments so nobody copies one by accident.
+        esc = re.sub(r'(//.*)$', r'<span class="tok-com">\1</span>', esc)
+    elif lang in ("bash", "sh", "shell"):
+        esc = re.sub(r'^(\s*)(#.*)$', r'\1<span class="tok-com">\2</span>', esc)
+        esc = re.sub(r'(\$\{?[A-Za-z_][A-Za-z0-9_]*\}?)', r'<span class="tok-var">\1</span>', esc)
+        esc = re.sub(r'\b(if|then|fi|for|do|done|while|read|echo|cd|mkdir|cp|git|export|local)\b',
+                     r'<span class="tok-kw">\1</span>', esc)
+    elif lang == "swift":
+        esc = re.sub(r'\b(let|var|func|struct|enum|public|return|if|else|guard|for|in)\b',
+                     r'<span class="tok-kw">\1</span>', esc)
+        esc = re.sub(r'(//.*)$', r'<span class="tok-com">\1</span>', esc)
+    return esc
 
 
 def inline(s: str) -> str:
@@ -186,6 +266,8 @@ def asset_version() -> str:
 
 
 def page(title: str, body: str, *, nav: str = "", cls: str = "") -> str:
+    open_body = '<article class="guide-body">' if cls == "guide" else ""
+    close_body = "</article>" if cls == "guide" else ""
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -202,7 +284,7 @@ def page(title: str, body: str, *, nav: str = "", cls: str = "") -> str:
   <a class="wordmark" href="/"><img src="/icon.png" alt="" width="28" height="28">Transcripts</a>
   <nav><a href="/guide/">User guide</a><a href="/#download">Download</a></nav>
 </header>
-<main>{nav}{body}</main>
+<main>{nav}{open_body}{body}{close_body}</main>
 <footer>
   <p>Transcripts is made by <a href="https://hatcher.ltd">Doug Hatcher</a>.
      <a href="/guide/privacy/">Privacy</a> ·
@@ -251,10 +333,24 @@ def build():
         page("Not found — Transcripts", (ROOT / "site" / "404.html").read_text(), cls="landing"))
 
     # Guide
-    links = "".join(
-        f'<a href="/guide/{"" if slug == "index" else slug + "/"}">{html.escape(title)}</a>'
-        for slug, title in GUIDE_PAGES)
-    nav = f'<nav class="guide-nav">{links}</nav>'
+    def sidebar(current: str) -> str:
+        out = ['<nav class="guide-nav" aria-label="Guide">']
+        for heading, pages in GUIDE_SECTIONS:
+            # Each section is one element, so the narrow-screen grid keeps a
+            # heading with its own links instead of flowing them into separate
+            # columns.
+            out.append(f'<div class="nav-section"><h4>{html.escape(heading)}</h4><ul>')
+            for slug, title in pages:
+                href = "/guide/" + ("" if slug == "index" else slug + "/")
+                # aria-current is the accessible signal; the class is the visual
+                # one. Both, because "where am I" is the question a sidebar
+                # exists to answer.
+                mark = ' class="here" aria-current="page"' if slug == current else ""
+                out.append(f'<li><a href="{href}"{mark}>{html.escape(title)}</a></li>')
+            out.append("</ul></div>")
+        out.append("</nav>")
+        return "".join(out)
+
     for slug, title in GUIDE_PAGES:
         src = GUIDE_SRC / f"{slug}.md"
         if not src.exists():
@@ -263,7 +359,8 @@ def build():
         body = md(src.read_text())
         dest = OUT / "guide" / ("index.html" if slug == "index" else f"{slug}/index.html")
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(page(f"{title} — Transcripts guide", body, nav=nav, cls="guide"))
+        dest.write_text(page(f"{title} — Transcripts guide", body,
+                             nav=sidebar(slug), cls="guide"))
         print(f"  ✓ /guide/{'' if slug == 'index' else slug + '/'}")
 
     print(f"✓ built → {OUT.relative_to(ROOT)}")
