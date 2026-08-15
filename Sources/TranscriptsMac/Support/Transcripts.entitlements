@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      Use when you build a proper .app target in Xcode and enable App Sandbox.
+      A menu-bar utility can also run unsandboxed; if so these are advisory.
+      Microphone capture:
+    -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+    <!--
+      Screen Recording (required by ScreenCaptureKit for system-audio capture) is
+      NOT an entitlement — it is a TCC grant the user makes in
+      System Settings > Privacy & Security > Screen Recording. We never script it.
+    -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+</dict>
+</plist>
