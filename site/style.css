@@ -64,7 +64,8 @@ main { padding: 0 1.5rem; }
 /* --- landing -------------------------------------------------------------- */
 
 .hero {
-  max-width: var(--max); margin: 0 auto; padding: 4.5rem 0 3rem;
+  --hero-top: 4.5rem;               /* one value: the padding AND the wave's offset */
+  max-width: var(--max); margin: 0 auto; padding: var(--hero-top) 0 3rem;
   text-align: center;
 }
 .hero h1 {
@@ -143,7 +144,7 @@ pre code { background: none; padding: 0; }
 @media (max-width: 34rem) {
   .top { padding: .85rem 1rem; }
   main { padding: 0 1rem; }
-  .hero { padding-top: 3rem; }
+  .hero { --hero-top: 3rem; }
 }
 
 .hero .brew {
@@ -160,3 +161,42 @@ pre code { background: none; padding: 0; }
   color: var(--muted); font-size: .85rem; line-height: 1.55; text-align: left;
 }
 .hero .unsigned code { display: inline-block; margin: .35rem 0; font-size: .95em; }
+
+/* --- hero waveform -------------------------------------------------------- */
+
+/* Anchored to the mark rather than to the page, so it stays aligned when the
+   headline rewraps. The centre is masked out: the wave appears to flow from
+   behind the icon — whose middle line is itself a waveform — rather than being
+   a band the icon happens to sit on. Full-bleed via viewport width, since the
+   hero is a narrow measure and the wave should not be.
+   Decorative and inert: aria-hidden, no pointer events, and it never overlaps
+   the text, which starts below it. */
+.hero { position: relative; }
+#wave {
+  position: absolute;
+  /* Aligned to the mark, not the padding box, so the wave runs through the icon
+     rather than floating above it. Both read the same variable, so they cannot
+     drift apart when the hero's spacing changes. */
+  top: var(--hero-top);
+  left: 50%;
+  width: 100vw;
+  max-width: 1400px;
+  height: 96px;                     /* the mark's own height */
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 0;
+  -webkit-mask-image:
+    radial-gradient(ellipse 90px 70px at center, transparent 55%, #000 100%),
+    linear-gradient(to right, transparent, #000 18%, #000 82%, transparent);
+          mask-image:
+    radial-gradient(ellipse 90px 70px at center, transparent 55%, #000 100%),
+    linear-gradient(to right, transparent, #000 18%, #000 82%, transparent);
+  -webkit-mask-composite: source-in;
+          mask-composite: intersect;
+}
+.hero > *:not(#wave) { position: relative; z-index: 1; }
+
+@media (max-width: 40rem) {
+  /* On a narrow screen the mask's clear centre would eat most of the wave. */
+  #wave { height: 80px; opacity: .7; }
+}

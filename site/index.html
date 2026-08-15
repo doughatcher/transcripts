@@ -1,4 +1,5 @@
 <section class="hero">
+  <canvas id="wave" aria-hidden="true"></canvas>
   <img class="mark" src="/icon.png" alt="" width="96" height="96">
   <span class="beta">Beta · {{VERSION}}</span>
   <h1>Live transcripts of every meeting. Entirely on device.</h1>
@@ -84,3 +85,92 @@
   Recording laws vary by country and state, and some require the consent of everyone
   in the conversation — Transcripts gives you a recorder, and the rest is yours.
 </section>
+
+<script>
+// An ambient waveform behind the hero. It is meant to read as the product
+// rather than as decoration: the app's whole subject is speech arriving over
+// time, so the wave travels left to right and its amplitude is the sum of a few
+// incommensurable sines — speech is lumpy, and a single sine reads as a test
+// tone rather than a voice.
+(function () {
+  const canvas = document.getElementById('wave');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d', { alpha: true });
+  const still = matchMedia('(prefers-reduced-motion: reduce)');
+
+  const BARS = 72, BAR_W = 3, GAP = 7;
+  let w = 0, h = 0, raf = null, t = 0;
+
+  function accent() {
+    // Read the theme's own colour instead of hardcoding one, so the wave
+    // follows light/dark with the rest of the page.
+    return getComputedStyle(document.documentElement)
+      .getPropertyValue('--accent').trim() || '#7c3aed';
+  }
+
+  function size() {
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    w = canvas.clientWidth; h = canvas.clientHeight;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function amp(i, time) {
+    // Three sines whose periods do not divide each other, so the pattern never
+    // visibly repeats, plus a slow envelope so the whole field breathes.
+    const x = i / BARS;
+    const a = Math.sin(x * 9.1 - time * 1.7);
+    const b = Math.sin(x * 21.3 - time * 2.6) * 0.55;
+    const c = Math.sin(x * 4.3 - time * 0.9) * 0.8;
+    const envelope = 0.55 + 0.45 * Math.sin(x * Math.PI);      // quiet at the edges
+    const breath = 0.75 + 0.25 * Math.sin(time * 0.6);
+    return Math.abs(a + b + c) / 2.35 * envelope * breath;
+  }
+
+  function draw(time) {
+    ctx.clearRect(0, 0, w, h);
+    const colour = accent();
+    const totalW = BARS * (BAR_W + GAP) - GAP;
+    const startX = (w - totalW) / 2;
+    const mid = h * 0.5;
+
+    for (let i = 0; i < BARS; i++) {
+      const a = amp(i, time);
+      const barH = Math.max(BAR_W, a * h * 0.92);
+      const x = startX + i * (BAR_W + GAP);
+      // Fade toward the edges so the band dissolves rather than being cropped.
+      const edge = Math.min(1, Math.min(i, BARS - 1 - i) / 14);
+      ctx.globalAlpha = 0.42 * edge * (0.4 + a * 0.6);
+      ctx.fillStyle = colour;
+      ctx.beginPath();
+      ctx.roundRect(x, mid - barH / 2, BAR_W, barH, BAR_W / 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function frame(ms) {
+    t = ms / 1000;
+    draw(t);
+    raf = requestAnimationFrame(frame);
+  }
+
+  function start() {
+    if (raf || still.matches) return;
+    raf = requestAnimationFrame(frame);
+  }
+  function stop() {
+    if (raf) { cancelAnimationFrame(raf); raf = null; }
+  }
+
+  size();
+  draw(0);                       // a pleasing static state before anything moves
+  if (!still.matches) start();
+
+  addEventListener('resize', () => { size(); draw(t); });
+  // Do not animate a page nobody is looking at.
+  document.addEventListener('visibilitychange', () =>
+    document.hidden ? stop() : start());
+  still.addEventListener('change', () => still.matches ? (stop(), draw(0)) : start());
+})();
+</script>
