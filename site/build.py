@@ -223,6 +223,13 @@ def build():
                                          landing, cls="landing"))
     print(f"  · version {version}")
 
+    # A real 404 page. Without one, Pages answers every missing path with
+    # index.html and a 200 — which meant the updater fetching a channel that
+    # does not exist got HTML, failed to decode it, and reported "the manifest
+    # could not be read" instead of "no stable release yet".
+    (OUT / "404.html").write_text(
+        page("Not found — Transcripts", (ROOT / "site" / "404.html").read_text(), cls="landing"))
+
     # Guide
     links = "".join(
         f'<a href="/guide/{"" if slug == "index" else slug + "/"}">{html.escape(title)}</a>'

@@ -135,7 +135,7 @@ echo "▶ $ZIP_NAME — $(( SIZE / 1024 / 1024 )) MB, sha256 ${SHA:0:16}…"
 NOTES="$(sed -n "/^## $VERSION\$/,/^## /p" docs/guide/changelog.md 2>/dev/null | sed '1d;$d' | sed 's/"/\\"/g' | tr '\n' ' ' || true)"
 [[ -n "$NOTES" ]] || NOTES="See the user guide for what's new."
 
-cat > "$SITE/appcast.json" <<JSON
+MANIFEST=$(cat <<JSON
 {
   "version": "$VERSION",
   "url": "$BASE_URL/$ZIP_NAME",
@@ -145,7 +145,33 @@ cat > "$SITE/appcast.json" <<JSON
   "notes": "$NOTES"
 }
 JSON
-echo "  ✓ appcast.json"
+)
+
+# Two channels, one artifact. A pre-release writes ONLY the beta manifest, so
+# stable riders are never offered it. A stable release writes both, so someone
+# on the beta train still receives a finished version once it is newer than the
+# last beta — otherwise opting into betas would strand you on them.
+printf '%s\n' "$MANIFEST" > "$SITE/appcast-beta.json"
+if [[ "$VERSION" == *-* ]]; then
+  echo "  ✓ appcast-beta.json (pre-release — stable channel untouched)"
+  # Carry forward the published STABLE manifest, if there is one. Fetched and
+  # checked rather than copied blindly: an earlier build wrote a pre-release
+  # into appcast.json, which would have offered a beta to everyone who had
+  # deliberately not asked for one.
+  if curl -fsS --max-time 20 "$BASE_URL/appcast.json" -o "$SITE/.appcast-prev.json" 2>/dev/null; then
+    PREV=$(python3 -c "import json;print(json.load(open('$SITE/.appcast-prev.json'))['version'])" 2>/dev/null || echo "")
+    if [[ -n "$PREV" && "$PREV" != *-* ]]; then
+      mv "$SITE/.appcast-prev.json" "$SITE/appcast.json"
+      echo "  ✓ appcast.json (preserved stable $PREV)"
+    else
+      rm -f "$SITE/.appcast-prev.json"
+      echo "  · no stable release published — stable channel left empty"
+    fi
+  fi
+else
+  printf '%s\n' "$MANIFEST" > "$SITE/appcast.json"
+  echo "  ✓ appcast.json + appcast-beta.json"
+fi
 
 # Stable alias so the site's download button never needs editing.
 cp "$ZIP" "$SITE/$APP_NAME-macos.zip"
@@ -185,16 +211,56 @@ end
 RUBY
 echo "  ✓ dist/transcripts.rb"
 
-cat <<DONE
+# --- 8. Publish --------------------------------------------------------------
+# Deploy and tap-push happen here rather than as copy-paste instructions,
+# because a release that is three commands is a release where someone
+# eventually runs two of them. The gate is notarization, not caution: an
+# unsigned build cannot reach this point unless NOTARIZE=0 was passed
+# deliberately, and that path refuses to publish.
+if [[ "${PUBLISH:-1}" == "1" && "$NOTARIZE" == "1" ]]; then
+  echo "▶ Deploying site"
+  npx wrangler pages deploy "$SITE" --project-name=transcripts --commit-dirty=true 2>&1 | tail -2
 
-✓ Release $VERSION staged.
+  TAP="${TAP_DIR:-$HOME/repos/homebrew-tap}"
+  if [[ -d "$TAP/.git" ]]; then
+    echo "▶ Updating the tap"
+    cp "$CASK" "$TAP/Casks/transcripts.rb"
+    git -C "$TAP" pull -q --rebase 2>/dev/null || true
+    if git -C "$TAP" diff --quiet -- Casks/transcripts.rb; then
+      echo "  · cask unchanged"
+    else
+      git -C "$TAP" commit -q -am "transcripts $VERSION" && git -C "$TAP" push -q
+      echo "  ✓ tap updated to $VERSION"
+    fi
+  else
+    echo "  ! no tap checkout at $TAP — skipping (clone hatcher-ltd/homebrew-tap there)"
+  fi
 
-  Publish:
-    npx wrangler pages deploy site/public --project-name=transcripts
-  Then copy the cask into the tap:
-    cp dist/transcripts.rb ../homebrew-tap/Casks/transcripts.rb \
-      && (cd ../homebrew-tap && git commit -am "transcripts $VERSION" && git push)
+  # The three consumers must agree. Verified against what is actually served,
+  # not against local files, because the failure this catches is a deploy that
+  # silently did not land.
+  echo "▶ Verifying published release"
+  sleep 5
+  CHANNEL="appcast.json"; [[ "$VERSION" == *-* ]] && CHANNEL="appcast-beta.json"
+  PUB=$(curl -fsS --max-time 30 "$BASE_URL/$CHANNEL" | python3 -c "import json,sys;print(json.load(sys.stdin)['sha256'])" 2>/dev/null || echo "")
+  TAPSHA=$(grep -oE '[a-f0-9]{64}' "$TAP/Casks/transcripts.rb" 2>/dev/null | head -1 || echo "")
+  if [[ "$PUB" == "$SHA" && "$TAPSHA" == "$SHA" ]]; then
+    echo "  ✓ manifest, cask and artifact all agree (${SHA:0:16}…)"
+  else
+    echo "  ✗ MISMATCH — manifest=${PUB:0:16}… cask=${TAPSHA:0:16}… built=${SHA:0:16}…" >&2
+    exit 1
+  fi
 
-  Users then:
-    brew install --cask hatcher-ltd/tap/transcripts
+  cat <<DONE
+
+✓ Published $VERSION → $BASE_URL
+  brew install --cask hatcher-ltd/tap/transcripts
 DONE
+else
+  cat <<DONE
+
+✓ Release $VERSION staged (not published).
+  PUBLISH=0 or NOTARIZE=0 was set — nothing was deployed and the tap is untouched.
+  Staged at: $SITE
+DONE
+fi
