@@ -23,8 +23,11 @@ screen locked, transcribes live on the device, and hands finished takes to the
 Mac through a folder they share. With iCloud on both, there is nothing to
 configure.
 
-Nothing is uploaded. The iOS app contains no networking code at all; the Mac
-app's only outbound request is its update check.
+Recording, transcription and summarization all happen on the device. The iOS
+app makes no network requests at all; the Mac app's only one is its update
+check. Files you place in a sync folder are of course synced by that service —
+that is the point of choosing one — but nothing is sent anywhere by Transcripts
+itself.
 
 ## Layout
 
