@@ -97,9 +97,10 @@ Paste into App Store Connect ▸ App Review Information ▸ Notes.
 > nothing to export — the files are already yours.
 >
 > **Genuinely private**
-> No servers, no accounts, no analytics, no advertising. Your audio never leaves
-> your device: the app requires on-device speech recognition and switches live
-> text off rather than send your recording anywhere.
+> No servers, no accounts, no analytics, no advertising. Transcripts sends your
+> audio nowhere: it requires on-device speech recognition and switches live text
+> off rather than fall back to a server. Your recordings go only where you put
+> them.
 >
 > ---
 > Recording laws vary by location, and some places require the consent of

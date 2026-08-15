@@ -633,7 +633,7 @@ private struct SetupPane: View {
                 .foregroundStyle(.tint)
             VStack(spacing: 6) {
                 Text("Where should recordings go?").font(.title2.weight(.semibold))
-                Text("Recordings are saved as ordinary audio files in a folder you choose. Nothing is ever uploaded.")
+                Text("Recordings are saved as ordinary audio files in a folder you choose. Transcribing happens on this device.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
