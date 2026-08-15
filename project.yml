@@ -6,6 +6,10 @@
 # widget extension: ActivityKit matches the attributes type across the two
 # processes, so one shared definition.
 name: Transcripts
+packages:
+  Transcripts:
+    path: .
+
 options:
   bundleIdPrefix: ltd.hatcher
   deploymentTarget:
@@ -100,3 +104,40 @@ targets:
         CODE_SIGN_STYLE: Automatic
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "1,2"
+
+  # The macOS menu-bar app. An Xcode target rather than a SwiftPM executable:
+  # SwiftPM cannot emit an .app bundle, and — more sharply — a package and a
+  # generated .xcodeproj sharing a directory both offer a "Transcripts" scheme,
+  # where xcodebuild silently resolves the project. Building the Mac app then
+  # built the iOS one instead. One project, distinct scheme names, no ambiguity.
+  TranscriptsMac:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/TranscriptsMac
+        excludes: ["Support/Info.plist", "Support/*.entitlements"]
+      - path: Sources/TranscriptsMac/Support/Transcripts.icns
+        buildPhase: resources
+    dependencies:
+      - package: Transcripts
+        product: TranscriptsCore
+      - package: Transcripts
+        product: TranscriptsEngine
+    info:
+      path: Sources/TranscriptsMac/Support/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ltd.hatcher.transcripts
+        PRODUCT_NAME: Transcripts
+        GENERATE_INFOPLIST_FILE: NO
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        # Unsandboxed by necessity: ScreenCaptureKit system audio and an
+        # arbitrary user-chosen vault path. Signed without entitlements — a
+        # self-signed build carrying sandbox entitlements is a known way to end
+        # up "authorized" by TCC but fed silence.
+        ENABLE_APP_SANDBOX: NO
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Transcripts Local Signing"
+        CODE_SIGN_ENTITLEMENTS: ""

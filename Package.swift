@@ -1,9 +1,9 @@
 // swift-tools-version:5.9
 import PackageDescription
 
-// The Mac app and the shared libraries. The iOS app is an Xcode project
-// (`project.yml` → xcodegen) because SwiftPM cannot produce an .app bundle,
-// and it consumes TranscriptsCore from here as a local package.
+// The shared libraries. Both apps are targets in the generated Xcode project
+// (`project.yml` → xcodegen), because SwiftPM cannot produce an .app bundle and
+// having exactly one project avoids xcodebuild resolving the wrong one.
 //
 // The split that matters is Core vs Engine:
 //
@@ -27,7 +27,6 @@ let package = Package(
     products: [
         .library(name: "TranscriptsCore", targets: ["TranscriptsCore"]),
         .library(name: "TranscriptsEngine", targets: ["TranscriptsEngine"]),
-        .executable(name: "Transcripts", targets: ["TranscriptsMac"]),
     ],
     dependencies: [
         // On-device speaker diarization (Core ML) for the "who said what" pass
@@ -52,9 +51,5 @@ let package = Package(
             ]
         ),
         .testTarget(name: "TranscriptsCoreTests", dependencies: ["TranscriptsCore"]),
-        .executableTarget(
-            name: "TranscriptsMac",
-            dependencies: ["TranscriptsCore", "TranscriptsEngine"]
-        ),
     ]
 )
