@@ -37,6 +37,18 @@ public struct DeviceCapture: Codable, Equatable, Sendable {
     public var titleHint: String?
     /// Recording app version, for triaging a bad batch after the fact.
     public var appVersion: String
+    /// The session this capture belongs to, when it was made during one.
+    ///
+    /// Additive and optional, so the schema stays at 2 on purpose. The version
+    /// exists so an older Mac can refuse a sidecar it would *misread*; a new
+    /// optional field is not misreadable — an older reader decodes the sidecar
+    /// exactly as before and ignores this. Bumping it would have made every
+    /// existing Mac reject captures from an updated phone, which is a far worse
+    /// outcome than one that cannot yet group them.
+    public var sessionID: String?
+    /// What that particular session was called, if it was given a label.
+    public var sessionLabel: String?
+
     /// What the device heard live, if it could. Deliberately *draft*: it comes
     /// from the phone's streaming recognizer with no diarization and no second
     /// pass, so the Mac always re-transcribes from the audio. Its value is that
@@ -54,7 +66,9 @@ public struct DeviceCapture: Codable, Equatable, Sendable {
         audioFilename: String,
         titleHint: String? = nil,
         appVersion: String,
-        draftTranscript: String? = nil
+        draftTranscript: String? = nil,
+        sessionID: String? = nil,
+        sessionLabel: String? = nil
     ) {
         self.schema = schema
         self.id = id
@@ -66,6 +80,8 @@ public struct DeviceCapture: Codable, Equatable, Sendable {
         self.titleHint = titleHint
         self.appVersion = appVersion
         self.draftTranscript = draftTranscript
+        self.sessionID = sessionID
+        self.sessionLabel = sessionLabel
     }
 }
 

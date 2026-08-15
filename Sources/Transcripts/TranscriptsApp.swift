@@ -7,7 +7,7 @@ import SwiftUI
 /// (speaker names, summaries) can happen there when one exists.
 @main
 struct TranscriptsApp: App {
-    @StateObject private var model = RecorderModel()
+    @StateObject private var model = RecorderModel.shared
 
     var body: some Scene {
         WindowGroup {

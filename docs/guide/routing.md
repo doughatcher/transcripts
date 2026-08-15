@@ -167,8 +167,19 @@ Because these are Shortcuts actions they automate. The best trigger is a
 evening you play — because that fires when you are already at the table. A
 time-only automation is the case where you might want the recording toggle off.
 
-On iPhone and iPad this is a personal automation. On the Mac, a `launchd` job or
-a calendar event running:
+Both platforms provide the actions. On **iPhone and iPad** this is a personal
+automation, and it is the better home for a recurring one: iOS can trigger on
+*arriving somewhere* combined with a time, which is what makes a weekly game
+reliable — you are already at the table when it fires.
+
+The mobile app does less behind the action, on purpose. iOS suspends the app
+between takes and has no shell, so it does not run the idle clock or the
+completion command. What it does is the part only the device in the room can:
+each recording it makes during a session is **tagged** with that session, and
+travels to the Mac carrying it. The Mac does the grouping and runs
+`onComplete` — whenever it next wakes, which need not be that evening.
+
+On the Mac, a `launchd` job or a calendar event running:
 
 ```bash
 shortcuts run "Start Session"
