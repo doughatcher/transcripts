@@ -272,6 +272,11 @@ final class RecorderModel: ObservableObject {
         // *playback* mode, and pairing it with .record throws OSStatus -50
         // (paramErr) on device — the Simulator accepts it, which is exactly
         // how this shipped broken (2026-08-03).
+        // .allowBluetooth warns: it was renamed .allowBluetoothHFP. The new
+        // spelling is gated above our iOS 17 floor, and branching on
+        // availability leaves the same warning on the fallback path — so the
+        // old spelling stays until the floor rises. It is a soft deprecation
+        // and still functional on every OS we support.
         try session.setCategory(.record, mode: .default, options: [.allowBluetooth])
         var lastFailure: Error?
         for attempt in 0..<6 {

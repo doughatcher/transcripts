@@ -272,7 +272,7 @@ private struct WorkspaceBar: View {
                         .font(.subheadline.weight(.medium))
                     Text(destination.workspaces.count > 1
                          ? "\(destination.workspaces.count) workspaces"
-                         : "Recordings sync here")
+                         : "Recordings are saved here")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
@@ -528,7 +528,7 @@ private struct SetupPane: View {
                 .foregroundStyle(.tint)
             VStack(spacing: 6) {
                 Text("Where should recordings go?").font(.title2.weight(.semibold))
-                Text("Transcripts hands audio to a folder your Mac watches. It never uploads anywhere else.")
+                Text("Recordings are saved as ordinary audio files in a folder you choose. Nothing is ever uploaded.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -543,8 +543,8 @@ private struct SetupPane: View {
                 ) { managed = true; picking = true }
 
                 SetupOption(
-                    title: "Configure",
-                    detail: "Choose an exact folder and Transcripts uses it as-is.",
+                    title: "Choose a folder",
+                    detail: "Pick an exact folder and Transcripts uses it as-is — including one a Mac already watches.",
                     icon: "slider.horizontal.3",
                     prominent: false
                 ) { managed = false; picking = true }
@@ -1046,8 +1046,8 @@ private struct DestinationRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name ?? "Choose a destination folder")
                     Text(name == nil
-                         ? "OneDrive, iCloud, or anywhere the Mac can see"
-                         : "Recordings sync here for the Mac to process")
+                         ? "iCloud Drive, OneDrive, Dropbox, or on this device"
+                         : "Recordings are saved here")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()

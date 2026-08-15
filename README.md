@@ -15,6 +15,18 @@ ever — there is no server, no account, and no third-party code.
   processing (speaker attribution, summaries) can happen there. The phone app
   is complete without it.
 
+### Handing off to a Mac
+
+Each recording is written to `<folder>/Inbox/` as `<uuid>.m4a` plus a
+`<uuid>.json` sidecar. Audio is written first and the sidecar last, so a
+watcher can treat "sidecar present" as "capture complete" — which matters on
+cloud folders that materialize files progressively.
+
+"Set up for me" creates a `Transcripts/` folder inside the parent you pick. If
+you're pairing with a Mac watcher that already expects a differently-named
+folder, use **Choose a folder** instead and point at that folder directly —
+the sidecar format is what the two sides agree on, not the folder name.
+
 ## Build
 
 Requires Xcode 26 (iOS 26 SDK for on-device summarization; the app itself runs

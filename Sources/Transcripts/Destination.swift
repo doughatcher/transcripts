@@ -28,9 +28,6 @@ struct Workspace: Codable, Identifiable, Equatable {
 final class Destination: ObservableObject {
     private static let listKey = "transcripts.workspaces"
     private static let activeKey = "transcripts.workspace.active"
-    /// Pre-workspaces keys, read once to carry an existing setup forward.
-    private static let legacyBookmarkKey = "transcripts.destination.bookmark"
-    private static let legacyManagedKey = "transcripts.destination.managed"
 
     /// Folder name created inside the picked root in "set up for me" mode.
     static let managedFolderName = "Transcripts"
@@ -188,23 +185,14 @@ final class Destination: ObservableObject {
             workspaces = list
             activeID = defaults.string(forKey: Self.activeKey).flatMap(UUID.init)
                 ?? list.first?.id
-            return
-        }
-        // Carry a pre-workspaces setup forward rather than making the user pick
-        // their folder again.
-        if let legacy = defaults.data(forKey: Self.legacyBookmarkKey) {
-            let managed = defaults.bool(forKey: Self.legacyManagedKey)
-            let name = Self.resolve(legacy).map { Self.suggestedName(for: $0, existing: []) } ?? "Recordings"
-            let migrated = Workspace(id: UUID(), name: name, bookmark: legacy, managed: managed)
-            workspaces = [migrated]
-            activeID = migrated.id
-            save()
         }
     }
 
     private func save() {
         let defaults = UserDefaults.standard
-        try? JSONEncoder().encode(workspaces).map { defaults.set($0, forKey: Self.listKey) }
+        if let data = try? JSONEncoder().encode(workspaces) {
+            defaults.set(data, forKey: Self.listKey)
+        }
         defaults.set(activeID?.uuidString, forKey: Self.activeKey)
     }
 }
