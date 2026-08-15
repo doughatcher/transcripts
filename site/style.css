@@ -173,19 +173,23 @@ pre code { background: none; padding: 0; }
 
    Width comes from a positioned full-bleed box rather than viewport units, so
    it never disagrees with the scrollbar. */
-.hero { position: relative; }
+.hero { position: relative; --mark: 96px; --wave-h: 192px; }
 #wave {
   position: absolute;
-  top: var(--hero-top);
+  /* Centred on the mark rather than aligned to its top: at twice the mark's
+     height, top-alignment would hang the wave down over the version pill. The
+     offset is derived from the two heights, so changing either keeps them
+     concentric. */
+  top: calc(var(--hero-top) - (var(--wave-h) - var(--mark)) / 2);
   left: 50%;
   transform: translateX(-50%);
-  width: min(1400px, 96vw);
-  height: 96px;
+  width: min(1000px, 92vw);
+  height: var(--wave-h);
   pointer-events: none;
   z-index: 0;
 }
 .hero > *:not(#wave) { position: relative; z-index: 1; }
 
 @media (max-width: 40rem) {
-  #wave { height: 80px; }
+  .hero { --wave-h: 150px; }
 }

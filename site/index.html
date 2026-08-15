@@ -5,7 +5,7 @@
        stale or blocked, this element must still be incapable of moving
        anything. Everything cosmetic stays in CSS. -->
   <canvas id="wave" aria-hidden="true"
-          style="position:absolute;pointer-events:none;height:96px"></canvas>
+          style="position:absolute;pointer-events:none;height:192px"></canvas>
   <img class="mark" src="/icon.png" alt="" width="96" height="96">
   <span class="beta">Beta · {{VERSION}}</span>
   <h1>Live transcripts of every meeting. Entirely on device.</h1>
@@ -104,7 +104,7 @@
   const ctx = canvas.getContext('2d', { alpha: true });
   const still = matchMedia('(prefers-reduced-motion: reduce)');
 
-  const BARS = 72, BAR_W = 3, GAP = 7;
+  const BARS = 72, BAR_W = 3, GAP = 8;
   let w = 0, h = 0, raf = null, t = 0;
 
   function accent() {
@@ -144,8 +144,8 @@
     // fade out entirely so the wave emerges from behind the icon instead of
     // running across it. Done here rather than with a CSS mask because mask
     // compositing is not portable — and this is two lines of arithmetic.
-    const clear = h * 0.72;
-    const fade = h * 0.55;
+    const clear = 62;   // the mark's half-width plus a little air
+    const fade = 90;    // how far the wave takes to reach full strength
 
     // Bars are laid out across the full canvas rather than a fixed count's
     // worth, so a wide window gets more wave instead of a stretched one.
@@ -160,9 +160,11 @@
       const near = Math.min(1, (dist - clear) / fade);  // ease away from it
 
       const a = amp(i / count, time);
-      const barH = Math.max(BAR_W, a * h * 0.92);
-      // Fade toward the outer edges so the band dissolves rather than stopping.
-      const edge = Math.min(1, (1 - Math.abs(i / count - 0.5) * 2) / 0.22);
+      const barH = Math.max(BAR_W, Math.min(a * 1.45, 1) * h * 0.9);
+      // Fade over a fixed distance from each end, not a fraction of the width.
+      // As a fraction, a narrow phone canvas got a ~38px fade and the tall bars
+      // were visibly guillotined at the edge instead of dissolving.
+      const edge = Math.min(1, Math.min(x, w - x) / 110);
 
       ctx.globalAlpha = 0.42 * near * edge * (0.4 + a * 0.6);
       ctx.fillStyle = colour;
