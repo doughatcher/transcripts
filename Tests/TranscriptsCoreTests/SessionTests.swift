@@ -176,6 +176,25 @@ import Testing
         #expect(p.hardStop == nil)
     }
 
+    /// The label names the occasion, and the slug should follow it — a journal
+    /// folder wants to be called after the night, not after the kind of night.
+    @Test func labelShapesTheSlug() {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let p = SessionProfile(id: "dnd", name: "D&D")
+        var s = ActiveSession(profileID: "dnd", startedAt: start, label: "Session 42: The Sunken Keep!")
+        var v = SessionVariables.variables(session: s, profile: p, sessionDirectory: nil,
+                                           transcripts: [], audio: [])
+        #expect(v["sessionLabel"] == "Session 42: The Sunken Keep!")
+        #expect(v["slug"]?.hasSuffix("-session-42-the-sunken-keep") == true)
+
+        // Without one, it falls back to the profile id.
+        s.label = nil
+        v = SessionVariables.variables(session: s, profile: p, sessionDirectory: nil,
+                                       transcripts: [], audio: [])
+        #expect(v["sessionLabel"] == "")
+        #expect(v["slug"]?.hasSuffix("-dnd") == true)
+    }
+
     @Test func variablesCoverWhatAScriptNeeds() {
         let start = Date(timeIntervalSince1970: 1_800_000_000)
         var s = ActiveSession(profileID: "dnd", startedAt: start)

@@ -7,6 +7,10 @@ import Foundation
 /// mean "the game ended", so the state cannot live only in memory.
 public struct ActiveSession: Codable, Equatable, Sendable {
     public var profileID: String
+    /// What you called this particular occasion — "Session 42, The Sunken Keep".
+    /// Free text passed in when the session starts; the profile names the
+    /// *kind* of session, this names the instance.
+    public var label: String?
     public var startedAt: Date
     /// Last time a recording started or finished under this session. The idle
     /// clock runs from here, not from `startedAt`.
@@ -33,10 +37,12 @@ public struct ActiveSession: Codable, Equatable, Sendable {
         case hardStop    // wall-clock backstop
     }
 
-    public init(profileID: String, startedAt: Date, lastActivityAt: Date? = nil,
+    public init(profileID: String, startedAt: Date, label: String? = nil,
+                lastActivityAt: Date? = nil,
                 recordingIDs: [UUID] = [], endedAt: Date? = nil,
                 endReason: EndReason? = nil, completedAt: Date? = nil) {
         self.profileID = profileID
+        self.label = label
         self.startedAt = startedAt
         self.lastActivityAt = lastActivityAt ?? startedAt
         self.recordingIDs = recordingIDs
@@ -117,6 +123,9 @@ public enum SessionVariables {
         var v: [String: String] = [
             "sessionID": profile.id,
             "sessionName": profile.name,
+            // The instance, not the kind. Empty rather than absent so a script
+            // can reference it unconditionally.
+            "sessionLabel": session.label ?? "",
             "startedAt": iso.string(from: session.startedAt),
             "recordingCount": String(session.recordingIDs.count),
             "endReason": session.endReason?.rawValue ?? "",
@@ -130,7 +139,11 @@ public enum SessionVariables {
         // name out of it — the shape adventure-log's data/sessions/ already uses.
         let day = DateFormatter()
         day.dateFormat = "yyyy-MM-dd"
-        v["slug"] = "\(day.string(from: session.startedAt))-\(profile.id)"
+        let slugTail = (session.label?.isEmpty == false ? session.label! : profile.id)
+            .lowercased()
+            .map { $0.isLetter || $0.isNumber ? String($0) : "-" }.joined()
+            .split(separator: "-").joined(separator: "-")
+        v["slug"] = "\(day.string(from: session.startedAt))-\(slugTail)"
         return v
     }
 }

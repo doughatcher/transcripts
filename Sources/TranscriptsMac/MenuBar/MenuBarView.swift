@@ -267,18 +267,36 @@ struct MenuBarView: View {
             HStack(spacing: 8) {
                 Image(systemName: "circle.hexagongrid.fill").foregroundStyle(.tint)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(p.name).font(.subheadline.weight(.medium))
+                    Text(s.label ?? p.name).font(.subheadline.weight(.medium))
                     Text(s.recordingIDs.isEmpty
-                         ? "Session running — nothing recorded yet"
-                         : "^[\(s.recordingIDs.count) recording](inflect: true) this session")
+                         ? "\(p.name) — nothing recorded yet"
+                         : "\(p.name) · ^[\(s.recordingIDs.count) recording](inflect: true)")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
-                Button("End") { controller.sessions.end() }
-                    .controlSize(.small)
+                Button("End") {
+                    // Stop first, or the take in progress never reaches the
+                    // session it belongs to.
+                    if case .recording = controller.state { controller.stopRecordingAndProcess() }
+                    controller.sessions.end()
+                }
+                .controlSize(.small)
             }
             .padding(8)
             .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+        } else if !controller.routing.sessions.isEmpty {
+            // Only when profiles exist: nobody who does not use sessions should
+            // have to look at the concept. The Shortcuts action is the intended
+            // route for a scheduled game; this is for starting one by hand.
+            Menu {
+                ForEach(controller.routing.sessions) { p in
+                    Button(p.name) { controller.sessions.start(profileID: p.id) }
+                }
+            } label: {
+                Label("Start session", systemImage: "circle.hexagongrid")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
         }
     }
 
