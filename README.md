@@ -43,11 +43,16 @@ truth.
 
 ## Privacy
 
-Audio, transcripts, and settings never leave the device. The privacy manifest
-(`Sources/Transcripts/PrivacyInfo.xcprivacy`) declares no data collection, no
-tracking, and no tracking domains, because there are none.
+The app contains **no networking code** — no `URLSession`, no sockets, no
+third-party SDKs, no dependencies at all. Audio, transcripts and settings never
+leave the device. Live transcription sets `requiresOnDeviceRecognition = true`
+and switches itself off on a device that can't recognize speech locally, rather
+than falling back to server-side recognition.
 
-Recording consent is your responsibility — only record where legally permitted.
+Full policy: [docs/PRIVACY.md](docs/PRIVACY.md).
+
+Recording consent is your responsibility — laws vary by country and state, and
+some require every participant's consent. Only record where you lawfully may.
 
 ## License
 
