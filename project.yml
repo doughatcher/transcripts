@@ -1,0 +1,91 @@
+# XcodeGen spec. Regenerate with `just project` after editing.
+#
+# TranscriptsCore is compiled straight into the app target — the shared surface
+# is six files and this app has zero SPM dependencies, so a package indirection
+# would be ceremony. TranscriptsActivity is compiled into both the app and the
+# widget extension: ActivityKit matches the attributes type across the two
+# processes, so one shared definition.
+name: Transcripts
+options:
+  bundleIdPrefix: ltd.hatcher
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+targets:
+  Transcripts:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/Transcripts
+      - path: Sources/TranscriptsCore
+      - path: Sources/TranscriptsActivity
+    dependencies:
+      - target: TranscriptsWidgets
+        embed: true
+    # A generated plist file, NOT GENERATE_INFOPLIST_FILE + INFOPLIST_KEY_*.
+    # Those settings only cover a fixed list of scalar keys: UIBackgroundModes is
+    # an array and was silently dropped, so the app had no background audio at
+    # all. iOS then suspended it on backgrounding, which killed the audio session
+    # mid-recording and left the m4a unfinalized (2026-08-10, in the ancestor
+    # codebase).
+    info:
+      path: Sources/Transcripts/Info.plist
+      properties:
+        CFBundleDisplayName: Transcripts
+        # The entire point of a pocket recorder: capture survives the screen
+        # locking and the user switching apps. An Info.plist key, not a
+        # paid-membership entitlement, so it works under free provisioning.
+        UIBackgroundModes: [audio]
+        # Lets the recorder show a Dynamic Island / Lock Screen activity, the
+        # only signal capture is still alive once the app backgrounds.
+        NSSupportsLiveActivities: true
+        NSMicrophoneUsageDescription: Transcripts records meetings and voice notes from your microphone.
+        # Live text is transcribed on-device only; audio is never sent to a server.
+        NSSpeechRecognitionUsageDescription: Transcripts transcribes your recording on this device as you speak, so you can read it live.
+        # Only HTTPS via system frameworks — skips the export-compliance
+        # questionnaire on every App Store build upload.
+        ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ltd.hatcher.transcripts
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        # Free provisioning re-signs weekly; leaving the team unset lets Xcode
+        # pick the personal one without baking an ID into the repo.
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+  # WidgetKit extension hosting the Live Activity.
+  TranscriptsWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Sources/TranscriptsWidgets
+      - path: Sources/TranscriptsActivity
+    # A widget extension needs a nested NSExtension dictionary, which the
+    # INFOPLIST_KEY_* build settings cannot express — installd rejects the appex
+    # outright without it.
+    info:
+      path: Sources/TranscriptsWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Transcripts
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ltd.hatcher.transcripts.widgets
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
