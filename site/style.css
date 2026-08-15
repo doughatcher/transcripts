@@ -173,7 +173,7 @@ pre code { background: none; padding: 0; }
 
    Width comes from a positioned full-bleed box rather than viewport units, so
    it never disagrees with the scrollbar. */
-.hero { position: relative; --mark: 96px; --wave-h: 192px; }
+.hero { position: relative; --mark: 96px; --wave-h: 340px; }
 #wave {
   position: absolute;
   /* Centred on the mark rather than aligned to its top: at twice the mark's
@@ -191,5 +191,5 @@ pre code { background: none; padding: 0; }
 .hero > *:not(#wave) { position: relative; z-index: 1; }
 
 @media (max-width: 40rem) {
-  .hero { --wave-h: 150px; }
+  .hero { --wave-h: 260px; }
 }
