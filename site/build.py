@@ -13,6 +13,7 @@ repo show up in the same diff.
     python3 site/build.py            # → site/public/
     python3 site/build.py --serve    # build, then serve on :8000
 """
+import hashlib
 import html
 import re
 import shutil
@@ -170,6 +171,19 @@ ANALYTICS = (
 )
 
 
+# Content hash of the stylesheet, appended to its URL.
+#
+# Pages serves assets with `cache-control: max-age=14400`, so a visitor can hold
+# a four-hour-old stylesheet while fetching fresh HTML. That combination is not
+# merely stale, it is broken: the hero canvas relies on CSS to be positioned and
+# sized, and without it the element falls into normal flow at its attribute size
+# — shoving the page down and putting the wave off-centre. Hashing the URL means
+# changed CSS is always a different URL, so the two can never disagree.
+def asset_version() -> str:
+    css = (ROOT / "site" / "style.css").read_bytes()
+    return hashlib.sha256(css).hexdigest()[:10]
+
+
 def page(title: str, body: str, *, nav: str = "", cls: str = "") -> str:
     return f"""<!doctype html>
 <html lang="en">
@@ -178,7 +192,7 @@ def page(title: str, body: str, *, nav: str = "", cls: str = "") -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)}</title>
 <meta name="description" content="Live transcripts of every meeting, recorded, transcribed and summarized entirely on your own Mac, iPhone and iPad.">
-<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/style.css?v={ASSET_V}">
 <link rel="icon" href="/icon.png">
 {ANALYTICS}
 </head>
@@ -199,7 +213,12 @@ def page(title: str, body: str, *, nav: str = "", cls: str = "") -> str:
 """
 
 
+ASSET_V = ""
+
+
 def build():
+    global ASSET_V
+    ASSET_V = asset_version()
     if OUT.exists():
         shutil.rmtree(OUT)
     (OUT / "guide").mkdir(parents=True)
