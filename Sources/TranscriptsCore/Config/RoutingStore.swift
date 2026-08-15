@@ -1,6 +1,6 @@
 import Foundation
 
-/// Loads/saves the routing config from `<knowledgeRoot>/.scribe/routing.json`,
+/// Loads/saves the routing config from `<knowledgeRoot>/.transcripts/routing.json`,
 /// seeding it on first use by discovering `*/transcripts/` folders in the vault.
 public final class RoutingStore {
     private let knowledgeRoot: URL
@@ -8,7 +8,7 @@ public final class RoutingStore {
 
     public init(knowledgeRoot: URL) {
         self.knowledgeRoot = knowledgeRoot
-        self.url = knowledgeRoot.appendingPathComponent(".scribe/routing.json")
+        self.url = knowledgeRoot.appendingPathComponent(".transcripts/routing.json")
     }
 
     public var fileURL: URL { url }
@@ -49,7 +49,7 @@ public final class RoutingStore {
     /// a destination whose keywords are tokens of its parent folder name.
     /// Folders never scanned for destinations (archived cases, build/dev noise).
     static let excluded: Set<String> = [
-        "archive", ".git", ".build", ".scribe", "node_modules", "templates",
+        "archive", ".git", ".build", ".transcripts", "node_modules", "templates",
         "deck transfers", "dist", "justfiles", "scripts",
     ]
 

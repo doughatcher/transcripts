@@ -4,7 +4,7 @@ import Foundation
 /// layout: `automatic` discovers any `*/transcripts/` folder in the vault, `script`
 /// hands off to your own sorter, and `off` always files to one folder.
 ///
-/// Persisted as `<knowledgeRoot>/.scribe/routing.json` so it's editable by hand and
+/// Persisted as `<knowledgeRoot>/.transcripts/routing.json` so it's editable by hand and
 /// versioned with the vault; the common knobs are also exposed in Settings.
 public struct RoutingConfig: Codable, Equatable, Sendable {
     public enum Mode: String, Codable, Sendable {

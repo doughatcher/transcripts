@@ -36,7 +36,7 @@ Settings ▸ Sorting offers three modes:
 - **Custom script** — hand the decision to a script of your own.
 - **Off** — everything goes to one folder.
 
-The rules live in a plain `routing.json` inside your vault's `.scribe` folder,
+The rules live in a plain `routing.json` inside your vault's `.transcripts` folder,
 and it is meant to be edited by hand. Nothing is hidden.
 
 ## Who said what

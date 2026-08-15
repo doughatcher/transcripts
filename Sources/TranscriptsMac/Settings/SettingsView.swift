@@ -61,6 +61,10 @@ struct SettingsView: View {
                 }
                 HStack {
                     ColorPicker("Recording color", selection: recordingColorBinding, supportsOpacity: false)
+                    if controller.config.recordingColorHex.caseInsensitiveCompare(HexColor.violet) != .orderedSame {
+                        Button("Violet") { controller.config.recordingColorHex = HexColor.violet }
+                            .controlSize(.small)
+                    }
                     if controller.config.recordingColorHex.caseInsensitiveCompare(HexColor.azure) != .orderedSame {
                         Button("Azure") { controller.config.recordingColorHex = HexColor.azure }
                             .controlSize(.small)

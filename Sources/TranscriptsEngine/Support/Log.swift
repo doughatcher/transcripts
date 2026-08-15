@@ -11,7 +11,7 @@ public enum Log {
         return logs.appendingPathComponent("Transcripts.log")
     }()
 
-    private static let queue = DispatchQueue(label: "net.superterran.scribe.log")
+    private static let queue = DispatchQueue(label: "ltd.hatcher.transcripts.log")
     private static let iso = ISO8601DateFormatter()
 
     public static func write(_ message: String) {
@@ -28,7 +28,7 @@ public enum Log {
             }
         }
         #if DEBUG
-        print("[scribe] \(message)")
+        print("[transcripts] \(message)")
         #endif
     }
 }
