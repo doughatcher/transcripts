@@ -15,6 +15,9 @@ public struct PipelineContext: Codable, Sendable {
     public var summaryURL: URL?
     /// Set by the Classify stage.
     public var routing: RoutingDecision?
+    /// Set when the recording belongs to a session that names its own folder.
+    /// Bypasses classification entirely — see `ClassifyStage`.
+    public var forcedDestination: String?
     /// Set by the Persist stage — the files' final resting paths.
     public var finalPaths: [URL]
     /// Per-run scratch workspace; safe for stages to write intermediates into.
@@ -30,6 +33,7 @@ public struct PipelineContext: Codable, Sendable {
         transcriptURL: URL? = nil,
         summaryURL: URL? = nil,
         routing: RoutingDecision? = nil,
+        forcedDestination: String? = nil,
         finalPaths: [URL] = [],
         userInfo: [String: String] = [:]
     ) {
@@ -39,6 +43,7 @@ public struct PipelineContext: Codable, Sendable {
         self.transcriptURL = transcriptURL
         self.summaryURL = summaryURL
         self.routing = routing
+        self.forcedDestination = forcedDestination
         self.finalPaths = finalPaths
         self.userInfo = userInfo
     }

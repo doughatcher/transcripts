@@ -34,19 +34,25 @@ public struct RoutingConfig: Codable, Equatable, Sendable {
     /// prints a vault-relative destination (or JSON `{"destination": "..."}`), or
     /// prints nothing / "handled" if it filed the recording itself.
     public var script: ExternalCommand?
+    /// Named multi-recording occasions — see `SessionProfile`. Lives here rather
+    /// than in its own file because this is already the hand-edited place where
+    /// "what happens to a finished recording" is described.
+    public var sessions: [SessionProfile]
 
     public init(
         mode: Mode = .automatic,
         fallback: String = "transcripts/",
         confidenceThreshold: Double = 0.55,
         destinations: [Destination] = [],
-        script: ExternalCommand? = nil
+        script: ExternalCommand? = nil,
+        sessions: [SessionProfile] = []
     ) {
         self.mode = mode
         self.fallback = fallback
         self.confidenceThreshold = confidenceThreshold
         self.destinations = destinations
         self.script = script
+        self.sessions = sessions
     }
 
     public static var `default`: RoutingConfig { .init() }
@@ -59,5 +65,6 @@ public struct RoutingConfig: Codable, Equatable, Sendable {
         confidenceThreshold = (try? c.decode(Double.self, forKey: .confidenceThreshold)) ?? 0.55
         destinations = (try? c.decode([Destination].self, forKey: .destinations)) ?? []
         script = try? c.decode(ExternalCommand.self, forKey: .script)
+        sessions = (try? c.decode([SessionProfile].self, forKey: .sessions)) ?? []
     }
 }

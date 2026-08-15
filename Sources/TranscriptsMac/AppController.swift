@@ -129,6 +129,16 @@ final class AppController: ObservableObject {
         let cfg = (try? store.load()) ?? .default
         self.config = cfg
         self.routing = RoutingStore(knowledgeRoot: cfg.destinations.resolvedRoot).loadOrSeed()
+        self.sessions = SessionManager(
+            // Read through to the live config each time: routing.json is
+            // hand-edited, and a profile may be added or retimed mid-evening.
+            // Re-read from disk each time rather than closing over a snapshot:
+            // routing.json is hand-edited, and a profile may be added or retimed
+            // in the middle of an evening.
+            profiles: {
+                let root = ((try? store.load()) ?? cfg).destinations.resolvedRoot
+                return RoutingStore(knowledgeRoot: root).loadOrSeed().sessions
+            })
         migrateInputPrefs()
         backfillFavoriteInputNames()
         migrateOpenCommand()
@@ -136,6 +146,12 @@ final class AppController: ObservableObject {
         applyArmState()
         refreshRecents()
         recoverInterrupted()
+        sessions.onComplete = { [weak self] session, profile in
+            await self?.runSessionCompletion(session, profile)
+        }
+        // After recoverInterrupted: a session may have ended while the app was
+        // away, and completing it wants the recordings already back in history.
+        sessions.restore()
         startDeviceWatcher()
         pruneBackups()
         checkForUpdatesQuietly()
@@ -305,6 +321,9 @@ final class AppController: ObservableObject {
                 try rec.start(into: dir)
                 self.recorder = rec
                 self.currentRecordID = recordID
+                // Joins the running session, and keeps its idle clock alive:
+                // a three-hour take must not age out mid-recording.
+                self.sessions.noteActivity(recordingID: recordID)
                 self.state = .recording(since: Date())
                 self.lastError = nil
                 self.startLevelTimer()
@@ -890,7 +909,8 @@ final class AppController: ObservableObject {
                 if let seedTranscript {
                     result = try await self.processNote(recording: recording, transcript: seedTranscript, cfg: cfg)
                 } else {
-                    result = try await engine.process(recording)
+                    result = try await engine.process(
+                        recording, forcedDestination: self.sessions.destinationOverride)
                 }
                 let md = result.finalPaths.first { $0.pathExtension == "md" }
                 let dropped = result.finalPaths.map(\.lastPathComponent).joined(separator: ", ")
@@ -917,6 +937,7 @@ final class AppController: ObservableObject {
                     r.destination = result.routing?.destination
                     r.errorText = nil
                 }
+                self.sessions.noteActivity(recordingID: recordID)
                 self.cleanupCrashSafeCaptures(recordID: recordID, result: result)
                 self.harvestVoiceSuggestions(from: result, recordID: recordID)
             } catch let pipelineError as PipelineError
@@ -2222,6 +2243,36 @@ final class AppController: ObservableObject {
 
     /// One-time migration of the old docked/undocked single prefs into favorites.
     /// Skips the built-in mic (it's the automatic fallback, not a favorite).
+    /// The running multi-recording session, if any. See `SessionManager`.
+    let sessions: SessionManager
+
+    /// Runs a finished session's `onComplete`, with its files substituted in.
+    ///
+    /// Failures are logged and swallowed on purpose: the session is over and its
+    /// recordings are already filed, so a broken publish script must not put the
+    /// app into an error state hours after the fact. The log is where you look.
+    private func runSessionCompletion(_ session: ActiveSession, _ profile: SessionProfile) async {
+        guard let command = profile.onComplete else { return }
+        let recs = session.recordingIDs.compactMap { id in history.record(id) }
+        let transcripts = recs.compactMap(\.documentURL)
+        let audio = recs.compactMap(\.audioURL)
+        let vars = SessionVariables.variables(
+            session: session, profile: profile,
+            sessionDirectory: nil, transcripts: transcripts, audio: audio)
+        let resolved = TemplateEngine.resolve(command, with: vars)
+        Log.write("session: running onComplete for '\(profile.id)' over \(recs.count) recording(s)")
+        do {
+            let result = try await ProcessCommandRunner().run(resolved, stdin: nil)
+            if result.exitCode != 0 {
+                Log.write("session: onComplete exited \(result.exitCode): \(result.stderrString.prefix(400))")
+            } else {
+                Log.write("session: onComplete finished")
+            }
+        } catch {
+            Log.write("session: onComplete failed — \(error)")
+        }
+    }
+
     private func migrateInputPrefs() {
         guard config.favoriteInputUIDs.isEmpty else { return }
         let devices = AudioInputDevices.all()
