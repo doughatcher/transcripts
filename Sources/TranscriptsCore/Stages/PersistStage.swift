@@ -15,7 +15,7 @@ public struct PersistStage: PipelineStage {
         self.copyAudio = copyAudio
     }
 
-    public init(knowledgeRoot: URL, stampModel: String = "scribe", copyAudio: Bool = true) {
+    public init(knowledgeRoot: URL, stampModel: String = "transcripts", copyAudio: Bool = true) {
         self.knowledgeRoot = knowledgeRoot
         self.stampModel = stampModel
         self.copyAudio = copyAudio

@@ -111,7 +111,7 @@ public struct AppConfig: Codable, Equatable, Sendable {
     /// Menu-bar icon style.
     public var menuBarIcon: MenuBarIconStyle
     /// Color of the recording indicator (the pulsing menu-bar icon and the
-    /// popover's "Recording" marks), as `#RRGGBB`. Defaults to Blue Acorn blue;
+    /// popover's "Recording" marks), as `#RRGGBB`. Defaults to recording red;
     /// the classic red is a one-click preset in Settings.
     public var recordingColorHex: String
     public var archiveCodec: String
@@ -186,7 +186,7 @@ public struct AppConfig: Codable, Equatable, Sendable {
         autoRecordAppAllowlist: [String] = [],
         pipeline: PipelineConfig,
         rememberVoices: Bool = false,
-        homeOrganization: String = "Blue Acorn iCi",
+        homeOrganization: String = "",
         nameMatchConfidence: Double = 0.65,
         includePrereleases: Bool = false,
         llmProvider: LLMProvider = .appleOnDevice,
@@ -245,7 +245,7 @@ public struct AppConfig: Codable, Equatable, Sendable {
         autoRecordAppAllowlist = v(.autoRecordAppAllowlist, [])
         pipeline = v(.pipeline, Self.defaultPipeline)
         rememberVoices = v(.rememberVoices, false)
-        homeOrganization = v(.homeOrganization, "Blue Acorn iCi")
+        homeOrganization = v(.homeOrganization, "")
         nameMatchConfidence = v(.nameMatchConfidence, 0.65)
         includePrereleases = v(.includePrereleases, false)
         llmProvider = v(.llmProvider, .appleOnDevice)

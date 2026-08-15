@@ -8,7 +8,7 @@ import TranscriptsCore
 ///
 /// Written to three stable, well-known places on every update:
 /// - `~/Library/Application Support/Transcripts/live.md` (durable Transcripts-side copy)
-/// - `<knowledgeRoot>/.scribe/live.md` (where vault-based agent sessions look)
+/// - `<knowledgeRoot>/.transcripts/live.md` (where vault-based agent sessions look)
 /// - `<knowledgeRoot>/Transcripts Live.md` (the human view — Obsidian refuses to
 ///   open anything under a dot-folder, so the viewable copy must be visible;
 ///   both vault copies are gitignored)
@@ -34,7 +34,7 @@ public final class LiveTranscript {
     public init(vaultRoot: URL?) {
         var targets = [HistoryStore.dir.appendingPathComponent("live.md")]
         if let vaultRoot {
-            let dir = vaultRoot.appendingPathComponent(".scribe", isDirectory: true)
+            let dir = vaultRoot.appendingPathComponent(".transcripts", isDirectory: true)
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             targets.append(dir.appendingPathComponent("live.md"))
             targets.append(vaultRoot.appendingPathComponent("Transcripts Live.md"))

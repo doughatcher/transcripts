@@ -10,6 +10,12 @@ public enum HexColor {
     /// A bright azure preset, legible on both light and dark menu bars.
     public static let azure = "#159BD7"
 
+    /// The brand violet — the app icon's lower gradient stop. Offered as a
+    /// preset rather than the default: red is not decoration here, it is the
+    /// one colour that means "recording right now", and it keeps that meaning
+    /// by being the thing you rarely see.
+    public static let violet = "#7C3AED"
+
     /// Parses `#RRGGBB` (the leading `#` optional) into sRGB components in 0…1.
     /// nil for anything malformed, so callers fall back to a known-good default
     /// rather than rendering an invisible icon.

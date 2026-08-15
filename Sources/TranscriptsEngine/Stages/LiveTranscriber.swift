@@ -20,7 +20,7 @@ public final class LiveTrackTranscriber: @unchecked Sendable {
     private var collector: Task<Void, Never>?
     private var converter: AVAudioConverter?
     private var analyzerFormat: AVAudioFormat?
-    private let queue = DispatchQueue(label: "com.blueacorn.scribe.livetranscribe")
+    private let queue = DispatchQueue(label: "ltd.hatcher.transcripts.livetranscribe")
 
     public init(onSegment: @escaping @Sendable (TranscriptSegment) -> Void) {
         self.onSegment = onSegment

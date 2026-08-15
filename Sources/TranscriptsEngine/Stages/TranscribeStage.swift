@@ -141,7 +141,7 @@ public struct TranscribeStage: PipelineStage {
         if let dur = rec.durationSeconds { fm.append("duration_seconds: \(Int(dur.rounded()))") }
         if let app = rec.activeApp?.appName { fm.append("active_app: \"\(app)\"") }
         if let bid = rec.activeApp?.bundleID { fm.append("active_app_bundle_id: \"\(bid)\"") }
-        fm.append("source: scribe")
+        fm.append("source: transcripts")
         fm.append("audio_file: \(audioFileName)")
         if !speakers.isEmpty {
             fm.append("speakers: [\(speakers.map { "\"\($0)\"" }.joined(separator: ", "))]")

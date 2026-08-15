@@ -43,7 +43,7 @@ EOF
 
 echo "▶ Generating self-signed code-signing certificate …"
 openssl req -x509 -newkey rsa:2048 -nodes \
-  -keyout "$TMP/scribe.key" -out "$TMP/scribe.crt" \
+  -keyout "$TMP/transcripts.key" -out "$TMP/transcripts.crt" \
   -days 3650 -config "$TMP/csc.cnf" >/dev/null 2>&1
 
 # OpenSSL 3.x exports PKCS12 with modern encryption that macOS `security import`
@@ -51,11 +51,11 @@ openssl req -x509 -newkey rsa:2048 -nodes \
 # -legacy flag but is already compatible, so only add it when it's supported.
 LEGACY=""
 if openssl pkcs12 -help 2>&1 | grep -q -- '-legacy'; then LEGACY="-legacy"; fi
-openssl pkcs12 -export $LEGACY -inkey "$TMP/scribe.key" -in "$TMP/scribe.crt" \
-  -out "$TMP/scribe.p12" -passout pass:scribe -name "$NAME" >/dev/null 2>&1
+openssl pkcs12 -export $LEGACY -inkey "$TMP/transcripts.key" -in "$TMP/transcripts.crt" \
+  -out "$TMP/transcripts.p12" -passout pass:transcripts -name "$NAME" >/dev/null 2>&1
 
 echo "▶ Importing into login keychain …"
-security import "$TMP/scribe.p12" -k "$KEYCHAIN" -P scribe -T /usr/bin/codesign -A >/dev/null
+security import "$TMP/transcripts.p12" -k "$KEYCHAIN" -P transcripts -T /usr/bin/codesign -A >/dev/null
 
 if security find-identity -p codesigning 2>/dev/null | grep -q "$NAME"; then
   echo "✓ '$NAME' installed. Re-run scripts/make-app.sh to sign with it."

@@ -144,9 +144,9 @@ public enum Affiliation {
         return homeOrg
     }
 
-    /// Affiliations are a path: `Org / Group` (e.g. "Blue Acorn iCi / USP Project
+    /// Affiliations are a path: `Org / Group` (e.g. "Acme / Platform Project
     /// Team"). The top segment is the organization; the rest is the internal group,
-    /// so a big org like Blue Acorn breaks into teams rather than one bucket. A
+    /// so a big org breaks into teams rather than one bucket. A
     /// plain string with no separator is just an org. Separator is " / ".
     public static let separator = " / "
 
