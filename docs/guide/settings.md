@@ -4,6 +4,8 @@ Open Settings from the menu-bar menu. Six panes.
 
 ## General
 
+![The General settings pane](/guide/images/settings-general.png)
+
 - **Microphone** — your input, and a preference order. Transcripts picks the
   best available one, so a headset takes over when you plug it in and the
   built-in microphone resumes when you don't.
@@ -25,10 +27,14 @@ Changing these does not move anything already written.
 
 ## Sorting
 
+![The Sorting settings pane](/guide/images/settings-sorting.png)
+
 How finished recordings are filed — Automatic, Custom script, or Off. See
 [Your transcripts](/guide/transcripts/).
 
 ## Pipeline
+
+![The Pipeline settings pane](/guide/images/settings-pipeline.png)
 
 Every recording moves through five stages: **encode → transcribe → summarize →
 classify → persist**. This pane shows each one and lets you replace any of them
@@ -39,12 +45,16 @@ hatch is a rewrite.
 
 ## Voices
 
+![The Voices settings pane](/guide/images/settings-voices.png)
+
 The people Transcripts has learned to recognise, and the recordings each voice
 was heard in. Rename someone, merge two entries that turned out to be the same
 person, or reject a bad match — which un-does it in the transcript too, not just
 in the list.
 
 ## About
+
+![The About settings pane](/guide/images/settings-about.png)
 
 Version, update settings, the consent notice, and what the app does with your
 data.
