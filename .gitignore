@@ -10,3 +10,4 @@ xcuserdata/
 *.xcuserstate
 .DS_Store
 dist/
+Package.resolved
