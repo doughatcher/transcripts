@@ -26,6 +26,7 @@ OUT = ROOT / "site" / "public"
 # Guide order is editorial, not alphabetical — it is the order you meet the app.
 GUIDE_PAGES = [
     ("index", "Getting started"),
+    ("install", "Installing"),
     ("recording", "Recording"),
     ("transcripts", "Your transcripts"),
     ("handoff", "iPhone, iPad and Mac"),
@@ -130,6 +131,26 @@ def inline(s: str) -> str:
 
 # --- Shell -------------------------------------------------------------------
 
+# Analytics: Cloudflare Web Analytics, not Google.
+#
+# It answers the actual question — who is looking, where from, which pages —
+# without cookies, which means no consent banner and no asterisk beside a
+# product sold on not tracking anyone. GTM was here briefly and did the same job
+# with a cookie obligation attached.
+#
+# The usual way to turn this on is the Pages dashboard (project ▸ Settings ▸ Web
+# Analytics ▸ Enable), which injects the beacon at the edge and needs no code at
+# all — leave BEACON_TOKEN empty for that. Set it only to pin the beacon in the
+# markup instead, e.g. to serve the same build from somewhere other than Pages.
+BEACON_TOKEN = ""
+
+ANALYTICS = (
+    f"""<script defer src="https://static.cloudflareinsights.com/beacon.min.js"
+ data-cf-beacon='{{"token": "{BEACON_TOKEN}"}}'></script>"""
+    if BEACON_TOKEN else ""
+)
+
+
 def page(title: str, body: str, *, nav: str = "", cls: str = "") -> str:
     return f"""<!doctype html>
 <html lang="en">
@@ -137,8 +158,10 @@ def page(title: str, body: str, *, nav: str = "", cls: str = "") -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)}</title>
+<meta name="description" content="Voice notes and meeting transcripts, recorded and transcribed on your own device.">
 <link rel="stylesheet" href="/style.css">
 <link rel="icon" href="/icon.png">
+{ANALYTICS}
 </head>
 <body class="{cls}">
 <header class="top">

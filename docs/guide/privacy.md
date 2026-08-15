@@ -52,6 +52,18 @@ usage analytics, no crash reporting, no advertising identifiers, and no
 tracking of any kind. Transcripts does not use third-party SDKs — it has no
 third-party dependencies at all.
 
+## This website
+
+The apps collect nothing — that is a property of how they are built. The iOS app
+contains no networking code at all, and the Mac app's only outbound request is
+checking whether a newer version exists.
+
+This website counts visits using Cloudflare Web Analytics, which measures page
+views, referrers and rough location **without cookies** and without building a
+profile of you. There is no advertising network involved, nothing is shared with
+Google, and there is nothing here to opt out of because nothing follows you
+anywhere.
+
 ## Children
 
 Transcripts is not directed at children and collects no data from anyone,
