@@ -1,60 +1,79 @@
+import CryptoKit
 import Foundation
 import TranscriptsCore
 
-/// Checks GitHub Releases for a newer Transcripts and downloads the zipped app.
+/// Checks for a newer Transcripts and downloads it.
 ///
-/// Points at a **public releases repo**, deliberately not at the source repo,
-/// which is private. Private repos do not serve release assets without
-/// credentials, and shipping a freeware Mac app that first demands the user
-/// mint a GitHub token is not a thing anyone should have to do — that is
-/// precisely the machinery this replaces.
+/// Reads a small JSON manifest from the site rather than a code-hosting API.
+/// The same file backs the Homebrew cask and the download button, so a release
+/// cannot half-ship with brew offering one version and the app another — there
+/// is one artifact and one description of it.
 ///
-/// Splitting the channel from the source also deletes an entire category of
-/// failure. Against a private repo GitHub answers 404 both for "no such
-/// release" and for "your token may not know this repo exists", so the ancestor
-/// had to probe a second endpoint to tell a missing release from a missing
-/// permission. Unauthenticated against a public repo, a 404 means what it says.
+/// This replaced a GitHub Releases implementation twice over, and both
+/// rewrites removed something rather than adding it. Against a *private* repo
+/// the app needed a token, and a 404 meant either "no such release" or "your
+/// token cannot see this repo" with no way to tell them apart. Against a public
+/// repo the token went but the unauthenticated rate limit arrived. A static
+/// file on the site we already publish has neither problem, and no API to be
+/// deprecated underneath us.
 ///
-/// The same public URLs back the Homebrew cask, so `brew upgrade` and the
-/// in-app updater are two doors onto one artifact rather than two release
-/// processes that can drift.
-///
-/// The one cost of being unauthenticated is GitHub's 60-requests-per-hour
-/// per-IP limit — which one update check will never approach on its own, but
-/// which a shared office egress IP can exhaust, so it is reported as itself
-/// rather than as a generic HTTP error.
+/// The manifest carries the artifact's SHA-256, so unlike either predecessor
+/// this one can verify what it downloaded before handing it to the installer.
 enum Updater {
-    static let repo = "hatcher-ltd/transcripts-releases"
+    /// Where the manifests live. Baked into every shipped build, so an installed
+    /// copy checks *this* host forever — it is not a URL to move casually.
+    static let baseURL = "https://transcripts.hatcher.ltd"
 
-    struct Release {
-        let version: String        // normalized, e.g. "0.2.0"
-        let tag: String            // e.g. "v0.2.0"
+    /// Stable and pre-release channels are separate files. A stable release
+    /// writes both, so someone riding the beta train still gets a finished
+    /// version when it is newer than the last beta.
+    static func manifestURL(prereleases: Bool) -> URL {
+        let name = prereleases ? "appcast-beta.json" : "appcast.json"
+        // Cache-busted at the URL, not just with a header. A CDN edge kept
+        // answering 200 for a manifest that had been removed, long after the
+        // deployment that removed it — and a stale manifest is how someone gets
+        // offered a build that is no longer the right one for their channel.
+        // URLRequest.cachePolicy only governs the local cache; this defeats the
+        // intermediary too.
+        return URL(string: "\(baseURL)/\(name)?v=\(Int(Date().timeIntervalSince1970))")!
+    }
+
+    struct Release: Decodable {
+        let version: String
+        let url: URL
+        let sha256: String
+        let size: Int
         let notes: String?
-        let assetURL: URL?         // public browser_download_url
-        let assetName: String?
+
+        /// Kept so existing call sites read unchanged.
+        var assetName: String? { url.lastPathComponent }
     }
 
     enum UpdateError: LocalizedError {
         case http(Int)
-        case noAsset
         case badResponse
-        /// GitHub's unauthenticated rate limit, shared across everyone on this IP.
-        case rateLimited
-        /// The repo is reachable but has no published stable release.
-        case noStableRelease
+        case noChannel(prerelease: Bool)
+        /// The download did not match the manifest's digest.
+        case checksumMismatch(expected: String, got: String)
 
         var errorDescription: String? {
             switch self {
             case .http(let c):
-                return "GitHub returned HTTP \(c)."
-            case .noAsset:
-                return "The latest release has no downloadable app asset."
+                return "Update check failed (HTTP \(c))."
             case .badResponse:
-                return "Unexpected response from GitHub."
-            case .rateLimited:
-                return "GitHub is rate-limiting update checks from this network. Try again in a little while."
-            case .noStableRelease:
-                return "There's no stable release published yet — only pre-releases. Turn on \"Ride the beta train\" above to get those."
+                return "The update manifest could not be read."
+            case .noChannel(let prerelease):
+                return prerelease
+                    ? "There's no pre-release build published right now. Turn off \"Ride the beta train\" to follow stable releases."
+                    : "There's no stable release yet — this is still a beta. Turn on \"Ride the beta train\" above to receive pre-release builds."
+            case .checksumMismatch(let expected, let got):
+                return """
+                    The downloaded update didn't match its published checksum, so it was discarded.
+
+                    Expected \(expected.prefix(16))…, got \(got.prefix(16))….
+
+                    This usually means a corrupted or interrupted download — try again. Nothing was installed.
+                    """
             }
         }
     }
@@ -65,93 +84,65 @@ enum Updater {
 
     // MARK: - Check
 
-    /// The newest applicable release. Stable riders get GitHub's
-    /// `releases/latest` (which excludes pre-releases by definition); the beta
-    /// train lists recent releases and picks the highest version, pre-release
-    /// or not. Non-app releases are filtered by requiring a `v`-prefixed tag.
     static func latest(includePrereleases: Bool = false) async throws -> Release {
-        let path = includePrereleases ? "releases?per_page=15" : "releases/latest"
-
-        let (data, http) = try await get(path)
+        var req = URLRequest(url: manifestURL(prereleases: includePrereleases))
+        // The manifest is small and changes rarely; a cached copy would hide a
+        // release for as long as the CDN felt like it.
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw UpdateError.badResponse }
         guard (200...299).contains(http.statusCode) else {
-            // `releases/latest` 404s when every release is a pre-release — the
-            // only 404 a public repo can produce here.
-            if http.statusCode == 404, !includePrereleases { throw UpdateError.noStableRelease }
-            if http.statusCode == 403, isRateLimited(http) { throw UpdateError.rateLimited }
+            // A missing manifest is a real state on either channel, not an
+            // error: during a beta there is no stable release, and between
+            // betas there may be no pre-release.
+            if http.statusCode == 404 { throw UpdateError.noChannel(prerelease: includePrereleases) }
             throw UpdateError.http(http.statusCode)
         }
-
-        let obj: [String: Any]?
-        if includePrereleases {
-            guard let list = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-                throw UpdateError.badResponse
-            }
-            obj = list
-                .filter { ($0["draft"] as? Bool) != true }
-                .filter { (($0["tag_name"] as? String) ?? "").hasPrefix("v") }
-                .max { a, b in
-                    AppVersion.compare((a["tag_name"] as? String) ?? "0",
-                                       (b["tag_name"] as? String) ?? "0") < 0
-                }
-        } else {
-            obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        do {
+            return try JSONDecoder().decode(Release.self, from: data)
+        } catch {
+            throw UpdateError.badResponse
         }
-        guard let obj, let tag = obj["tag_name"] as? String else { throw UpdateError.badResponse }
-
-        // Pick the asset matching THIS release's version (tested in
-        // AppVersion.assetName) — never just the first zip, which once installed an
-        // ancient build in a silent downgrade loop.
-        let assets = obj["assets"] as? [[String: Any]] ?? []
-        let names = assets.compactMap { $0["name"] as? String }
-        let chosenName = AppVersion.assetName(from: names, version: normalize(tag))
-        let zip = assets.first { ($0["name"] as? String) == chosenName }
-        // browser_download_url, not the API asset url: public assets download
-        // straight from it with no Accept header and no credentials.
-        let assetURL = (zip?["browser_download_url"] as? String).flatMap(URL.init(string:))
-
-        return Release(
-            version: normalize(tag),
-            tag: tag,
-            notes: obj["body"] as? String,
-            assetURL: assetURL,
-            assetName: zip?["name"] as? String)
     }
 
     /// True when `remote` is a higher version than the running app.
     static func isNewer(_ remote: String) -> Bool { compare(remote, currentVersion) > 0 }
 
-    // MARK: - Transport
-
-    private static func get(_ path: String) async throws -> (Data, HTTPURLResponse) {
-        let base = "https://api.github.com/repos/\(repo)"
-        var req = URLRequest(url: URL(string: path.isEmpty ? base : "\(base)/\(path)")!)
-        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        req.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
-        let (data, resp) = try await URLSession.shared.data(for: req)
-        guard let http = resp as? HTTPURLResponse else { throw UpdateError.badResponse }
-        return (data, http)
-    }
-
-    /// GitHub signals an exhausted quota as 403 with the remaining count at zero,
-    /// which is otherwise indistinguishable from an ordinary refusal.
-    private static func isRateLimited(_ http: HTTPURLResponse) -> Bool {
-        http.value(forHTTPHeaderField: "X-RateLimit-Remaining") == "0"
-    }
-
     // MARK: - Download
 
-    /// Downloads the release asset to a temp file (the returned URL is a `.zip`).
+    /// Downloads the release and verifies it against the manifest before
+    /// returning. An updater that installs whatever arrived is a worse hazard
+    /// than one that occasionally refuses.
     static func download(_ release: Release) async throws -> URL {
-        guard let assetURL = release.assetURL else { throw UpdateError.noAsset }
-        let (tmp, resp) = try await URLSession.shared.download(from: assetURL)
+        let (tmp, resp) = try await URLSession.shared.download(from: release.url)
         guard let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw UpdateError.http((resp as? HTTPURLResponse)?.statusCode ?? -1)
         }
+
+        let digest = try sha256(of: tmp)
+        guard digest.caseInsensitiveCompare(release.sha256) == .orderedSame else {
+            try? FileManager.default.removeItem(at: tmp)
+            throw UpdateError.checksumMismatch(expected: release.sha256, got: digest)
+        }
+
         let dest = FileManager.default.temporaryDirectory
             .appendingPathComponent(release.assetName ?? "Transcripts-\(release.version).zip")
         try? FileManager.default.removeItem(at: dest)
         try FileManager.default.moveItem(at: tmp, to: dest)
         return dest
+    }
+
+    /// Streamed rather than read whole: the artifact is ~10 MB today, but an
+    /// updater that loads the download into memory to hash it is a bug waiting
+    /// for the app to grow.
+    private static func sha256(of url: URL) throws -> String {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        var hasher = SHA256()
+        while let chunk = try handle.read(upToCount: 1 << 20), !chunk.isEmpty {
+            hasher.update(data: chunk)
+        }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
     // MARK: - Version compare (pre-release-aware; logic tested in TranscriptsCore)
