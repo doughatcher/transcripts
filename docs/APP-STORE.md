@@ -16,8 +16,10 @@ transmitting off the device — data that stays on device is **not** collected.
 
 Justification if asked, and it is verifiable in the source:
 
-- The app contains **no networking code**. No `URLSession`, no `URLRequest`, no
-  `Network.framework`, no sockets, no third-party SDKs (zero dependencies).
+- The iOS app contains **no networking code**. No `URLSession`, no
+  `URLRequest`, no `Network.framework`, no sockets, no third-party SDKs (zero
+  dependencies). Verifiable by inspection of the binary — the symbols are
+  simply absent.
 - Recordings and transcripts are written to local files and to a folder the
   user explicitly grants access to via `UIDocumentPicker`. Files a user places
   in their own iCloud/OneDrive/Dropbox folder are synced by that provider under
@@ -60,8 +62,6 @@ Paste into App Store Connect ▸ App Review Information ▸ Notes.
 > **Recording consent.** The app is a recorder; the user decides what to
 > record. Guidance about consent laws is provided in the App Store description
 > and in our privacy policy.
->
-> The app is open source: <repo URL once public — omit this line while private>
 
 ---
 
@@ -102,10 +102,6 @@ Paste into App Store Connect ▸ App Review Information ▸ Notes.
 > app requires on-device speech recognition and will switch live text off
 > rather than send your recording to a server.
 >
-> **Open source**
-> The app is open source, so the privacy claims above are checkable rather than
-> promised.
->
 > ---
 > Recording laws vary by location, and some places require the consent of
 > everyone in a conversation. Please make sure you may lawfully record before
@@ -117,8 +113,8 @@ Paste into App Store Connect ▸ App Review Information ▸ Notes.
 *(98 chars. Do not repeat words already in the name or subtitle — Apple indexes
 those separately.)*
 
-**Support URL:** `https://hatcher.ltd/transcripts`
-**Privacy Policy URL:** `https://hatcher.ltd/transcripts/privacy` (source: `docs/PRIVACY.md`)
+**Support URL:** `https://transcripts.hatcher.ltd`
+**Privacy Policy URL:** `https://transcripts.hatcher.ltd/privacy` (source: `docs/PRIVACY.md`)
 
 ---
 
@@ -142,8 +138,8 @@ content sharing, no web view, and no ad network.
 - [ ] Xcode signing Team set to your team (not BA)
 - [ ] Privacy policy live at a public URL
 - [ ] EU trader status declared (see below)
-- [ ] App icon finalized (currently the inherited quill — fine for TestFlight,
-      decide before submission)
+- [ ] App icon finalized (transcript lines with a live waveform — replace if a
+      designer pass is wanted, but it is submission-ready as is)
 - [ ] Screenshots: 6.9" iPhone and 13" iPad, required sizes
 - [ ] `ITSAppUsesNonExemptEncryption=false` — already set in `project.yml`
 - [ ] Privacy manifests present for app and widget — already done
