@@ -13,9 +13,21 @@ The iOS app has no third-party dependencies. The list below applies to the
 macOS build only.
 
 FluidAudio — https://github.com/FluidInference/FluidAudio
-    Speaker diarization. NOTE: the Core ML model weights it downloads are
-    licensed separately from the library, and their terms must be confirmed
-    before commercial distribution. See docs/APP-STORE.md.
+    Apache License 2.0. Speaker diarization — the "who said what" pass over the
+    other side of a call.
+
+Speaker diarization models (downloaded at first use, macOS only)
+    FluidInference/speaker-diarization-coreml — CC BY 4.0
+    https://huggingface.co/FluidInference/speaker-diarization-coreml
+
+    Derived from pyannote/speaker-diarization-community-1, also CC BY 4.0
+    https://huggingface.co/pyannote/speaker-diarization-community-1
+
+    Licence: https://creativecommons.org/licenses/by/4.0/
+    CC BY 4.0 permits commercial use and redistribution, including in a
+    proprietary application, on condition of attribution — which is what this
+    entry is. The models are converted to Core ML by FluidInference; they are
+    used here unmodified.
 
 mlx-swift, mlx-swift-examples — https://github.com/ml-explore
     MIT. In-process LLM inference for the summarization tier.

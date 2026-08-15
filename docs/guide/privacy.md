@@ -69,6 +69,14 @@ anywhere.
 Transcripts is not directed at children and collects no data from anyone,
 including children.
 
+## Credits
+
+Speaker attribution on the Mac uses on-device diarization models from
+[FluidInference](https://huggingface.co/FluidInference/speaker-diarization-coreml),
+derived from [pyannote](https://huggingface.co/pyannote/speaker-diarization-community-1),
+both under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). They are
+downloaded once, run entirely on your Mac, and are used unmodified.
+
 ## Your recordings are your responsibility
 
 Recording laws vary by country and by state. Some jurisdictions require the
