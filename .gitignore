@@ -12,3 +12,4 @@ xcuserdata/
 dist/
 Package.resolved
 site/public/
+Sources/TranscriptsMac/Support/Info.plist
