@@ -110,15 +110,17 @@
 
   function size() {
     const dpr = Math.min(devicePixelRatio || 1, 2);
-    w = canvas.clientWidth; h = canvas.clientHeight;
+    // Measured, not assumed: getBoundingClientRect reflects any transform and
+    // fractional layout, where clientWidth rounds.
+    const r = canvas.getBoundingClientRect();
+    w = Math.round(r.width); h = Math.round(r.height);
     canvas.width = w * dpr; canvas.height = h * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  function amp(i, time) {
+  function amp(x, time) {
     // Three sines whose periods do not divide each other, so the pattern never
     // visibly repeats, plus a slow envelope so the whole field breathes.
-    const x = i / BARS;
     const a = Math.sin(x * 9.1 - time * 1.7);
     const b = Math.sin(x * 21.3 - time * 2.6) * 0.55;
     const c = Math.sin(x * 4.3 - time * 0.9) * 0.8;
@@ -130,17 +132,33 @@
   function draw(time) {
     ctx.clearRect(0, 0, w, h);
     const colour = accent();
-    const totalW = BARS * (BAR_W + GAP) - GAP;
-    const startX = (w - totalW) / 2;
     const mid = h * 0.5;
+    const centre = w / 2;
+    // The mark's own half-width, plus breathing room: bars inside this radius
+    // fade out entirely so the wave emerges from behind the icon instead of
+    // running across it. Done here rather than with a CSS mask because mask
+    // compositing is not portable — and this is two lines of arithmetic.
+    const clear = h * 0.72;
+    const fade = h * 0.55;
 
-    for (let i = 0; i < BARS; i++) {
-      const a = amp(i, time);
+    // Bars are laid out across the full canvas rather than a fixed count's
+    // worth, so a wide window gets more wave instead of a stretched one.
+    const step = BAR_W + GAP;
+    const count = Math.floor(w / step);
+    const startX = (w - (count * step - GAP)) / 2;
+
+    for (let i = 0; i < count; i++) {
+      const x = startX + i * step;
+      const dist = Math.abs(x + BAR_W / 2 - centre);
+      if (dist < clear) continue;                       // behind the mark
+      const near = Math.min(1, (dist - clear) / fade);  // ease away from it
+
+      const a = amp(i / count, time);
       const barH = Math.max(BAR_W, a * h * 0.92);
-      const x = startX + i * (BAR_W + GAP);
-      // Fade toward the edges so the band dissolves rather than being cropped.
-      const edge = Math.min(1, Math.min(i, BARS - 1 - i) / 14);
-      ctx.globalAlpha = 0.42 * edge * (0.4 + a * 0.6);
+      // Fade toward the outer edges so the band dissolves rather than stopping.
+      const edge = Math.min(1, (1 - Math.abs(i / count - 0.5) * 2) / 0.22);
+
+      ctx.globalAlpha = 0.42 * near * edge * (0.4 + a * 0.6);
       ctx.fillStyle = colour;
       ctx.beginPath();
       ctx.roundRect(x, mid - barH / 2, BAR_W, barH, BAR_W / 2);
