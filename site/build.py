@@ -50,6 +50,7 @@ GUIDE_PAGES = [
     ("handoff", "iPhone, iPad and Mac"),
     ("settings", "Settings"),
     ("privacy", "Privacy"),
+    ("changelog", "Changelog"),
 ]
 
 
