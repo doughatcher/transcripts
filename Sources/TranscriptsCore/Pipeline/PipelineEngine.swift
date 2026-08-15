@@ -47,9 +47,13 @@ public final class PipelineEngine {
     }
 
     /// Process a recording end to end, returning the final enriched context.
-    public func process(_ recording: Recording, scratchRoot: URL? = nil) async throws -> PipelineContext {
+    /// `forcedDestination` bypasses classification — used when the recording
+    /// belongs to a session that names its own folder.
+    public func process(_ recording: Recording, scratchRoot: URL? = nil,
+                        forcedDestination: String? = nil) async throws -> PipelineContext {
         let scratch = try makeScratchDir(root: scratchRoot, recording: recording)
         var ctx = PipelineContext(recording: recording, scratchDir: scratch)
+        ctx.forcedDestination = forcedDestination
 
         switch config.pipeline.mode {
         case .handoff:

@@ -16,6 +16,7 @@ struct MenuBarView: View {
 
             Divider()
 
+            sessionBanner
             recordControls
 
             // Proof the call is transcribing itself: opens the live, speaker-
@@ -249,6 +250,35 @@ struct MenuBarView: View {
         case .armed: return "Watching for meetings"
         case .recording(let since): return "Recording \(elapsed(since))"
         case .processing: return "Processing…"
+        }
+    }
+
+    /// A running session, when there is one.
+    ///
+    /// Visible rather than implicit on purpose: a session silently changes where
+    /// recordings are filed and arms an action that fires later, and state with
+    /// consequences that arrive hours afterwards should not be invisible while
+    /// it runs. Absent entirely when no session is active — nobody who does not
+    /// use them should have to look at the concept.
+    @ViewBuilder
+    private var sessionBanner: some View {
+        if let s = controller.sessions.active, s.isRunning,
+           let p = controller.sessions.profile {
+            HStack(spacing: 8) {
+                Image(systemName: "circle.hexagongrid.fill").foregroundStyle(.tint)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(p.name).font(.subheadline.weight(.medium))
+                    Text(s.recordingIDs.isEmpty
+                         ? "Session running — nothing recorded yet"
+                         : "^[\(s.recordingIDs.count) recording](inflect: true) this session")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Button("End") { controller.sessions.end() }
+                    .controlSize(.small)
+            }
+            .padding(8)
+            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
         }
     }
 

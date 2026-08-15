@@ -40,6 +40,14 @@ public struct ClassifyStage: PipelineStage {
         guard let sourceURL else { return }
         let content = (try? String(contentsOf: sourceURL, encoding: .utf8)) ?? ""
 
+        // A running session's destination is a statement of intent, not a guess,
+        // so it settles the question before any inference runs. Classifying a
+        // D&D session by keyword would be both wasteful and occasionally wrong.
+        if let forced = context.forcedDestination, !forced.isEmpty {
+            context.routing = decision(forced, confidence: 1, note: "session destination")
+            return
+        }
+
         switch routing.mode {
         case .off:
             context.routing = decision(routing.fallback, confidence: 1, note: "sorting off — fixed folder")

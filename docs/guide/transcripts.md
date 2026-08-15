@@ -56,4 +56,4 @@ be undone exactly rather than approximately.
 
 ---
 
-Next: [iPhone, iPad and Mac](/guide/handoff/)
+Next: [Sorting and sessions](/guide/routing/)

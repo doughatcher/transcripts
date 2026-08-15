@@ -48,6 +48,7 @@ GUIDE_PAGES = [
     ("recording", "Recording"),
     ("live", "The live transcript"),
     ("transcripts", "Your transcripts"),
+    ("routing", "Sorting and sessions"),
     ("handoff", "iPhone, iPad and Mac"),
     ("settings", "Settings"),
     ("privacy", "Privacy"),
