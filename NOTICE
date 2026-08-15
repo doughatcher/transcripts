@@ -1,6 +1,14 @@
 Transcripts — third-party components
 ====================================
 
+Portions of the macOS application derive from Scribe
+(https://github.com/BlueAcornInc/scribe), by Blue Acorn iCi.
+
+Scribe continues as its own project. When it is published under the MIT
+licence, that licence's attribution clause applies to this derivation and its
+copyright notice belongs here verbatim — MIT permits building proprietary works
+from it, on condition the notice travels along.
+
 The iOS app has no third-party dependencies. The list below applies to the
 macOS build only.
 
