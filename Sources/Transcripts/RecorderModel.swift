@@ -60,6 +60,13 @@ final class RecorderModel: ObservableObject {
     @Published var lastError: String?
 
     let destination = Destination()
+    /// The session this device is recording into, if any.
+    let session = SessionState()
+
+    /// One instance, because App Intents run outside the SwiftUI scene and must
+    /// act on the same recorder the UI is showing — two would mean an intent
+    /// starting a recording the user cannot see or stop.
+    static let shared = RecorderModel()
 
     static let waveformWindow = 120
 
@@ -906,7 +913,12 @@ final class RecorderModel: ObservableObject {
                 // a hint becomes the record's actual name.
                 titleHint: nil,
                 appVersion: Self.appVersion,
-                draftTranscript: take.draft)
+                draftTranscript: take.draft,
+                // The whole point of a session on this device: the Mac cannot
+                // know which occasion a recording belonged to, and by the time
+                // it sees the file the evening is over. So it travels with it.
+                sessionID: session.id,
+                sessionLabel: session.label)
 
             try destination.withAccess { root in
                 let inbox = DeviceInbox.inbox(under: root)
