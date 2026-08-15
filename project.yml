@@ -12,6 +12,7 @@ packages:
 
 
 
+
     path: .
 
 options:
@@ -21,11 +22,13 @@ options:
 
 
 
+
     iOS: "17.0"
   createIntermediateGroups: true
 
 targets:
   Transcripts:
+
 
 
 
@@ -94,6 +97,7 @@ targets:
 
 
 
+
     type: app-extension
     platform: iOS
     sources:
@@ -131,6 +135,7 @@ targets:
 
 
 
+
     type: application
     platform: macOS
     deploymentTarget: "14.0"
@@ -144,8 +149,25 @@ targets:
         product: TranscriptsCore
       - package: Transcripts
         product: TranscriptsEngine
+    # Every key must be declared here. `info.path` GENERATES the plist rather
+    # than copying an existing one, so the hand-ported file that used to live at
+    # that path was silently overwritten — taking LSUIElement, both TCC usage
+    # strings and the icon with it. Nothing failed loudly: the app still built,
+    # still launched, and still recorded, it just grew a Dock icon and lost the
+    # sentences macOS shows when asking for the microphone.
     info:
       path: Sources/TranscriptsMac/Support/Info.plist
+      properties:
+        CFBundleDisplayName: Transcripts
+        CFBundleName: Transcripts
+        # An agent app: menu bar only, no Dock icon, no menu bar of its own.
+        LSUIElement: true
+        LSMinimumSystemVersion: "14.0"
+        CFBundleIconFile: Transcripts
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSMicrophoneUsageDescription: Transcripts records meetings and voice notes from your microphone.
+        NSSpeechRecognitionUsageDescription: Transcripts transcribes your recordings on this device to create readable transcripts.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ltd.hatcher.transcripts
