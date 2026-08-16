@@ -15,6 +15,9 @@ The first release under this name.
 - Speaker attribution, correctable — reassigning a voice updates both the
   profile and the transcript.
 - Automatic filing into your vault by keyword and on-device model.
+- **Import audio from anywhere** — share a call recording, a Voice Memo or any
+  audio file into Transcripts and it joins your library with its original
+  timestamp.
 - **Sessions**: group an evening's recordings under one name, with their own
   folder and an action that runs once when it ends. Start and end them from
   Shortcuts — with an optional label for the occasion and recording that begins

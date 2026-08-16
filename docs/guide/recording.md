@@ -55,4 +55,35 @@ again.
 
 ---
 
+## Phone calls
+
+**iOS does not let any third-party app record a phone call.** `CallKit` reports
+only whether a call is connected — not its audio — and no audio-session mode
+routes call audio to an app. During a call iOS takes the microphone
+exclusively, so Transcripts cannot capture even your own side.
+
+Transcripts knows a call has started and **stops cleanly**, keeping what it
+already recorded, rather than being cut off mid-capture and leaving a take that
+claims forty minutes and holds four.
+
+What you can do instead:
+
+- **Record the call with the Phone app** (iOS 18.1 and later announces itself
+  audibly to everyone on the line, and saves the recording and a transcript into
+  Notes), then **share that recording into Transcripts** — it lands in your
+  library like any other recording, syncs to the Mac, and is transcribed and
+  attributed properly there.
+- **Put the call on speaker** and record it with an iPad or Mac in the room.
+  Crude, but it captures both sides — and on the Mac you get speaker names.
+
+## Importing audio recorded elsewhere
+
+Anything the share sheet can hand over — a call recording exported from Notes, a
+Voice Memo, an interview someone emailed you — can go into Transcripts. Share it
+and pick Transcripts, or use **Open with** from Files.
+
+Imported recordings keep **their own timestamp**, not the moment you imported
+them, so a call recorded this morning and shared tonight files under this
+morning — and joins the right session on the Mac.
+
 Next: [The live transcript](/guide/live/)
