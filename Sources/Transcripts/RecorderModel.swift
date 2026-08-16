@@ -62,6 +62,10 @@ final class RecorderModel: ObservableObject {
     let destination = Destination()
     /// The session this device is recording into, if any.
     let session = SessionState()
+    /// Knows when a phone call is in progress. It cannot record one — see
+    /// `CallAwareness` — but it can stop a capture cleanly instead of letting
+    /// iOS pull the audio route out from under it.
+    private(set) var calls: CallAwareness!
 
     /// One instance, because App Intents run outside the SwiftUI scene and must
     /// act on the same recorder the UI is showing — two would mean an intent
@@ -154,6 +158,16 @@ final class RecorderModel: ObservableObject {
     init() {
         loadMeta()
         reload()
+        calls = CallAwareness { [weak self] in
+            guard let self, self.isRecording else { return }
+            // A call takes the audio session exclusively. Stopping now keeps
+            // everything captured so far as a finished recording; carrying on
+            // would leave a take claiming the full span and holding only the
+            // minutes before the phone rang.
+            self.transcriptionNote =
+                "Stopped — a phone call took over the microphone. iOS doesn't let apps record calls."
+            self.toggle()
+        }
         resumeInterruptedRecording()
         // Anything that never reached the destination — export failed, or the
         // app died between stop and copy — goes again now, unprompted. The
@@ -605,6 +619,38 @@ final class RecorderModel: ObservableObject {
             saveMeta()
             takes.insert(take, at: 0)
             await export(take)
+        }
+    }
+
+    // MARK: - Importing
+
+    /// Takes on a recording made elsewhere — a call recorded by the Phone app, a
+    /// Voice Memo, an interview someone sent you.
+    ///
+    /// Deliberately no live-transcription step: the file is already whole, and
+    /// the phone's streaming recognizer exists to read along with speech as it
+    /// happens. Transcribing it properly is the Mac's job, from the audio, which
+    /// is what gets exported.
+    func importAudio(from url: URL) async {
+        let id = UUID()
+        do {
+            let staged = try await AudioImport.stage(url, into: Self.captureDirectory(), id: id)
+            var take = Take(id: id, audio: staged.audio, startedAt: staged.recordedAt,
+                            duration: staged.duration, exported: false, draft: nil)
+            // Named from the file rather than from content: there is no draft to
+            // summarize, and a filename the user chose is a better handle than
+            // a timestamp.
+            let stem = url.deletingPathExtension().lastPathComponent
+            take.title = stem.isEmpty ? nil : stem
+            meta[id.uuidString] = TakeMeta(exported: false, title: take.title, summary: nil)
+            saveMeta()
+            takes.insert(take, at: 0)
+            takes.sort { $0.startedAt > $1.startedAt }
+            lastError = nil
+            await export(take)
+        } catch {
+            lastError = (error as? LocalizedError)?.errorDescription
+                ?? "Couldn't import that recording."
         }
     }
 

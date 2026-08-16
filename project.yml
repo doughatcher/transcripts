@@ -80,6 +80,24 @@ targets:
         # Only HTTPS via system frameworks — skips the export-compliance
         # questionnaire on every App Store build upload.
         ITSAppUsesNonExemptEncryption: false
+        # Puts Transcripts in the share sheet for audio, and lets Files "Open
+        # with" hand a recording over. A share extension would do the same at
+        # the cost of a second bundle id and an App Group to reach the
+        # destination bookmark — this needs neither.
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Audio
+            LSHandlerRank: Alternate
+            CFBundleTypeRole: Editor
+            LSItemContentTypes:
+              - public.audio
+              - public.mp3
+              - public.mpeg-4-audio
+              - com.apple.m4a-audio
+              - public.aiff-audio
+              - com.microsoft.waveform-audio
+        # Opens the file where it sits rather than only a copy, so a recording
+        # can be imported without first being duplicated into the app.
+        LSSupportsOpeningDocumentsInPlace: true
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

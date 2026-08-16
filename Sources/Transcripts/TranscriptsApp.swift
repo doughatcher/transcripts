@@ -11,7 +11,13 @@ struct TranscriptsApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView().environmentObject(model)
+            ContentView()
+                .environmentObject(model)
+                // Audio shared or opened from another app — a call recording
+                // exported from Notes, a Voice Memo, a file from Files.
+                .onOpenURL { url in
+                    Task { await model.importAudio(from: url) }
+                }
         }
     }
 }
