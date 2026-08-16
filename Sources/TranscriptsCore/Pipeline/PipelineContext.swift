@@ -3,7 +3,7 @@ import Foundation
 /// The typed payload that flows through every pipeline stage. Each stage reads
 /// what it needs and enriches the context for downstream stages. It is `Codable`
 /// so the engine can hand the whole thing to an external command (via stdin /
-/// `SCRIBE_CONTEXT_JSON`) and merge back a result.
+/// `TRANSCRIPTS_CONTEXT_JSON`) and merge back a result.
 public struct PipelineContext: Codable, Sendable {
     public var recording: Recording
 

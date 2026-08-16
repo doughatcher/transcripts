@@ -170,6 +170,20 @@ The shape used by `script`, `onComplete`, and every pipeline stage.
 
 `arguments` and `environment` values support `${...}` substitution.
 
+### Environment given to external commands
+
+Every command Transcripts runs — a sort script, a pipeline stage — also receives
+the context as environment variables, so a script need not parse anything to get
+at the common values:
+
+| Variable | |
+| --- | --- |
+| `TRANSCRIPTS_CONTEXT_JSON` | path to the full context as JSON. The same JSON is also on **stdin**. |
+| `TRANSCRIPTS_<NAME>` | one per template variable, upper-cased — `TRANSCRIPTS_AUDIOURL`, `TRANSCRIPTS_TRANSCRIPTPATH`, and so on. |
+
+An explicit `environment` entry in the command always wins, so you can rename or
+override any of them.
+
 ### Session substitutions
 
 Available to `onComplete`:

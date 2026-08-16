@@ -106,8 +106,12 @@ public final class PipelineEngine {
     }
 
     /// Runs an external command: substitutes template vars, writes the full
-    /// context JSON to a temp file (exposed as `SCRIBE_CONTEXT_JSON`) and to
-    /// stdin, then merges any `ExternalStageResult` it prints back into context.
+    /// context JSON to a temp file (exposed as `TRANSCRIPTS_CONTEXT_JSON`) and
+    /// to stdin, then merges any `ExternalStageResult` it prints back into
+    /// context.
+    ///
+    /// The prefix is part of the public contract — every stage script reads
+    /// these — so it names this app rather than the one this code grew out of.
     private func runExternal(_ command: ExternalCommand, stage: StageID?, into ctx: inout PipelineContext) async throws {
         let vars = TemplateEngine.variables(for: ctx)
         var resolved = TemplateEngine.resolve(command, with: vars)
@@ -115,9 +119,9 @@ public final class PipelineEngine {
         let contextData = try JSONEncoder().encode(ctx)
         let contextFile = ctx.scratchDir.appendingPathComponent("context.json")
         try? contextData.write(to: contextFile)
-        resolved.environment["SCRIBE_CONTEXT_JSON"] = contextFile.path
-        for (k, v) in vars where resolved.environment["SCRIBE_\(k.uppercased())"] == nil {
-            resolved.environment["SCRIBE_\(k.uppercased())"] = v
+        resolved.environment["TRANSCRIPTS_CONTEXT_JSON"] = contextFile.path
+        for (k, v) in vars where resolved.environment["TRANSCRIPTS_\(k.uppercased())"] == nil {
+            resolved.environment["TRANSCRIPTS_\(k.uppercased())"] = v
         }
 
         let result = try await runner.run(resolved, stdin: contextData)
