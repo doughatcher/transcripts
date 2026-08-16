@@ -129,13 +129,13 @@ content sharing, no web view, and no ad network.
 
 ## 5. Pre-submission checklist
 
-- [ ] Individual Apple Developer enrollment active; **verify the team selector
-      in App Store Connect is your own team, not Blue Acorn, LLC**, before
-      creating the app record. An app created under another team belongs to
-      that team, and moving it later needs a formal Apple app transfer.
+- [ ] Individual Apple Developer enrollment active. **Verify the team selector
+      in App Store Connect is your own team before creating the app record** —
+      an Apple ID can belong to several, and an app created under the wrong one
+      belongs to that team, recoverable only by a formal Apple app transfer.
 - [ ] App name "Transcripts" reserved
 - [ ] Bundle id `ltd.hatcher.transcripts` registered under **your** team
-- [ ] Xcode signing Team set to your team (not BA)
+- [ ] Xcode signing Team set to your own team
 - [ ] Privacy policy live at a public URL
 - [ ] EU trader status declared (see below)
 - [ ] App icon finalized (transcript lines with a live waveform — replace if a
