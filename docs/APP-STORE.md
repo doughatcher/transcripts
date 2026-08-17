@@ -114,7 +114,10 @@ Paste into App Store Connect ▸ App Review Information ▸ Notes.
 those separately.)*
 
 **Support URL:** `https://transcripts.hatcher.ltd`
-**Privacy Policy URL:** `https://transcripts.hatcher.ltd/privacy` (source: `docs/PRIVACY.md`)
+**Privacy Policy URL:** `https://transcripts.hatcher.ltd/privacy` (source:
+`docs/guide/privacy.md`, published at `/guide/privacy/`; `/privacy` is a 301 to
+it, set in `site/build.py`). Both must return 200 **before** you submit —
+Apple fetches this URL at review and again for as long as the app is listed.
 
 ---
 

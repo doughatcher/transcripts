@@ -363,6 +363,15 @@ def build():
                              nav=sidebar(slug), cls="guide"))
         print(f"  ✓ /guide/{'' if slug == 'index' else slug + '/'}")
 
+    # Cloudflare Pages redirects. /privacy is the URL given to App Store Connect
+    # as the Privacy Policy link, and Apple re-fetches it for as long as the app
+    # is listed — so it has to be a path the guide's structure cannot break. The
+    # page itself stays in the guide, where it is written and reviewed.
+    (OUT / "_redirects").write_text(
+        "/privacy    /guide/privacy/    301\n"
+        "/support    /guide/            301\n")
+    print("  ✓ /privacy → /guide/privacy/")
+
     print(f"✓ built → {OUT.relative_to(ROOT)}")
 
 
