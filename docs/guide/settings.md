@@ -59,8 +59,9 @@ in the list.
 Version, update settings, the consent notice, and what the app does with your
 data.
 
-**Ride the beta train** opts you into pre-release builds. During the beta this
-is how you get updates at all.
+**Ride the beta train** opts you into pre-release builds — ones published for
+testing before they are blessed as stable. Leave it off and the updater follows
+stable releases only.
 
 ---
 

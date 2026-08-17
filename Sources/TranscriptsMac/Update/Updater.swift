@@ -65,7 +65,7 @@ enum Updater {
             case .noChannel(let prerelease):
                 return prerelease
                     ? "There's no pre-release build published right now. Turn off \"Ride the beta train\" to follow stable releases."
-                    : "There's no stable release yet — this is still a beta. Turn on \"Ride the beta train\" above to receive pre-release builds."
+                    : "There's no stable release published right now. Turn on \"Ride the beta train\" above to receive pre-release builds."
             case .checksumMismatch(let expected, let got):
                 return """
                     The downloaded update didn't match its published checksum, so it was discarded.
