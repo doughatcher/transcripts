@@ -158,5 +158,21 @@ enrollment that means a home address published on a public page.
 - Free, non-monetized app → non-trader status is generally available.
 - Any monetization → trader, and the contact details are published.
 
-If Transcripts will ever charge, stand up Hatcher Ltd as a real entity and use a
-business address before listing, rather than transferring afterward.
+**Correction (2026-08-17):** an earlier version of this note said the entity had
+to exist before listing "rather than transferring afterward". That conflated two
+different hazards. An app record created under the *wrong team* does need a
+formal Apple app transfer to recover. Converting your *own* individual
+enrollment to an organization is not that: Apple converts the account in place,
+the apps stay put, and it phone-verifies the entity. Same $99/yr either way, and
+the D-U-N-S number is free.
+
+So the entity is not a prerequisite for listing. It is a prerequisite for
+*charging*, because signing the Paid Apps agreement and declaring trader status
+as an individual publishes a home address, and un-publishing it later means
+redoing the agreements after the fact. Everything else in this sequence is
+cheaply reversible; that step is not.
+
+Formation sequence, costs and open legal questions live in the vault at
+`Context/plans/hatcher-ltd-entity-formation.md`. Note that Hatcher Ltd already
+trades — Square account, checking account, invoiced client revenue — without an
+entity behind it, so this is regularisation rather than a new venture.
