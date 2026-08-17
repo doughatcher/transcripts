@@ -45,8 +45,14 @@ struct MobileSessionQuery: EntityQuery {
 
 struct StartMobileSessionIntent: AppIntent {
     static var title: LocalizedStringResource = "Start Session"
+    // Names no platform on purpose. App Store processing rejects an intent
+    // description containing "mac" outright — ITMS-90626, Invalid Siri Support —
+    // and it does so *after* upload: `altool --validate-app` passes the binary,
+    // then the build is discarded and never appears in App Store Connect. The
+    // rule is about Siri-facing copy not advertising other devices, so this says
+    // what happens rather than what picks the recordings up.
     static var description = IntentDescription(
-        "Begins a session and starts recording. Recordings made during it are tagged, so a Mac watching the same folder can group them and run the session's completion action.")
+        "Begins a session and starts recording. Recordings made during it are tagged, so they can be grouped afterwards and the session's completion action run.")
     /// Capture needs the app foregrounded to take the microphone.
     static var openAppWhenRun: Bool = true
 

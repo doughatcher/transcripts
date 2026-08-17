@@ -178,6 +178,22 @@ jobs:
           fi
           echo "✓ no networking symbols"
 
+      # ITMS-90626, Invalid Siri Support: App Store processing rejects an intent
+      # description naming another platform, and it does so *after* upload —
+      # --validate-app passes the binary, then the build is silently discarded
+      # and never appears in App Store Connect. That cost an afternoon on
+      # 2026-08-17, twice, so check the compiled metadata here where it is cheap.
+      - name: Assert no platform names in Siri metadata
+        run: |
+          APP="$RUNNER_TEMP/export/Payload/Transcripts.app"
+          [ -d "$APP" ] || { unzip -q "$RUNNER_TEMP/export/Transcripts.ipa" -d "$RUNNER_TEMP/unpacked"; APP="$RUNNER_TEMP/unpacked/Payload/Transcripts.app"; }
+          if [ -d "$APP/Metadata.appintents" ] && \
+             grep -rioE 'mac|iphone|ipad|apple watch' "$APP/Metadata.appintents"; then
+            echo "::error::App Intents metadata names a platform. App Store processing rejects this as ITMS-90626, after a successful upload."
+            exit 1
+          fi
+          echo "✓ no platform names in App Intents metadata"
+
       - name: Validate
         run: |
           xcrun altool --validate-app -f "$RUNNER_TEMP/export/Transcripts.ipa" -t ios \
