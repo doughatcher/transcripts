@@ -41,4 +41,5 @@ The first release under this name.
   retrains.
 - The Mac app is unsandboxed by necessity: capturing other apps' audio and
   writing to a folder you choose are both outside the sandbox.
-- Nobody but its author has run this yet. That is what the beta is for.
+- It has been in daily use for months, but by very few people. Early Access is
+  about widening that — the untested part is the variety of setups, not the app.
