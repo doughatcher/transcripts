@@ -42,10 +42,14 @@ enum Appearance {
         // Not pure white: a hair of warmth keeps the plate from vibrating
         // against the true-white of a Finder window behind it.
         case .light:  return (rgb(0xFF, 0xFF, 0xFF), rgb(0xF4, 0xF3, 0xF8))
-        // Not pure black either — #000 on an OLED phone makes the icon look
-        // like a hole rather than a tile. Near-black with a violet cast keeps
-        // it sitting on the same shelf as the components.
-        case .dark:   return (rgb(0x0B, 0x0A, 0x12), rgb(0x14, 0x11, 0x1F))
+        // Neutral, and very nearly black. An earlier version gave this a violet
+        // cast on the theory that #000 reads as a hole rather than a tile —
+        // true of an icon viewed alone, and wrong on a home screen, where every
+        // other dark icon is essentially black and the cast made ours the one
+        // tinted square in the dock. Judge a tile against its neighbours, not
+        // against itself. The colour lives in the marks; the ground gets out of
+        // the way, lifted off pure black only enough to read as a surface.
+        case .dark:   return (rgb(0x0A, 0x0A, 0x0C), rgb(0x16, 0x16, 0x18))
         // Tinted is graded by luminance, not colour: the system re-maps this
         // to whatever tint the user picked, so all that matters is the ramp.
         case .tinted: return (rgb(0x00, 0x00, 0x00), rgb(0x00, 0x00, 0x00))
