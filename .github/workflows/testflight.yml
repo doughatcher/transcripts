@@ -4,9 +4,10 @@
 # the only place the marketing version is written during a release, so the thing
 # in App Store Connect and the thing in git history cannot disagree.
 #
-# The build number is the workflow run number, which is monotonic per repository
-# and never reused. App Store Connect rejects a build number it has already seen
-# for a version, and "bump the number by hand" is the step everyone forgets.
+# The build number is read from App Store Connect — whatever it already holds,
+# plus one. Not the run number: builds uploaded from a laptop, or a run that
+# fails after uploading, leave gaps a local counter cannot know about, and a
+# build number App Store Connect has seen before is rejected on sight.
 #
 # Nothing here mutates project.yml. MARKETING_VERSION and CURRENT_PROJECT_VERSION
 # are passed to xcodebuild as build settings, which override the spec for that
@@ -71,7 +72,7 @@ jobs:
           # pre-release suffix like 1.0.0-beta.1 is valid for the Mac updater
           # and rejected by App Store Connect, so take the numeric core.
           echo "marketing=${VERSION%%-*}" >> "$GITHUB_OUTPUT"
-          echo "▶ ${VERSION%%-*} (build ${{ github.run_number }})"
+          echo "▶ ${VERSION%%-*}"
 
       - name: Install xcodegen
         run: brew install xcodegen
@@ -115,6 +116,45 @@ jobs:
           printf '%s' "$ASC_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
           chmod 600 ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
 
+      # Ask App Store Connect what it already has rather than assuming. The run
+      # number was the obvious choice and the wrong one: uploads from a laptop,
+      # or a run that fails after uploading, both leave gaps the counter knows
+      # nothing about, and a build number App Store Connect has already seen is
+      # rejected. Max-known plus one is self-correcting whatever else happened.
+      - name: Next build number
+        id: build
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import base64, json, os, subprocess, time, urllib.request
+          kid, iss = os.environ["ASC_KEY_ID"], os.environ["ASC_ISSUER_ID"]
+          key = os.path.expanduser(f"~/.appstoreconnect/private_keys/AuthKey_{kid}.p8")
+          enc = lambda x: base64.urlsafe_b64encode(x).rstrip(b"=")
+          now = int(time.time())
+          signing = (enc(json.dumps({"alg":"ES256","kid":kid,"typ":"JWT"},separators=(",",":")).encode())
+                     + b"." + enc(json.dumps({"iss":iss,"iat":now,"exp":now+900,
+                                              "aud":"appstoreconnect-v1"},separators=(",",":")).encode()))
+          der = subprocess.run(["openssl","dgst","-sha256","-sign",key],
+                               input=signing, capture_output=True).stdout
+          # ES256 wants raw r||s; openssl emits DER SEQUENCE{INTEGER r, INTEGER s}.
+          i = 2 + ((der[1] & 0x7f) if der[1] & 0x80 else 0)
+          def read_int(buf, off):
+              ln = buf[off+1]
+              return buf[off+2:off+2+ln].lstrip(b"\x00").rjust(32, b"\x00"), off+2+ln
+          r, off = read_int(der, i)
+          s, _ = read_int(der, off)
+          token = (signing + b"." + enc(r + s)).decode()
+          url = "https://api.appstoreconnect.apple.com/v1/builds?filter[app]=6802331047&limit=200"
+          req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+          builds = json.load(urllib.request.urlopen(req)).get("data", [])
+          seen = [int(b["attributes"]["version"]) for b in builds
+                  if str(b["attributes"].get("version", "")).isdigit()]
+          print(f"number={max(seen) + 1 if seen else 1}")
+          PY
+          echo "▶ build ${{ steps.build.outputs.number }}"
+
       - name: Archive
         run: |
           xcodebuild archive \
@@ -128,7 +168,7 @@ jobs:
             -authenticationKeyIssuerID ${{ secrets.ASC_ISSUER_ID }} \
             DEVELOPMENT_TEAM=${{ secrets.TEAM_ID }} \
             MARKETING_VERSION=${{ steps.version.outputs.marketing }} \
-            CURRENT_PROJECT_VERSION=${{ github.run_number }}
+            CURRENT_PROJECT_VERSION=${{ steps.build.outputs.number }}
 
       - name: Export options
         run: |
@@ -208,6 +248,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Transcripts-${{ steps.version.outputs.marketing }}-${{ github.run_number }}
+          name: Transcripts-${{ steps.version.outputs.marketing }}-${{ steps.build.outputs.number }}
           path: ${{ runner.temp }}/export/Transcripts.ipa
           if-no-files-found: warn
