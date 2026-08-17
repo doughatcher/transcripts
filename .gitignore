@@ -13,3 +13,8 @@ dist/
 Package.resolved
 site/public/
 Sources/TranscriptsMac/Support/Info.plist
+
+# Coverage artifact dropped by `swift test` in the working directory.
+*.profraw
+# Wrangler's local cache — carries the Cloudflare account id and name.
+.wrangler/
