@@ -16,11 +16,15 @@ packages:
 
 
 
+
+
     path: .
 
 options:
   bundleIdPrefix: ltd.hatcher
   deploymentTarget:
+
+
 
 
 
@@ -42,11 +46,29 @@ targets:
 
 
 
+
+
     type: application
     platform: iOS
     sources:
       - path: Sources/Transcripts
+      # The Mac pipeline is excluded rather than compiled and left unused. It is
+      # dead code on iOS — the phone's chat chain is FoundationModels then the
+      # extractive fallback, never Ollama — but compiling it linked URLSession
+      # and URLRequest into the shipped binary. The App Store privacy answer and
+      # the review notes both claim those symbols are absent and invite Apple to
+      # verify it against the binary, so leaving them in made a checkable claim
+      # false. Excluded here, not #if'd, so the Mac package still builds it.
       - path: Sources/TranscriptsCore
+        excludes:
+          - "Providers/OllamaClient.swift"     # the only URLSession in the app
+          - "Providers/CommandRunner.swift"    # Process — unavailable on iOS
+          - "Providers/TemplateEngine.swift"   # PipelineEngine only
+          - "Providers/ExternalStageResult.swift"
+          # PipelineStage.swift and PipelineContext.swift stay: StageID is the
+          # config file's stage vocabulary, which AppConfig decodes on iOS too.
+          - "Pipeline/PipelineEngine.swift"    # drives external commands
+          - "Stages/**"                        # Summarize/Classify build OllamaClient
       - path: Sources/TranscriptsActivity
     dependencies:
       - target: TranscriptsWidgets
@@ -128,6 +150,8 @@ targets:
 
 
 
+
+
     type: app-extension
     platform: iOS
     sources:
@@ -161,6 +185,8 @@ targets:
   # where xcodebuild silently resolves the project. Building the Mac app then
   # built the iOS one instead. One project, distinct scheme names, no ambiguity.
   TranscriptsMac:
+
+
 
 
 
