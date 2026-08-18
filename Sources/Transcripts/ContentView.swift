@@ -139,6 +139,24 @@ struct ContentView: View {
                                     model.deleteLocal(take)
                                 } label: { Label("Delete", systemImage: "trash") }
                             }
+                            // Repairs on the leading edge, the destructive one on
+                            // the trailing edge. That is the iOS convention, and
+                            // it means the careless swipe — the one you make
+                            // walking — cannot be the one that deletes.
+                            .swipeActions(edge: .leading) {
+                                Button {
+                                    draftTitle = take.title ?? ""
+                                    renaming = take
+                                } label: { Label("Rename", systemImage: "pencil") }
+                                    .tint(.indigo)
+
+                                if model.takes.count >= 2 {
+                                    Button {
+                                        mergeAnchor = take
+                                    } label: { Label("Merge", systemImage: "arrow.triangle.merge") }
+                                        .tint(.teal)
+                                }
+                            }
                             // Long press rather than a toolbar button. These are
                             // occasional repairs — a wrong title, a recording
                             // that broke in two — and putting them on the chrome
@@ -1182,6 +1200,8 @@ private struct TakePane: View {
                     Text("\(take.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(Clock.human(take.duration))")
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
+
+                TakeScrubber(take: take, disabled: model.isRecording)
 
                 if let summary = take.summary, !summary.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
