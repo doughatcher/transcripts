@@ -85,13 +85,6 @@ struct ContentView: View {
             .sorted { $0.date > $1.date }
     }
 
-    /// Multi-select for merging. Hand-rolled rather than EditMode because the
-    /// list's normal selection is a single `Selection?` driving navigation, and
-    /// SwiftUI won't swap a list between selection types cleanly.
-    @State private var picking2Merge = false
-    @State private var picked: Set<UUID> = []
-    @State private var merging = false
-
     var body: some View {
         NavigationSplitView {
             List(selection: $selection) {
@@ -109,56 +102,19 @@ struct ContentView: View {
                       case .shared(let entry):
                         TranscriptRow(entry: entry).tag(Selection.transcript(entry.url))
                       case .local(let take):
-                        if picking2Merge {
-                            Button {
-                                if picked.contains(take.id) { picked.remove(take.id) }
-                                else { picked.insert(take.id) }
-                            } label: {
-                                TakeRow(take: take, picked: picked.contains(take.id))
+                        TakeRow(take: take)
+                            .tag(Selection.take(take.id))
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    model.deleteLocal(take)
+                                } label: { Label("Delete", systemImage: "trash") }
                             }
-                            .buttonStyle(.plain)
-                        } else {
-                            TakeRow(take: take, picked: nil)
-                                .tag(Selection.take(take.id))
-                                .swipeActions(edge: .trailing) {
-                                    Button(role: .destructive) {
-                                        model.deleteLocal(take)
-                                    } label: { Label("Delete", systemImage: "trash") }
-                                }
-                        }
                       }
                     }
                   }
                 }
             }
             .navigationTitle("Transcripts")
-            .toolbar {
-                if model.takes.count >= 2 {
-                    ToolbarItem(placement: .primaryAction) {
-                        if picking2Merge {
-                            Button("Cancel") { picking2Merge = false; picked = [] }
-                        } else {
-                            Button("Merge…") { picking2Merge = true }
-                        }
-                    }
-                }
-                if picking2Merge {
-                    ToolbarItem(placement: .bottomBar) {
-                        Button {
-                            merging = true
-                            let ids = picked
-                            picking2Merge = false
-                            picked = []
-                            Task { await model.merge(ids); merging = false }
-                        } label: {
-                            Text("Merge \(picked.count) into one recording")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(picked.count < 2)
-                    }
-                }
-            }
             .safeAreaInset(edge: .bottom) {
                 WorkspaceBar(destination: model.destination,
                              onAdd: { managed in
@@ -166,13 +122,6 @@ struct ContentView: View {
                                  picking = true
                              },
                              onSwitch: { model.refreshLibrary() })
-            }
-            .overlay {
-                if merging {
-                    ProgressView("Merging…")
-                        .padding(20)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-                }
             }
         } detail: {
             switch selection {
@@ -392,16 +341,9 @@ private struct SidebarWaveform: View {
 
 private struct TakeRow: View {
     let take: RecorderModel.Take
-    /// nil = normal row; true/false = merge-picking mode with checkmark state.
-    let picked: Bool?
 
     var body: some View {
         HStack(spacing: 10) {
-            if let picked {
-                Image(systemName: picked ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundStyle(picked ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
-            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(take.title ?? take.startedAt.formatted(date: .abbreviated, time: .shortened))
                     .lineLimit(1)
