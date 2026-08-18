@@ -174,7 +174,12 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("Transcripts")
-            .searchable(text: $query, prompt: "Search recordings")
+            // Always shown, not the default pull-down-to-reveal. A search field
+            // you have to know is there is not a search field, and in a sidebar
+            // there is no scroll gesture that obviously uncovers it.
+            .searchable(text: $query,
+                        placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: "Search recordings")
             .overlay {
                 if !query.isEmpty && grouped.isEmpty {
                     ContentUnavailableView.search(text: query)
