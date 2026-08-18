@@ -32,8 +32,13 @@ echo "▶ device $DEV"
 
 DATA="$(xcrun simctl get_app_container "$DEV" "$BUNDLE_ID" data)"
 CAPTURES="$DATA/Library/Application Support/Captures"
-mkdir -p "$CAPTURES"
 echo "▶ $CAPTURES"
+
+# Replace rather than add. Seeding twice used to leave two of everything, which
+# looks like a duplication bug in the app rather than in this script — exactly
+# the wrong thing for a tool whose job is to make the UI legible.
+rm -rf "$CAPTURES"
+mkdir -p "$CAPTURES"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT

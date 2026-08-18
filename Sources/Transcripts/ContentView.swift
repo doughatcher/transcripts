@@ -59,6 +59,8 @@ struct ContentView: View {
     @State private var renaming: RecorderModel.Take?
     @State private var draftTitle = ""
 
+    @State private var showingPrivacy = false
+
     private var searched: [Row] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
         guard !q.isEmpty else { return rows }
@@ -174,6 +176,19 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("Transcripts")
+            // The app asks for a microphone, speech recognition and a folder in
+            // its first thirty seconds. "Where does this go?" is the reasonable
+            // response and the phone had nowhere to answer it — the Mac has had
+            // an About pane the whole time.
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showingPrivacy = true } label: {
+                        Image(systemName: "hand.raised")
+                    }
+                    .accessibilityLabel("Privacy")
+                }
+            }
+            .sheet(isPresented: $showingPrivacy) { PrivacySheet() }
             // Always shown, not the default pull-down-to-reveal. A search field
             // you have to know is there is not a search field, and in a sidebar
             // there is no scroll gesture that obviously uncovers it.
@@ -461,6 +476,98 @@ private struct TakeRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .accessibilityLabel("Still syncing")
+            }
+        }
+    }
+}
+
+/// What happens to your recordings, in the app rather than only on a website.
+///
+/// The wording tracks `docs/guide/privacy.md`, which is the published policy and
+/// the URL App Review fetches. Keep them saying the same thing: an in-app claim
+/// that outruns the policy is worse than no claim, and this one is checkable —
+/// CI fails the build if a networking symbol reaches the binary.
+private struct PrivacySheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Nothing leaves this device")
+                            .font(.title3.weight(.semibold))
+                        Text("Transcripts has no servers, no accounts, no analytics and no advertising. It contains no networking code at all — not disabled, not optional: absent.")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Group {
+                        Item(icon: "waveform",
+                             title: "Recording stays here",
+                             detail: "Audio is written to this device as ordinary .m4a files, with the transcript beside it as plain text. Nothing is uploaded.")
+
+                        Item(icon: "text.bubble",
+                             title: "Transcribed on this device",
+                             detail: "Live text uses Apple's on-device speech recognition. If a device can't recognise speech locally, Transcripts turns live text off and tells you — it does not fall back to a server.")
+
+                        Item(icon: "folder",
+                             title: "Your folder, your rules",
+                             detail: "Recordings are copied to the folder you pick. If that folder lives in iCloud Drive, OneDrive or Dropbox, that service syncs it under your account and its own policy — the same as any other file you put there.")
+
+                        Item(icon: "mic",
+                             title: "Microphone only while recording",
+                             detail: "And only after you grant permission. You can revoke it any time in Settings ▸ Privacy & Security ▸ Microphone.")
+
+                        Item(icon: "nosign",
+                             title: "Never collected",
+                             detail: "No personal information, contacts, location, device identifiers, usage analytics, crash reporting or advertising identifiers. There are no third-party SDKs.")
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Recording is your responsibility")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Recording laws vary by country and by state, and some require the consent of everyone in the conversation. Transcripts gives you a recorder; the rest is yours.")
+                            .font(.callout).foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
+
+                    Link("Read the full privacy policy",
+                         destination: URL(string: "https://transcripts.hatcher.ltd/privacy")!)
+                        .font(.callout)
+
+                    Text("Everything above describes how the app is built, not a promise about how it is operated — there is no server to operate.")
+                        .font(.caption).foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: 640)
+                .frame(maxWidth: .infinity)
+                .padding(24)
+            }
+            .navigationTitle("Privacy")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private struct Item: View {
+        let icon: String
+        let title: String
+        let detail: String
+
+        var body: some View {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: icon)
+                    .font(.body)
+                    .foregroundStyle(.tint)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.subheadline.weight(.semibold))
+                    Text(detail).font(.callout).foregroundStyle(.secondary)
+                }
             }
         }
     }
