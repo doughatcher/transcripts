@@ -45,6 +45,34 @@ struct ContentView: View {
         }
     }
 
+    /// Library-wide search. Matches the title and the draft the phone heard, so
+    /// "ERP sync" finds the call you never titled — which is most of them, since
+    /// titles are model-generated and you were busy at the time.
+    @State private var query = ""
+
+    /// The take a merge was started from, via its context menu. Non-nil presents
+    /// the picker for what to join it with.
+    @State private var mergeAnchor: RecorderModel.Take?
+    @State private var merging = false
+
+    /// The take being renamed, and the text field's contents.
+    @State private var renaming: RecorderModel.Take?
+    @State private var draftTitle = ""
+
+    private var searched: [Row] {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return rows }
+        return rows.filter { row in
+            switch row {
+            case .local(let t):
+                return (t.title ?? "").lowercased().contains(q)
+                    || (t.draft ?? "").lowercased().contains(q)
+            case .shared(let e):
+                return e.title.lowercased().contains(q)
+            }
+        }
+    }
+
     /// Rows grouped by the day they were recorded.
     ///
     /// A flat reverse-chronological list reads as unrelated items even when
@@ -53,7 +81,7 @@ struct ContentView: View {
     /// together where they belong.
     private var grouped: [(key: Date, rows: [Row])] {
         let cal = Calendar.current
-        return Dictionary(grouping: rows) { cal.startOfDay(for: $0.date) }
+        return Dictionary(grouping: searched) { cal.startOfDay(for: $0.date) }
             .map { (key: $0.key, rows: $0.value.sorted { $0.date > $1.date }) }
             .sorted { $0.key > $1.key }
     }
@@ -109,12 +137,82 @@ struct ContentView: View {
                                     model.deleteLocal(take)
                                 } label: { Label("Delete", systemImage: "trash") }
                             }
+                            // Long press rather than a toolbar button. These are
+                            // occasional repairs — a wrong title, a recording
+                            // that broke in two — and putting them on the chrome
+                            // made the library look like something to be
+                            // managed rather than just read.
+                            .contextMenu {
+                                Button {
+                                    draftTitle = take.title ?? ""
+                                    renaming = take
+                                } label: { Label("Rename", systemImage: "pencil") }
+
+                                if let text = take.draft, !text.isEmpty {
+                                    ShareLink(item: text) {
+                                        Label("Share transcript", systemImage: "square.and.arrow.up")
+                                    }
+                                }
+                                ShareLink(item: take.audio) {
+                                    Label("Share audio", systemImage: "waveform")
+                                }
+
+                                if model.takes.count >= 2 {
+                                    Button {
+                                        mergeAnchor = take
+                                    } label: { Label("Merge with…", systemImage: "arrow.triangle.merge") }
+                                }
+
+                                Divider()
+                                Button(role: .destructive) {
+                                    model.deleteLocal(take)
+                                } label: { Label("Delete", systemImage: "trash") }
+                            }
                       }
                     }
                   }
                 }
             }
             .navigationTitle("Transcripts")
+            .searchable(text: $query, prompt: "Search recordings")
+            .overlay {
+                if !query.isEmpty && grouped.isEmpty {
+                    ContentUnavailableView.search(text: query)
+                }
+            }
+            .alert("Rename recording", isPresented: Binding(
+                get: { renaming != nil },
+                set: { if !$0 { renaming = nil } })) {
+                TextField("Title", text: $draftTitle)
+                Button("Save") {
+                    if let take = renaming {
+                        let name = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                        model.rename(take, to: name.isEmpty ? nil : name)
+                    }
+                    renaming = nil
+                }
+                Button("Cancel", role: .cancel) { renaming = nil }
+            } message: {
+                Text("Titles are written by the model from what it heard, so they are sometimes wrong. Clearing the name puts the date back.")
+            }
+            .sheet(item: $mergeAnchor) { anchor in
+                MergeSheet(anchor: anchor,
+                           candidates: model.takes.filter { $0.id != anchor.id }
+                                                  .sorted { $0.startedAt > $1.startedAt }) { ids in
+                    mergeAnchor = nil
+                    merging = true
+                    Task { await model.merge(ids.union([anchor.id])); merging = false }
+                } onCancel: {
+                    mergeAnchor = nil
+                }
+            }
+            .overlay {
+                if merging {
+                    ProgressView("Merging…")
+                        .padding(20)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                }
+            }
             .safeAreaInset(edge: .bottom) {
                 WorkspaceBar(destination: model.destination,
                              onAdd: { managed in
@@ -358,6 +456,63 @@ private struct TakeRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .accessibilityLabel("Still syncing")
+            }
+        }
+    }
+}
+
+/// Picks what to join a take with. Reached from a take's context menu, so the
+/// anchor is already chosen and this only asks "and which others" — which is
+/// the whole reason it can be a sheet rather than a mode over the library.
+private struct MergeSheet: View {
+    let anchor: RecorderModel.Take
+    let candidates: [RecorderModel.Take]
+    let onMerge: (Set<UUID>) -> Void
+    let onCancel: () -> Void
+
+    @State private var picked: Set<UUID> = []
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Joining") {
+                    TakeRow(take: anchor)
+                }
+                Section("With") {
+                    ForEach(candidates) { take in
+                        Button {
+                            if picked.contains(take.id) { picked.remove(take.id) }
+                            else { picked.insert(take.id) }
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: picked.contains(take.id)
+                                      ? "checkmark.circle.fill" : "circle")
+                                    .font(.title3)
+                                    .foregroundStyle(picked.contains(take.id)
+                                                     ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
+                                TakeRow(take: take)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .navigationTitle("Merge recordings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: onCancel)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Merge") { onMerge(picked) }
+                        .disabled(picked.isEmpty)
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                Text("They join oldest first into one recording. The originals are removed from this device.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24).padding(.bottom, 12)
             }
         }
     }
