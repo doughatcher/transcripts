@@ -1009,6 +1009,22 @@ final class RecorderModel: ObservableObject {
         takes[i].exported = true
     }
 
+    // MARK: - Rename
+
+    /// Retitles a take. Passing nil clears it, which puts the date back.
+    ///
+    /// Titles are written by the model from a draft transcript, so they are
+    /// wrong often enough to need a way out — and the title is what you scan
+    /// past for months afterwards. Stored in `TakeMeta` beside `exported`, so it
+    /// survives relaunch; the Mac re-titles from its own better transcript when
+    /// the recording lands there, and this only governs the local row.
+    func rename(_ take: Take, to title: String?) {
+        meta[take.id.uuidString, default: TakeMeta()].title = title
+        saveMeta()
+        guard let i = takes.firstIndex(where: { $0.id == take.id }) else { return }
+        takes[i].title = title
+    }
+
     // MARK: - Merge
 
     /// Joins several takes into one recording — for a session that ended up as
