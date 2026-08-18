@@ -201,17 +201,21 @@ jobs:
             -authenticationKeyID ${{ secrets.ASC_KEY_ID }} \
             -authenticationKeyIssuerID ${{ secrets.ASC_ISSUER_ID }}
 
+      # Unpack once, here, and let the assertions below share it. They used to
+      # unpack independently into the same directory, so the second one met a
+      # populated directory, unzip prompted to overwrite, found no stdin, and
+      # exited non-zero — failing the step before its actual check ever ran.
+      - name: Unpack the IPA
+        run: |
+          rm -rf "$RUNNER_TEMP/unpacked"
+          unzip -q "$RUNNER_TEMP/export/Transcripts.ipa" -d "$RUNNER_TEMP/unpacked"
+          echo "APP=$RUNNER_TEMP/unpacked/Payload/Transcripts.app" >> "$GITHUB_ENV"
+
       # The privacy answer and the review notes both tell Apple this binary
       # contains no networking code and invite them to check. Check it here, so
       # the claim cannot quietly stop being true between releases.
       - name: Assert the no-networking claim
         run: |
-          APP="$RUNNER_TEMP/export/Payload/Transcripts.app"
-          [ -d "$APP" ] || APP=$(find "$RUNNER_TEMP/export" -name 'Transcripts.app' -maxdepth 3 | head -1)
-          if [ -z "$APP" ]; then
-            unzip -q "$RUNNER_TEMP/export/Transcripts.ipa" -d "$RUNNER_TEMP/unpacked"
-            APP="$RUNNER_TEMP/unpacked/Payload/Transcripts.app"
-          fi
           if nm -u "$APP/Transcripts" | grep -E 'URLSession|URLRequest|NWConnection'; then
             echo "::error::Networking symbols are present, but the App Store privacy answer says they are not."
             exit 1
@@ -225,14 +229,44 @@ jobs:
       # 2026-08-17, twice, so check the compiled metadata here where it is cheap.
       - name: Assert no platform names in Siri metadata
         run: |
-          APP="$RUNNER_TEMP/export/Payload/Transcripts.app"
-          [ -d "$APP" ] || { unzip -q "$RUNNER_TEMP/export/Transcripts.ipa" -d "$RUNNER_TEMP/unpacked"; APP="$RUNNER_TEMP/unpacked/Payload/Transcripts.app"; }
-          if [ -d "$APP/Metadata.appintents" ] && \
-             grep -rioE 'mac|iphone|ipad|apple watch' "$APP/Metadata.appintents"; then
-            echo "::error::App Intents metadata names a platform. App Store processing rejects this as ITMS-90626, after a successful upload."
-            exit 1
-          fi
-          echo "✓ no platform names in App Intents metadata"
+          python3 - "$APP/Metadata.appintents/extract.actionsdata" <<'PY'
+          import json, re, sys, pathlib
+
+          src = pathlib.Path(sys.argv[1])
+          if not src.exists():
+              print("no App Intents metadata in this build — nothing to check")
+              sys.exit(0)
+          data = json.loads(src.read_text())
+
+          # Only the strings Apple actually shows to Siri. Grepping the whole
+          # Metadata.appintents directory was the first attempt and is wrong:
+          # it walks binary NLU blobs, where a three-letter substring like
+          # "mac" hits by chance and fails the build for nothing.
+          strings = []
+          def walk(node):
+              if isinstance(node, dict):
+                  for key, value in node.items():
+                      if key == "key" and isinstance(value, str):
+                          strings.append(value)
+                      else:
+                          walk(value)
+              elif isinstance(node, list):
+                  for item in node:
+                      walk(item)
+          walk(data)
+
+          banned = re.compile(r"\b(mac|macos|iphone|ipad|apple watch|watchos)\b", re.I)
+          hits = [s for s in strings if banned.search(s)]
+          if hits:
+              for hit in hits:
+                  print(f"  names a platform: {hit}")
+              print("::error::App Intents metadata names a platform. App Store "
+                    "processing rejects this as ITMS-90626 — after the upload "
+                    "reports success, so nothing surfaces until the build "
+                    "silently fails to appear.")
+              sys.exit(1)
+          print(f"✓ {len(strings)} Siri-facing strings, none naming a platform")
+          PY
 
       - name: Validate
         run: |
