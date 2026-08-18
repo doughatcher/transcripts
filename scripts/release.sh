@@ -104,7 +104,20 @@ MSG
   echo "▶ Notarizing (this takes a few minutes)"
   TMPZIP="$(mktemp -d)/$ZIP_NAME"
   ditto -c -k --keepParent "$APP" "$TMPZIP"
-  xcrun notarytool submit "$TMPZIP" --keychain-profile transcripts-notary --wait
+  # --keychain is not optional here, despite reading like it. Without it,
+  # notarytool stores the profile somewhere it cannot find again:
+  # `store-credentials` validates against Apple and reports success, and the
+  # very next lookup says "No Keychain password item found". Naming the login
+  # keychain explicitly on both the store and the read makes it persist.
+  #
+  #   xcrun notarytool store-credentials transcripts-notary \
+  #     --key ~/.appstoreconnect/private_keys/AuthKey_<KEYID>.p8 \
+  #     --key-id <KEYID> --issuer <ISSUER> \
+  #     --keychain ~/Library/Keychains/login.keychain-db
+  xcrun notarytool submit "$TMPZIP" \
+    --keychain-profile transcripts-notary \
+    --keychain "${NOTARY_KEYCHAIN:-$HOME/Library/Keychains/login.keychain-db}" \
+    --wait
   xcrun stapler staple "$APP"
   echo "  ✓ stapled"
 else
@@ -198,7 +211,7 @@ cask "transcripts" do
     end
   end
 
-  depends_on macos: ">= :sonoma"
+  depends_on macos: :sonoma
 
   app "Transcripts.app"
 
