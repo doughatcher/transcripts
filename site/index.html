@@ -16,18 +16,12 @@
   </p>
   <div class="badges" id="download">
     <a class="btn" href="/{{ZIP}}">Download for Mac</a>
-    <a class="btn secondary" href="/guide/">Read the guide</a>
+    <a class="btn secondary" href="https://testflight.apple.com/join/S4gy9315">Test on iPhone &amp; iPad</a>
   </div>
   <p class="brew">Transcripts {{VERSION}} · macOS 14 or later · 9 MB<br>
      or <code>brew install --cask hatcher-ltd/tap/transcripts</code></p>
-  <p class="unsigned">
-    <strong>This build isn't notarized yet.</strong> macOS will refuse to
-    open it until Apple's developer certificate is in place. Until then, after
-    moving it to Applications, run once:<br>
-    <code>xattr -dr com.apple.quarantine /Applications/Transcripts.app</code><br>
-    If you'd rather not do that, wait for the next build — this note will
-    disappear when it does.
-  </p>
+  <p class="brew">The phone and iPad app runs through TestFlight for now.
+     It is not on the App Store yet.</p>
 </section>
 
 <section class="claims">
@@ -92,14 +86,26 @@
 </section>
 
 <section class="note">
-  <strong>This is Early Access.</strong> Transcripts has been in daily use for
-  months, so it is not raw — but it has had only a handful of users, and that is
-  the gap. Your microphone, your accent, your way of running a meeting may be the
+  <p><strong>What Early Access means here.</strong> Transcripts has been in daily
+  use for months, so it is not raw. What it has not had is <em>users</em> — only a
+  handful, all of them me and people near me. That is the gap this stage exists to
+  close: your microphone, your accent, your way of running a meeting may be the
   first of their kind it meets. If something misbehaves, please
   <a href="https://github.com/hatcher-ltd/transcripts-support/issues">report
-  it</a> — that is what this stage is for.
-  Recording laws vary by country and state, and some require the consent of everyone
-  in the conversation — Transcripts gives you a recorder, and the rest is yours.
+  it</a>.</p>
+
+  <p><strong>1.0 on the Mac.</strong> The Mac app is signed and notarised by
+  Apple, so it installs without argument — by download or by Homebrew — and
+  updates itself from there.</p>
+
+  <p><strong>TestFlight on iPhone and iPad.</strong> The same version, handed out
+  through Apple&rsquo;s testing programme rather than the App Store. It goes to the
+  App Store at 1.1; until then the TestFlight link above is the way in, and it is
+  free.</p>
+
+  <p>Recording laws vary by country and state, and some require the consent of
+  everyone in the conversation — Transcripts gives you a recorder, and the rest is
+  yours.</p>
 </section>
 
 <script>
