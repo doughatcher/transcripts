@@ -18,6 +18,9 @@ packages:
 
 
 
+
+
+
     path: .
 
 options:
@@ -33,11 +36,17 @@ options:
 
 
 
+
+
+
     iOS: "17.0"
   createIntermediateGroups: true
 
 targets:
   Transcripts:
+
+
+
 
 
 
@@ -152,6 +161,9 @@ targets:
 
 
 
+
+
+
     type: app-extension
     platform: iOS
     sources:
@@ -185,6 +197,9 @@ targets:
   # where xcodebuild silently resolves the project. Building the Mac app then
   # built the iOS one instead. One project, distinct scheme names, no ambiguity.
   TranscriptsMac:
+
+
+
 
 
 
@@ -232,7 +247,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: ltd.hatcher.transcripts
         PRODUCT_NAME: Transcripts
         GENERATE_INFOPLIST_FILE: NO
-        MARKETING_VERSION: "1.0.0-beta.1"
+        MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         # Unsandboxed by necessity: ScreenCaptureKit system audio and an
         # arbitrary user-chosen vault path. Signed without entitlements — a
