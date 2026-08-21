@@ -2,9 +2,11 @@ Transcripts — third-party components
 ====================================
 
 Portions of the macOS application derive from Scribe, which is licensed under
-the MIT licence. MIT permits building proprietary works from it on condition
-that the copyright notice and the permission notice travel with the derivation,
-so both are reproduced here verbatim:
+the MIT licence. Transcripts is now under that same licence, so the terms no
+longer differ — but MIT's condition is that the copyright notice and the
+permission notice travel with the derivation, and that condition is Scribe's to
+impose whatever this project chose for itself. Both are reproduced here
+verbatim:
 
     MIT License
 

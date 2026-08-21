@@ -62,6 +62,8 @@ Paste into App Store Connect ▸ App Review Information ▸ Notes.
 > **Recording consent.** The app is a recorder; the user decides what to
 > record. Guidance about consent laws is provided in the App Store description
 > and in our privacy policy.
+>
+> The app is open source under the MIT licence: https://github.com/hatcher-ltd/transcripts
 
 ---
 
@@ -101,6 +103,10 @@ Paste into App Store Connect ▸ App Review Information ▸ Notes.
 > audio nowhere: it requires on-device speech recognition and switches live text
 > off rather than fall back to a server. Your recordings go only where you put
 > them.
+>
+> **Open source**
+> The app is open source under the MIT licence, so the privacy claims above are
+> checkable rather than promised.
 >
 > ---
 > Recording laws vary by location, and some places require the consent of

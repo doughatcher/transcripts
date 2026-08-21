@@ -569,15 +569,16 @@ struct SettingsView: View {
 struct AboutTab: View {
     @EnvironmentObject private var controller: AppController
 
-    // The source is private, so nothing here links to a repository — a "source
-    // code" button onto a 404 is worse than no button. Support is a mail link
-    // rather than an issue tracker for the same reason.
     private static let siteURL = URL(string: "https://transcripts.hatcher.ltd")!
     private static let guideURL = URL(string: "https://transcripts.hatcher.ltd/guide")!
     private static let supportURL = URL(string: "mailto:support@hatcher.ltd?subject=Transcripts")!
-    /// Public tracker. The source is private, so this is a repository with no
-    /// code in it — reporters can still see what is already known rather than
-    /// each discovering it alone down a mail thread.
+    /// An app whose whole claim is that nothing leaves the device should let you
+    /// go and check that for yourself. It sits outside the row of links below
+    /// because a fifth Label does not fit in a 580pt window.
+    private static let sourceURL = URL(string: "https://github.com/hatcher-ltd/transcripts")!
+    /// Reports still land in the support repository rather than alongside the
+    /// code: that is where the existing threads and the people subscribed to
+    /// them already are, and splitting them costs more than the tidiness gains.
     private static let issuesURL = URL(string: "https://github.com/hatcher-ltd/transcripts-support/issues")!
 
     private static let author = "Doug Hatcher"
@@ -641,6 +642,10 @@ struct AboutTab: View {
                             .font(.headline)
                         Text("Transcripts is made by \(Self.author).")
                             .font(.callout)
+                        Link(destination: Self.sourceURL) {
+                            Label("Source on GitHub — MIT licensed", systemImage: "curlybraces")
+                        }
+                        .font(.callout)
                         HStack(spacing: 18) {
                             Link(destination: Self.siteURL) {
                                 Label("Website", systemImage: "globe")
