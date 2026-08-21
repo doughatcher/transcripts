@@ -1,4 +1,5 @@
 import SwiftUI
+import Speech
 import UIKit
 import UniformTypeIdentifiers
 
@@ -1177,6 +1178,19 @@ private struct LivePanel: View {
 /// recording is simply in it. What matters is the content — what was said and
 /// what it was about — which the Mac then improves in place.
 private struct TakePane: View {
+    /// Why a recording came back without text. Speech authorisation is read at
+    /// render time rather than stored per take: if it is still denied that is
+    /// the live answer and the actionable one, and if it has since been granted
+    /// the honest thing to say is that the Mac will handle this one.
+    static var noTranscriptReason: String {
+        switch SFSpeechRecognizer.authorizationStatus() {
+        case .denied, .restricted:
+            return "Speech Recognition is off for Transcripts, so the phone could not write this down. Turn it on in Settings ▸ Privacy & Security ▸ Speech Recognition. The Mac still has the audio and will transcribe it."
+        default:
+            return "Nothing was transcribed on the device. The Mac still has the audio and will transcribe it."
+        }
+    }
+
     @EnvironmentObject private var model: RecorderModel
     let take: RecorderModel.Take
     @State private var query = ""
@@ -1239,9 +1253,14 @@ private struct TakePane: View {
                     Text("Heard on this device. The Mac re-transcribes from the audio and adds speaker names — this entry is replaced by that version when it lands.")
                         .font(.caption2).foregroundStyle(.tertiary)
                 } else {
+                    // Say why, not just that. The app knows at record time
+                    // whether speech recognition was allowed, and used to
+                    // report it only in the live pane while recording — so a
+                    // take with no transcript was silent about the one thing
+                    // that would let you fix it.
                     ContentUnavailableView("No transcript",
                                            systemImage: "waveform.slash",
-                                           description: Text("Nothing was transcribed on the device. The Mac still has the audio and will transcribe it."))
+                                           description: Text(Self.noTranscriptReason))
                         .frame(maxWidth: .infinity)
                 }
 
