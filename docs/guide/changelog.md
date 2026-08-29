@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2
+
+- The Obsidian mirror refuses to run when it would write over the copy it is
+  mirroring — pointing it at the knowledge root used to blank the `audio_file`
+  the filed transcript needs to find its own audio.
+
 ## 1.0.1
 
 The release the first iPad taught us to make.
