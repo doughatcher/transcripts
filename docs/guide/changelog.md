@@ -2,6 +2,14 @@
 
 ## 1.0.2
 
+- Recordings are named after what was said in them again. The summarizer is
+  asked for a title and reliably gives one, but wrapped in whatever markdown it
+  favours — and a decorated `**TITLE: …**` was not being read, so a recording
+  kept the name of the window it was captured from. The two apps then disagreed
+  about what to fall back to: the same call was “with Candidate” on the Mac and
+  “Microsoft Teams — Aug 24” on the iPad, when it was an interview with a name.
+  `scripts/repair-titles.py` puts the recovered titles into recordings made
+  before the fix.
 - The Obsidian mirror refuses to run when it would write over the copy it is
   mirroring — pointing it at the knowledge root used to blank the `audio_file`
   the filed transcript needs to find its own audio.

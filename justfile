@@ -20,6 +20,57 @@ build: project
 open: project
     open Transcripts.xcodeproj
 
+# Build and install straight onto the paired iPhone and iPad, without waiting
+# for TestFlight to process a build. Same headless signing as `testflight`.
+#
+# Devices are addressed by devicectl identifier, never by name: this iPad is
+# named with a Unicode right quote that does not survive shell round-tripping,
+# and matching by name fails with CoreDeviceError 1000. `just devices` prints
+# the identifiers.
+devices: project
+    #!/usr/bin/env bash
+    set -euo pipefail
+    set -a; source .env.signing; set +a
+    KEY="$(eval echo "$ASC_KEY_PATH")"
+    echo "▶ Building for device"
+    xcodebuild -project Transcripts.xcodeproj -scheme Transcripts -configuration Debug \
+      -destination 'generic/platform=iOS' -derivedDataPath .build/ios-device \
+      DEVELOPMENT_TEAM=6Q9BX97LMS \
+      -allowProvisioningUpdates \
+      -authenticationKeyPath "$KEY" \
+      -authenticationKeyID "$ASC_KEY_ID" \
+      -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+      build > .build/ios-device.log 2>&1 \
+      || { echo "✗ build failed — tail of .build/ios-device.log:" >&2; tail -25 .build/ios-device.log >&2; exit 1; }
+    APP=.build/ios-device/Build/Products/Debug-iphoneos/Transcripts.app
+    # Every paired physical device, so a new one is picked up without editing
+    # this recipe. A device that is locked or off refuses the install; that is
+    # reported per device rather than failing the whole run.
+    xcrun devicectl list devices --json-output .build/devices.json > /dev/null
+    IDS="$(python3 -c "
+    import json
+    d = json.load(open('.build/devices.json'))['result']['devices']
+    for x in d:
+        p = x.get('deviceProperties', {})
+        h = x.get('hardwareProperties', {})
+        # reality distinguishes a real device from a simulator; platform alone
+        # does not, and a shutdown simulator answers 'paired'.
+        if (h.get('platform') == 'iOS' and h.get('reality') == 'physical'
+                and x.get('connectionProperties', {}).get('pairingState') == 'paired'):
+            print(x['identifier'], p.get('name', '?').replace(' ', '_'))
+    ")"
+    [[ -n "$IDS" ]] || { echo "✗ no paired iOS devices — connect or unlock them" >&2; exit 1; }
+    while read -r ID NAME; do
+      [[ -n "$ID" ]] || continue
+      echo "▶ Installing to ${NAME//_/ }"
+      if xcrun devicectl device install app --device "$ID" "$APP" > .build/install-$ID.log 2>&1; then
+        echo "  ✓ installed"
+      else
+        echo "  ✗ failed — see .build/install-$ID.log (device locked?)" >&2
+        tail -3 .build/install-$ID.log >&2
+      fi
+    done <<< "$IDS"
+
 # Archive the iOS app and upload it to TestFlight. Signing and profiles are
 # minted headlessly from the App Store Connect API key in .env.signing
 # (gitignored) — there is no Apple ID signed into Xcode on this machine, so
