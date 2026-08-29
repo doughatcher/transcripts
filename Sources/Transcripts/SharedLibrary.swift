@@ -79,7 +79,13 @@ enum SharedLibrary {
             // and the body can be enormous. A `FileHandle` actually honours
             // that — `String(contentsOf:)` was paging whole meetings into
             // memory on every foreground refresh just to learn their titles.
-            guard let head = Self.head(of: url) else {
+            // Empty counts as unreadable, not as a file with no frontmatter.
+            // `String(contentsOf:)` used to throw on a transcript iCloud hadn't
+            // materialised; opening the same placeholder by file handle can
+            // instead succeed and hand back nothing, which would list the file
+            // under its own filename, with no date and no audio, and never ask
+            // for the download that would fix it.
+            guard let head = Self.head(of: url), !head.isEmpty else {
                 // A transcript the Mac has written but this device hasn't pulled
                 // down yet is a placeholder, not a missing file. Silently
                 // skipping it made a freshly-shared library look half-empty, so
@@ -155,10 +161,24 @@ enum SharedLibrary {
             }
             let target = cacheDir.appendingPathComponent("\(size)-\(source.lastPathComponent)")
             if fm.fileExists(atPath: target.path) { return target }
+            // Copy to a staging name and rename into place, rather than copying
+            // straight to the final one. A copy that dies partway — the sync
+            // folder going away mid-read, the app suspended on a long meeting —
+            // leaves the bytes it managed behind, and a truncated file sitting
+            // at the final name is indistinguishable from a finished one: every
+            // later play would take it as a cache hit and stop half way. The
+            // rename is atomic within the volume, so the final name only ever
+            // appears complete.
+            let staging = cacheDir.appendingPathComponent("partial-\(UUID().uuidString)")
             do {
-                try fm.copyItem(at: source, to: target)
+                try fm.copyItem(at: source, to: staging)
+                try fm.moveItem(at: staging, to: target)
                 return target
             } catch {
+                try? fm.removeItem(at: staging)
+                // Another pass may have finished the same copy while this one
+                // ran; its file is complete, so use it.
+                if fm.fileExists(atPath: target.path) { return target }
                 // A placeholder reports its size but can't be copied until the
                 // bytes arrive — same recovery as an unreadable file.
                 try? fm.startDownloadingUbiquitousItem(at: source)

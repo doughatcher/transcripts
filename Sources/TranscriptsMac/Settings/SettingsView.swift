@@ -10,6 +10,10 @@ struct SettingsView: View {
     /// nil in normal use, so the tab bar stays interactive.
     var forcedTab: Int? = nil
     @State private var selection = 0
+    /// Read once when the pane appears, not from the body: `known()` reads
+    /// Obsidian's registry and stats every vault in it, and a body that does
+    /// that re-runs the lot on each keystroke in the vault field.
+    @State private var knownVaults: [URL] = []
 
     var body: some View {
         TabView(selection: Binding(get: { forcedTab ?? selection },
@@ -229,7 +233,7 @@ struct SettingsView: View {
                 // Offered rather than assumed for a vault other than the one
                 // detected — with several vaults, which one the notes belong in
                 // is the user's call.
-                ForEach(ObsidianVault.known().prefix(3), id: \.self) { vault in
+                ForEach(knownVaults.prefix(3), id: \.self) { vault in
                     if controller.config.destinations.vaultMirror.map({ (($0 as NSString).expandingTildeInPath) })
                         != vault.path {
                         Button("Use “\(vault.lastPathComponent)”") {
@@ -325,6 +329,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .task { knownVaults = ObsidianVault.known() }
     }
 
     private func routingBinding<T>(_ keyPath: WritableKeyPath<RoutingConfig, T>) -> Binding<T> {
