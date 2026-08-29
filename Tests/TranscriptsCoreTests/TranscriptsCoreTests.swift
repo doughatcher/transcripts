@@ -1452,6 +1452,42 @@ import Foundation
         }
     }
 
+    /// The models decorate the title line, and a decorated title used to be no
+    /// title at all: the transcript kept the meeting-window name, the file kept
+    /// the app-name slug, and the `TITLE:` line stayed visible in the summary.
+    @Test func extractsTitleThroughWhateverMarkdownTheModelUsed() {
+        let forms = [
+            "TITLE: Post-Sales Interview Process",
+            "# TITLE: Post-Sales Interview Process",
+            "## Title: Post-Sales Interview Process",
+            "**TITLE: Post-Sales Interview Process**",
+            "**TITLE:** Post-Sales Interview Process",
+            "*Title*: Post-Sales Interview Process",
+            "`TITLE: Post-Sales Interview Process`",
+        ]
+        for form in forms {
+            let (title, body) = SummarizeStage.extractTitle(from: "\(form)\n\n**TL;DR:** it happened")
+            #expect(title == "Post-Sales Interview Process", "failed on: \(form)")
+            // The line is consumed, not left for the reader to see.
+            #expect(!body.uppercased().contains("TITLE:"), "left the line behind on: \(form)")
+            #expect(body.contains("TL;DR"))
+        }
+    }
+
+    @Test func extractTitleLeavesOrdinarySummariesAlone() {
+        let (title, body) = SummarizeStage.extractTitle(from: "**TL;DR:** no title line here")
+        #expect(title == nil)
+        #expect(body == "**TL;DR:** no title line here")
+
+        // A colon-bearing sentence is not a title line.
+        let (t2, _) = SummarizeStage.extractTitle(from: "The title: of this talk was never given")
+        #expect(t2 == nil)
+
+        // An empty title is not a title.
+        let (t3, _) = SummarizeStage.extractTitle(from: "**TITLE:**\n\nbody")
+        #expect(t3 == nil)
+    }
+
     @Test func summarizeSingleShotWhenTranscriptFits() async throws {
         let spy = SpyChatModel(reply: "TITLE: Weekly Sync\n\n**TL;DR:** ok")
         _ = try await SummarizeStage.summarize("short transcript", with: spy)

@@ -222,21 +222,38 @@ public struct SummarizeStage: PipelineStage {
 
     /// Pulls a leading `TITLE: ...` line out of the model output; returns the title
     /// (if any) and the remaining summary body.
+    ///
+    /// Decoration-tolerant, because the models actually decorate it. Asking for
+    /// "First line: `TITLE: <3-7 word title>`" reliably gets back the title —
+    /// and just as reliably gets it in whatever markdown the model favours that
+    /// day: `**TITLE: Post-Sales Interview Process**`, `## Title: …`,
+    /// `**Title:** …`. Matching only the bare form meant a decorated one was no
+    /// title at all: the transcript kept the meeting-window name, the file kept
+    /// the app-name slug, and the `TITLE:` line stayed in the summary where the
+    /// reader could see exactly what had been thrown away.
     static func extractTitle(from raw: String) -> (title: String?, body: String) {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         var lines = trimmed.components(separatedBy: "\n")
-        guard let first = lines.first else { return (nil, trimmed) }
-        let upper = first.uppercased()
-        if upper.hasPrefix("TITLE:") || upper.hasPrefix("# TITLE:") {
-            let title = first
-                .replacingOccurrences(of: "TITLE:", with: "", options: [.caseInsensitive])
-                .replacingOccurrences(of: "#", with: "")
-                .trimmingCharacters(in: .whitespaces)
-            lines.removeFirst()
-            let body = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-            return (title.isEmpty ? nil : title, body)
-        }
-        return (nil, trimmed)
+        guard let index = lines.firstIndex(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
+        else { return (nil, trimmed) }
+
+        let bare = Self.undecorate(lines[index])
+        guard let colon = bare.range(of: "TITLE:", options: [.caseInsensitive]),
+              bare[bare.startIndex..<colon.lowerBound].trimmingCharacters(in: .whitespaces).isEmpty
+        else { return (nil, trimmed) }
+
+        let title = String(bare[colon.upperBound...]).trimmingCharacters(in: .whitespaces)
+        guard !title.isEmpty else { return (nil, trimmed) }
+        lines.remove(at: index)
+        return (title, lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// Strips the markdown a model wraps a heading in, so the text can be
+    /// matched on. Titles have no business carrying emphasis, so dropping these
+    /// outright costs nothing.
+    static func undecorate(_ line: String) -> String {
+        line.replacingOccurrences(of: "[*_`#>]", with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
     }
 
     /// One-line description from the `**TL;DR:**` bullet, if present.
