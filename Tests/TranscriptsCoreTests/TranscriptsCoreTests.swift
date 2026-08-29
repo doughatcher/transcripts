@@ -1474,6 +1474,25 @@ import Foundation
         }
     }
 
+    /// Unwrapping the decoration must not reach inside the title. Stripping
+    /// `#` and `_` everywhere renamed "C# to F# Migration" to "C to F
+    /// Migration" — in the frontmatter, the filename slug and the Mac's
+    /// history, none of which the reader can see is wrong without the audio.
+    @Test func extractTitleKeepsPunctuationThatBelongsToTheTitle() {
+        let cases = [
+            ("**TITLE: C# to F# Migration**", "C# to F# Migration"),
+            ("TITLE: C# to F# Migration", "C# to F# Migration"),
+            ("**TITLE:** Rename read_me to README", "Rename read_me to README"),
+            ("## Title: Q3 Planning #2", "Q3 Planning #2"),
+            ("TITLE: Standup: Tuesday", "Standup: Tuesday"),
+            ("`TITLE: The *real* problem`", "The *real* problem"),
+        ]
+        for (input, expected) in cases {
+            let (title, _) = SummarizeStage.extractTitle(from: "\(input)\n\nbody")
+            #expect(title == expected, "input: \(input)")
+        }
+    }
+
     @Test func extractTitleLeavesOrdinarySummariesAlone() {
         let (title, body) = SummarizeStage.extractTitle(from: "**TL;DR:** no title line here")
         #expect(title == nil)

@@ -237,23 +237,35 @@ public struct SummarizeStage: PipelineStage {
         guard let index = lines.firstIndex(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
         else { return (nil, trimmed) }
 
-        let bare = Self.undecorate(lines[index])
-        guard let colon = bare.range(of: "TITLE:", options: [.caseInsensitive]),
-              bare[bare.startIndex..<colon.lowerBound].trimmingCharacters(in: .whitespaces).isEmpty
+        // Split on the first colon and treat the halves differently. The label
+        // may carry decoration anywhere (`**TITLE**`, `*Title*`) so it is
+        // stripped throughout; the title itself may only be stripped at its
+        // ends, because those same characters are load-bearing inside it —
+        // `**TITLE: C# to F# Migration**` names two languages, not "C to F".
+        let line = lines[index]
+        guard let colon = line.firstIndex(of: ":"),
+              Self.undecorate(String(line[line.startIndex..<colon]))
+                  .caseInsensitiveCompare("TITLE") == .orderedSame
         else { return (nil, trimmed) }
 
-        let title = String(bare[colon.upperBound...]).trimmingCharacters(in: .whitespaces)
+        let title = Self.trimDecoration(String(line[line.index(after: colon)...]))
         guard !title.isEmpty else { return (nil, trimmed) }
         lines.remove(at: index)
         return (title, lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    /// Strips the markdown a model wraps a heading in, so the text can be
-    /// matched on. Titles have no business carrying emphasis, so dropping these
-    /// outright costs nothing.
+    /// Strips every markdown character, for matching a *label* — where the
+    /// decoration can sit anywhere and none of it is part of the word.
     static func undecorate(_ line: String) -> String {
         line.replacingOccurrences(of: "[*_`#>]", with: "", options: .regularExpression)
             .trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Strips decoration from the ends only, for *content* — which keeps the
+    /// `#` in "C#" and the `_` in "read_me" while still unwrapping `**bold**`.
+    static func trimDecoration(_ text: String) -> String {
+        text.replacingOccurrences(of: "^[*_`\\s]+|[*_`\\s]+$", with: "",
+                                  options: .regularExpression)
     }
 
     /// One-line description from the `**TL;DR:**` bullet, if present.

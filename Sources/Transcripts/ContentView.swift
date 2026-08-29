@@ -725,7 +725,14 @@ private struct TranscriptPane: View {
                 }
 
                 if let text {
-                    if !text.isEmpty {
+                    if text.isEmpty {
+                        // Read fine, and there is nothing under the frontmatter.
+                        // Without this the pane goes blank and reads exactly like
+                        // the failure this screen was built to stop showing.
+                        ContentUnavailableView("No transcript text",
+                                               systemImage: "doc",
+                                               description: Text("This entry has a summary but no transcript body."))
+                    } else {
                         HStack(spacing: 8) {
                             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                             TextField("Search this transcript", text: $query)

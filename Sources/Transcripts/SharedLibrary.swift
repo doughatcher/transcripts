@@ -101,7 +101,12 @@ enum SharedLibrary {
                 recordedAt: fields["recorded_at"].flatMap(Self.date),
                 summary: fields["description"],
                 folder: folder,
-                audioFile: fields["audio_file"]))
+                // Blank means "there is no sibling audio", which is exactly what
+                // the vault mirror writes. Kept as Optional("") it would resolve
+                // to the containing directory: the pane would offer a player for
+                // a file that cannot exist and sit through the whole download
+                // retry before admitting it.
+                audioFile: fields["audio_file"].flatMap { $0.isEmpty ? nil : $0 }))
             if found.count >= limit { break }
         }
         return found.sorted {
@@ -191,9 +196,14 @@ enum SharedLibrary {
     /// giving iCloud a bounded few seconds to materialise the file in between.
     private nonisolated static func retrying<T>(bookmark: Data, _ attempt: () -> T?) async -> T? {
         for round in 0..<10 {
+            // Checked rather than left to `Task.sleep` to report: a swallowed
+            // cancellation turns the remaining rounds into a tight loop with no
+            // delay between them, each one copying the audio again for a pane
+            // the user already navigated away from.
+            if Task.isCancelled { return nil }
             if let value = Destination.withScope(bookmark: bookmark, attempt) { return value }
             guard round < 9 else { break }
-            try? await Task.sleep(nanoseconds: 700_000_000)
+            do { try await Task.sleep(nanoseconds: 700_000_000) } catch { return nil }
         }
         return nil
     }

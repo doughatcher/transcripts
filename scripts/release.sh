@@ -137,9 +137,16 @@ MSG
   NOTARY_STATUS="In Progress"
   for _ in $(seq 1 90); do
     sleep 20
+    # `|| true`, for the same reason `submit` has it: under `set -eo pipefail` a
+    # single dropped `info` call — a flaky network, Apple rate-limiting — would
+    # abort the release mid-notarization, skipping staple, appcast and deploy
+    # for a build that goes on to be accepted. That is the failure this rewrite
+    # existed to remove, left in place one loop lower down.
     NOTARY_STATUS="$(xcrun notarytool info "$SUBMIT_ID" "${NOTARY_ARGS[@]}" 2>/dev/null \
-      | awk '/status:/{ $1=""; sub(/^ /,""); print; exit }')"
-    [[ "$NOTARY_STATUS" == "In Progress" ]] || break
+      | awk '/status:/{ $1=""; sub(/^ /,""); print; exit }' || true)"
+    # An empty status is a failed lookup, not a verdict: keep waiting.
+    [[ -z "$NOTARY_STATUS" || "$NOTARY_STATUS" == "In Progress" ]] || break
+    NOTARY_STATUS="${NOTARY_STATUS:-In Progress}"
     printf '.'
   done
   echo

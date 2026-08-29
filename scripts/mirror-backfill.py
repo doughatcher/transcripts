@@ -68,7 +68,11 @@ def main():
     ap.add_argument("--write", action="store_true", help="copy (default is a dry run)")
     args = ap.parse_args()
 
-    root, vault = (args.root, args.vault) if args.root and args.vault else from_config()
+    # Both or neither. Taking one and silently reading the other from the config
+    # turns "back-fill just this folder" into a copy of the entire library.
+    if bool(args.root) != bool(args.vault):
+        sys.exit("--root and --vault go together; pass both or neither")
+    root, vault = (args.root, args.vault) if args.root else from_config()
     root, vault = pathlib.Path(root), pathlib.Path(vault)
     if not root.is_dir():
         sys.exit(f"knowledge root is not a directory: {root}")

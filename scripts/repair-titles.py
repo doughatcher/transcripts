@@ -39,7 +39,12 @@ SKIP_NAMES = {"Transcripts Live.md"}
 # lands under a "## Summary" heading once persisted.
 SCAN_LINES = 8
 
+# Two different jobs. A *label* may carry decoration anywhere and none of it is
+# part of the word, so it all goes. A *title* may only be unwrapped at its ends,
+# because the same characters are load-bearing inside it: "C# to F# Migration"
+# must not come out as "C to F Migration".
 DECORATION = re.compile(r"[*_`#>]")
+EDGE_DECORATION = re.compile(r"^[*_`\s]+|[*_`\s]+$")
 
 
 def roots_from_config():
@@ -87,10 +92,11 @@ def find_title_line(body):
         seen += 1
         if seen > SCAN_LINES:
             break
-        bare = DECORATION.sub("", line).strip()
-        head, sep, rest = bare.partition(":")
-        if sep and head.strip().upper() == "TITLE" and rest.strip():
-            return i, rest.strip()
+        head, sep, rest = line.partition(":")
+        if sep and DECORATION.sub("", head).strip().upper() == "TITLE":
+            title = EDGE_DECORATION.sub("", rest)
+            if title:
+                return i, title
     return None, None
 
 
