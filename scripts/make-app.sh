@@ -114,5 +114,5 @@ echo "✓ Installed to $INSTALL_DIR/$APP_NAME.app"
 
 if [[ -z "${NO_LAUNCH:-}" ]]; then
   open "$INSTALL_DIR/$APP_NAME.app"
-  echo "✓ $APP_NAME is running — look for the waveform in the menu bar."
+  echo "✓ $APP_NAME is running — look for the Transcripts mark in the menu bar."
 fi

@@ -2409,10 +2409,12 @@ final class AppController: ObservableObject {
     /// microphone style keeps its fixed recording icon.
     func recordingIcon() -> NSImage {
         let tint = NSColor.fromHex(config.recordingColorHex)
-        if config.menuBarIcon == .waveform {
-            return MenuBarIconRenderer.levelPulse(level: inputLevel, tint: tint)
+        switch config.menuBarIcon {
+        case .waveform: return MenuBarIconRenderer.levelPulse(level: inputLevel, tint: tint)
+        case .mark: return MenuBarIconRenderer.markPulse(level: inputLevel, tint: tint)
+        case .microphone:
+            return MenuBarIconRenderer.image(style: .microphone, state: .recording, tint: tint)
         }
-        return MenuBarIconRenderer.image(style: config.menuBarIcon, state: .recording, tint: tint)
     }
 
     /// The recording-indicator color as a SwiftUI `Color`, for the popover marks.

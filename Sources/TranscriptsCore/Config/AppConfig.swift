@@ -31,6 +31,10 @@ public struct PipelineConfig: Codable, Equatable, Sendable {
 
 /// Menu-bar icon style.
 public enum MenuBarIconStyle: String, Codable, Sendable, CaseIterable {
+    /// The app icon's motif — text lines over a waveform — drawn as a glyph.
+    /// The default: it reads as *Transcripts*, where a bare waveform or mic
+    /// could be any of half a dozen audio utilities.
+    case mark
     case waveform
     case microphone
 }
@@ -262,7 +266,7 @@ public struct AppConfig: Codable, Equatable, Sendable {
     /// laptop this is in order to brand it is exactly the sort of thing an app
     /// on a stranger's machine should not do, and every style here is one click
     /// apart in Settings anyway.
-    public static var defaultMenuBarIcon: MenuBarIconStyle { .waveform }
+    public static var defaultMenuBarIcon: MenuBarIconStyle { .mark }
 
     /// Recording-indicator color for a fresh install. Both presets stay one click
     /// apart in Settings.

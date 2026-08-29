@@ -35,8 +35,70 @@ enum MenuBarIconRenderer {
             case .recording: return symbol("mic.fill", color: tint)
             }
         case .waveform:
-            return symbol("waveform", color: state == .recording ? tint : nil)
+            switch state {
+            // `waveform` has no outline variant, so idle and armed used to
+            // render identically — the one distinction the icon exists to make.
+            // Alpha is the template image's ink, so dimming reads as "off".
+            case .idle: return dimmed(symbol("waveform", color: nil))
+            case .armed: return symbol("waveform", color: nil)
+            case .recording: return symbol("waveform", color: tint)
+            }
+        case .mark:
+            switch state {
+            case .idle: return dimmed(mark(color: nil))
+            case .armed: return mark(color: nil)
+            case .recording: return mark(color: tint)
+            }
         }
+    }
+
+    /// The app icon's motif — two text lines over a waveform — redrawn as a
+    /// menu-bar glyph. Drawn in code rather than shipped as an asset so it stays
+    /// crisp at every scale factor and tints/dims exactly like the symbols do.
+    /// The icon's bottom line is dropped: at 16 points, three rows read as the
+    /// mark and four read as noise.
+    ///
+    /// `waveLift` (0…1) lightens only the waveform bars toward white — the
+    /// recording pulse — while the text lines hold the tint, so the flash reads
+    /// as sound arriving inside the mark rather than the whole icon blinking.
+    private static func mark(color: NSColor?, waveLift: CGFloat = 0) -> NSImage {
+        let ink = (color ?? .black).usingColorSpace(.sRGB) ?? .black
+        let wave = NSColor(srgbRed: ink.redComponent + (1 - ink.redComponent) * waveLift * 0.85,
+                           green: ink.greenComponent + (1 - ink.greenComponent) * waveLift * 0.85,
+                           blue: ink.blueComponent + (1 - ink.blueComponent) * waveLift * 0.85,
+                           alpha: 1)
+        let img = NSImage(size: NSSize(width: 18, height: 16), flipped: false) { _ in
+            func bar(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat, _ c: NSColor) {
+                c.setFill()
+                NSBezierPath(roundedRect: NSRect(x: x, y: y, width: w, height: h),
+                             xRadius: min(w, h) / 2, yRadius: min(w, h) / 2).fill()
+            }
+            // Text lines: one full measure, one short — the "transcript".
+            bar(1.0, 13.4, 16.0, 2.2, ink)
+            bar(1.0, 9.6, 10.5, 2.2, ink)
+            // The waveform row, centered in the band below the text.
+            let heights: [CGFloat] = [2.6, 4.8, 7.4, 5.4, 6.6, 3.8, 2.4]
+            let barW: CGFloat = 1.8, gap: CGFloat = 0.55
+            let total = CGFloat(heights.count) * barW + CGFloat(heights.count - 1) * gap
+            var x = (18 - total) / 2
+            for h in heights {
+                bar(x, 3.9 - h / 2 + 0.9, barW, h, wave)
+                x += barW + gap
+            }
+            return true
+        }
+        img.isTemplate = (color == nil)
+        return img
+    }
+
+    /// Template ink is the alpha channel, so a translucent redraw is "off".
+    private static func dimmed(_ image: NSImage, to alpha: CGFloat = 0.45) -> NSImage {
+        let out = NSImage(size: image.size, flipped: false) { rect in
+            image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: alpha)
+            return true
+        }
+        out.isTemplate = true
+        return out
     }
 
     private static func symbol(_ name: String, color: NSColor?) -> NSImage {
@@ -76,6 +138,17 @@ enum MenuBarIconRenderer {
                             alpha: 1)
         let img = symbol("waveform", color: color)
         img.isTemplate = false
+        cache[key] = img
+        return img
+    }
+
+    /// The mark's recording pulse: same level→brightness idea as `levelPulse`,
+    /// but only the waveform bars lift — the text lines hold the tint.
+    static func markPulse(level: Float, tint: NSColor = .recordingDefault) -> NSImage {
+        let bucket = max(0, min(7, Int((level).squareRoot() * 8)))
+        let key = "mark-pulse-\(tint.hexKey)-\(bucket)"
+        if let cached = cache[key] { return cached }
+        let img = mark(color: tint, waveLift: CGFloat(bucket) / 7.0)
         cache[key] = img
         return img
     }

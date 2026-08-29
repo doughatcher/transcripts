@@ -46,9 +46,10 @@ struct ContentView: View {
         }
     }
 
-    /// Library-wide search. Matches the title and the draft the phone heard, so
-    /// "ERP sync" finds the call you never titled — which is most of them, since
-    /// titles are model-generated and you were busy at the time.
+    /// Library-wide search. Matches the title, the draft the phone heard, and a
+    /// shared transcript's summary, so "ERP sync" finds the call you never
+    /// titled — which is most of them, since titles are model-generated and you
+    /// were busy at the time.
     @State private var query = ""
 
     /// The take a merge was started from, via its context menu. Non-nil presents
@@ -72,6 +73,7 @@ struct ContentView: View {
                     || (t.draft ?? "").lowercased().contains(q)
             case .shared(let e):
                 return e.title.lowercased().contains(q)
+                    || (e.summary ?? "").lowercased().contains(q)
             }
         }
     }
@@ -673,14 +675,27 @@ private struct TranscriptRow: View {
 
 /// A finished transcript from the shared folder — the Mac's output, readable on
 /// whichever device happens to be in your hand.
+///
+/// The file lives in the picked workspace, so every read here goes through the
+/// security scope and tolerates iCloud not having downloaded it yet. Both are
+/// invisible on the Mac that wrote the file and routine on the iPad that
+/// didn't — which is exactly where this pane used to come up blank.
 private struct TranscriptPane: View {
+    @EnvironmentObject private var model: RecorderModel
     let entry: TranscriptEntry
-    @State private var body_: String = ""
+    /// nil while loading or failed; `settled` says which.
+    @State private var text: String?
+    @State private var settled = false
+    @State private var audio: URL?
+    @State private var audioSettled = false
     @State private var query = ""
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            // Lazy on purpose: a two-hour meeting is thousands of lines, and
+            // materialising every row before first paint froze the pane long
+            // enough to read as broken.
+            LazyVStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(entry.title).font(.title2.weight(.semibold))
                     if let at = entry.recordedAt {
@@ -688,6 +703,19 @@ private struct TranscriptPane: View {
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
                 }
+
+                if entry.audioFile != nil {
+                    if let audio {
+                        AudioScrubber(url: audio, disabled: model.isRecording)
+                    } else if !audioSettled {
+                        Label("Fetching the audio…", systemImage: "icloud.and.arrow.down")
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Text("The audio hasn't synced to this device yet.")
+                            .font(.caption).foregroundStyle(.tertiary)
+                    }
+                }
+
                 if let summary = entry.summary, !summary.isEmpty {
                     Text(summary)
                         .font(.callout)
@@ -695,22 +723,39 @@ private struct TranscriptPane: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
                 }
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Search this transcript", text: $query)
-                        .textFieldStyle(.plain).autocorrectionDisabled()
-                    if !query.isEmpty {
-                        Button { query = "" } label: {
-                            Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
-                        }.buttonStyle(.plain)
-                    }
-                }
-                .padding(8)
-                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 9))
 
-                ForEach(Array(paragraphs.enumerated()), id: \.offset) { _, para in
-                    Text(highlighted(para)).font(.callout).textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                if let text {
+                    if !text.isEmpty {
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                            TextField("Search this transcript", text: $query)
+                                .textFieldStyle(.plain).autocorrectionDisabled()
+                            if !query.isEmpty {
+                                Button { query = "" } label: {
+                                    Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+                                }.buttonStyle(.plain)
+                            }
+                        }
+                        .padding(8)
+                        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 9))
+
+                        ForEach(Array(paragraphs.enumerated()), id: \.offset) { _, para in
+                            line(para)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                } else if !settled {
+                    ProgressView("Fetching the transcript…")
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 40)
+                } else {
+                    ContentUnavailableView {
+                        Label("Not on this device yet", systemImage: "icloud.and.arrow.down")
+                    } description: {
+                        Text("The transcript is still syncing from the shared folder. It usually arrives within a moment of the Mac writing it.")
+                    } actions: {
+                        Button("Try again") { Task { await load() } }
+                    }
                 }
             }
             .frame(maxWidth: 620)
@@ -719,18 +764,58 @@ private struct TranscriptPane: View {
         }
         .navigationTitle("Transcript")
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: entry.url) { body_ = entry.body() }
+        .task(id: entry.url) { await load() }
+    }
+
+    private func load() async {
+        text = nil; settled = false
+        audio = nil; audioSettled = false
+        guard let bookmark = model.destination.active?.bookmark else {
+            settled = true; audioSettled = true
+            return
+        }
+        // Concurrent, then surfaced as each lands: the text is a fast read and
+        // shouldn't wait behind a 40 MB audio download.
+        async let body = SharedLibrary.body(of: entry, bookmark: bookmark)
+        async let sound = SharedLibrary.localAudio(for: entry, bookmark: bookmark)
+        text = await body; settled = true
+        audio = await sound; audioSettled = true
     }
 
     private var paragraphs: [String] {
-        let all = body_.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        let all = (text ?? "").components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return all }
         let q = query.lowercased()
         return all.filter { $0.lowercased().contains(q) }
     }
 
+    /// One line of the document, with just enough markdown to match what the
+    /// Mac writes: `##` section headings, `**bold**` speaker names and bullet
+    /// lists. Anything fancier renders as the plain text it is.
+    @ViewBuilder
+    private func line(_ raw: String) -> some View {
+        if raw.hasPrefix("#") {
+            Text(raw.drop(while: { $0 == "#" }).trimmingCharacters(in: .whitespaces))
+                .font(.headline)
+                .padding(.top, 8)
+        } else {
+            Text(highlighted(raw))
+                .font(.callout)
+                .textSelection(.enabled)
+        }
+    }
+
     private func highlighted(_ text: String) -> AttributedString {
-        var s = AttributedString(text)
+        var line = text
+        if line.hasPrefix("* ") || line.hasPrefix("- ") {
+            line = "•\u{2002}" + line.dropFirst(2)
+        }
+        var s = (try? AttributedString(
+            markdown: line,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+            ?? AttributedString(line)
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return s }
         var range = s.startIndex..<s.endIndex
@@ -1215,7 +1300,7 @@ private struct TakePane: View {
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
 
-                TakeScrubber(take: take, disabled: model.isRecording)
+                AudioScrubber(url: take.audio, disabled: model.isRecording)
 
                 if let summary = take.summary, !summary.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {

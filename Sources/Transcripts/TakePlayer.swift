@@ -117,9 +117,11 @@ extension TakeAudio: AVAudioPlayerDelegate {
     }
 }
 
-/// Transport for one take: play/pause, a scrubber, and elapsed/remaining.
-struct TakeScrubber: View {
-    let take: RecorderModel.Take
+/// Transport for one audio file: play/pause, a scrubber, and elapsed/remaining.
+/// Serves both a local take and a shared transcript's archived audio — by the
+/// time it gets here, either one is just a playable URL.
+struct AudioScrubber: View {
+    let url: URL
     /// Recording and playback cannot share the audio session, so the transport
     /// goes flat rather than fighting for it.
     let disabled: Bool
@@ -169,7 +171,7 @@ struct TakeScrubber: View {
                     .font(.caption).foregroundStyle(.tertiary)
             }
         }
-        .task(id: take.id) { audio.load(take.audio) }
+        .task(id: url) { audio.load(url) }
         .onDisappear { audio.stop() }
         .onChange(of: disabled) { _, nowDisabled in
             if nowDisabled { audio.pause() }

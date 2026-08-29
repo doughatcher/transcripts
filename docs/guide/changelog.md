@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.0.1
+
+The release the first iPad taught us to make.
+
+**iPhone and iPad**
+
+- Shared transcripts now actually open on the device that didn't write them.
+  Reading a transcript from the workspace folder went through without the
+  folder's security scope and without asking iCloud to download the file — on
+  the Mac that wrote the file both are free, on an iPad both fail silently, so
+  a transcript showed its title and summary over an empty page. Reads now
+  carry the scope, request the download, and say "fetching" or "not synced
+  yet" instead of showing nothing.
+- Shared transcripts can be played. The Mac has always archived the audio next
+  to the markdown and named it in the frontmatter; the app now reads that and
+  puts the same scrubber on a shared transcript that local recordings have.
+- Transcripts render their structure — section headings, bold speaker names
+  and bullets — instead of literal `##` and `**`.
+- Long transcripts no longer freeze the pane on open, and the library scan
+  reads only each file's frontmatter instead of paging whole meetings into
+  memory on every refresh.
+- Search also matches a shared transcript's summary.
+
+**Mac**
+
+- A menu-bar icon of our own: the Transcripts mark — text lines over a
+  waveform, matching the app icon — is the new default. It dims when
+  auto-record is off, shows solid while watching, and while recording only its
+  waveform pulses with the input level. The plain waveform and microphone
+  styles remain in Settings, and the waveform style now dims when idle too.
+
 ## 1.0.0
 
 The first release under this name.

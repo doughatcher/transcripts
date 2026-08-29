@@ -18,3 +18,4 @@ Sources/TranscriptsMac/Support/Info.plist
 *.profraw
 # Wrangler's local cache — carries the Cloudflare account id and name.
 .wrangler/
+.env.signing

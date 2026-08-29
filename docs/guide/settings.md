@@ -13,8 +13,11 @@ Open Settings from the menu-bar menu. Six panes.
 - **Auto-record** — watch for calls and start on its own.
 - **Capture system audio** — record the other participants as well as you.
 - **Launch at login** — start with the Mac.
-- **Menu bar icon** and **recording colour** — a waveform or a microphone, and
-  the colour it turns while recording.
+- **Menu bar icon** and **recording colour** — the Transcripts mark (text lines
+  over a waveform, matching the app icon), a plain waveform, or a microphone,
+  and the colour it turns while recording. The icon dims when auto-record is
+  off, shows solid while watching, and pulses with the input level while
+  recording.
 - **Recent recordings in menu** — how many to list. The Recordings window always
   shows everything.
 

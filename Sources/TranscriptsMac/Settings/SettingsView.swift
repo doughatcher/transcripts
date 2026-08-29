@@ -56,6 +56,7 @@ struct SettingsView: View {
                     set: { controller.setLaunchAtLogin($0) }
                 ))
                 Picker("Menu bar icon", selection: binding(\.menuBarIcon)) {
+                    Text("Transcripts mark").tag(MenuBarIconStyle.mark)
                     Text("Waveform").tag(MenuBarIconStyle.waveform)
                     Text("Microphone").tag(MenuBarIconStyle.microphone)
                 }

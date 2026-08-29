@@ -16,12 +16,14 @@ struct TranscriptEntry: Identifiable, Equatable {
     /// decision, worth showing because it says which case or client it belongs
     /// to.
     let folder: String
+    /// Name of the sibling audio file the Mac archived next to the markdown —
+    /// the `audio_file` frontmatter key. nil for text-only notes and for
+    /// transcripts written before the Mac kept audio.
+    let audioFile: String?
 
-    /// Markdown below the frontmatter. Read lazily: a library of long meetings
-    /// is megabytes of text nobody has asked to see yet.
-    func body() -> String {
-        guard let raw = try? String(contentsOf: url, encoding: .utf8) else { return "" }
-        return TranscriptFrontmatter.stripFrontmatter(raw)
+    /// Where that audio lives: same folder, the name the frontmatter says.
+    var audioURL: URL? {
+        audioFile.map { url.deletingLastPathComponent().appendingPathComponent($0) }
     }
 }
 
@@ -73,9 +75,11 @@ enum SharedLibrary {
                 continue
             }
             guard url.pathExtension.lowercased() == "md" else { continue }
-            // Only read the head: frontmatter is the first few hundred bytes and
-            // the body can be enormous.
-            guard let raw = try? String(contentsOf: url, encoding: .utf8) else {
+            // Only read the head: frontmatter is the first few hundred bytes
+            // and the body can be enormous. A `FileHandle` actually honours
+            // that — `String(contentsOf:)` was paging whole meetings into
+            // memory on every foreground refresh just to learn their titles.
+            guard let head = Self.head(of: url) else {
                 // A transcript the Mac has written but this device hasn't pulled
                 // down yet is a placeholder, not a missing file. Silently
                 // skipping it made a freshly-shared library look half-empty, so
@@ -83,14 +87,15 @@ enum SharedLibrary {
                 try? fm.startDownloadingUbiquitousItem(at: url)
                 continue
             }
-            let fields = parseHead(raw)
+            let fields = TranscriptFrontmatter.parse(head)
             let folder = url.deletingLastPathComponent().lastPathComponent
             found.append(TranscriptEntry(
                 url: url,
                 title: fields["title"] ?? url.deletingPathExtension().lastPathComponent,
                 recordedAt: fields["recorded_at"].flatMap(Self.date),
                 summary: fields["description"],
-                folder: folder))
+                folder: folder,
+                audioFile: fields["audio_file"]))
             if found.count >= limit { break }
         }
         return found.sorted {
@@ -98,8 +103,79 @@ enum SharedLibrary {
         }
     }
 
-    private static func parseHead(_ raw: String) -> [String: String] {
-        TranscriptFrontmatter.parse(String(raw.prefix(2000)))
+    /// First ~2 KB of the file as text, or nil if it can't be opened. Lossy
+    /// decoding, because 2048 bytes can land mid-character — the tail is
+    /// garbage past the frontmatter either way.
+    private static func head(of url: URL) -> String? {
+        guard let fh = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? fh.close() }
+        guard let data = try? fh.read(upToCount: 2048) else { return nil }
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    // MARK: - Opening an entry
+
+    /// Markdown below the frontmatter, or nil if the file can't be read yet.
+    ///
+    /// The scan borrows the workspace's security scope for its walk and closes
+    /// it again, so a read that happens later — a transcript actually opened —
+    /// must bring its own. Reading without it fails silently on any picked
+    /// folder, which on the iPad looked like a library of transcripts with
+    /// titles and no text. iCloud adds the second failure mode: a file can be
+    /// listed but not yet local, so a failed read asks for the download and
+    /// retries briefly rather than giving up on the first attempt.
+    nonisolated static func body(of entry: TranscriptEntry, bookmark: Data) async -> String? {
+        await retrying(bookmark: bookmark) { () -> String? in
+            if let raw = try? String(contentsOf: entry.url, encoding: .utf8) {
+                return TranscriptFrontmatter.stripFrontmatter(raw)
+            }
+            try? FileManager.default.startDownloadingUbiquitousItem(at: entry.url)
+            return nil
+        }
+    }
+
+    /// A locally playable copy of the entry's archived audio, or nil when
+    /// there is none or it hasn't synced to this device yet.
+    ///
+    /// `AVAudioPlayer` holds the file for the whole listen, and the security
+    /// scope would have to stay open just as long. Copying into our own tmp
+    /// keeps the scope discipline in one place: open, copy, close, then play
+    /// the copy with no strings attached. Keyed by size so replaying a
+    /// transcript doesn't copy the meeting twice, and tmp means the system
+    /// reclaims the space instead of us bookkeeping it.
+    nonisolated static func localAudio(for entry: TranscriptEntry, bookmark: Data) async -> URL? {
+        guard let source = entry.audioURL else { return nil }
+        let fm = FileManager.default
+        let cacheDir = fm.temporaryDirectory.appendingPathComponent("shared-audio", isDirectory: true)
+        try? fm.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+        return await retrying(bookmark: bookmark) { () -> URL? in
+            guard let size = try? source.resourceValues(forKeys: [.fileSizeKey]).fileSize else {
+                try? fm.startDownloadingUbiquitousItem(at: source)
+                return nil
+            }
+            let target = cacheDir.appendingPathComponent("\(size)-\(source.lastPathComponent)")
+            if fm.fileExists(atPath: target.path) { return target }
+            do {
+                try fm.copyItem(at: source, to: target)
+                return target
+            } catch {
+                // A placeholder reports its size but can't be copied until the
+                // bytes arrive — same recovery as an unreadable file.
+                try? fm.startDownloadingUbiquitousItem(at: source)
+                return nil
+            }
+        }
+    }
+
+    /// Runs `attempt` under the workspace scope until it produces a value,
+    /// giving iCloud a bounded few seconds to materialise the file in between.
+    private nonisolated static func retrying<T>(bookmark: Data, _ attempt: () -> T?) async -> T? {
+        for round in 0..<10 {
+            if let value = Destination.withScope(bookmark: bookmark, attempt) { return value }
+            guard round < 9 else { break }
+            try? await Task.sleep(nanoseconds: 700_000_000)
+        }
+        return nil
     }
 
     private static let iso: ISO8601DateFormatter = {

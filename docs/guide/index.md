@@ -12,8 +12,8 @@ and iPad app** that records anywhere and hands its recordings to the Mac.
 ## Installing on the Mac
 
 Download the zip, move **Transcripts.app** to your Applications folder, and open
-it. It has no window — look for the waveform in the menu bar, at the top right of
-the screen.
+it. It has no window — look for the Transcripts mark (two text lines over a
+waveform) in the menu bar, at the top right of the screen.
 
 The first time you record, macOS asks for the **microphone**. The first time it
 records a call, it asks for **Screen Recording**, which is how macOS describes
