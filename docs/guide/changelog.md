@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.4
+
+- A title containing `#` or `_` survives being read. "C# to F# Migration" was
+  being filed as "C to F Migration" — in the transcript, its filename and the
+  Recordings list — because unwrapping the model's markdown reached inside the
+  title instead of stopping at its ends.
+- A transcript mirrored into an Obsidian vault no longer offers to play audio
+  that was deliberately left behind in the knowledge root.
+- A transcript that reads but has no body says so, instead of showing an empty
+  page.
+
 ## 1.0.3
 
 - The menu-bar mark is one line of text over a waveform, not three stacked
