@@ -31,7 +31,7 @@ public struct PipelineConfig: Codable, Equatable, Sendable {
 
 /// Menu-bar icon style.
 public enum MenuBarIconStyle: String, Codable, Sendable, CaseIterable {
-    /// The app icon's motif — text lines over a waveform — drawn as a glyph.
+    /// The app icon's motif — a line of text over a waveform — drawn as a glyph.
     /// The default: it reads as *Transcripts*, where a bare waveform or mic
     /// could be any of half a dozen audio utilities.
     case mark

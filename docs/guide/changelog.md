@@ -2,6 +2,12 @@
 
 ## 1.0.2
 
+- The menu-bar mark is one line of text over a waveform, not three stacked
+  rows. The fuller mark was a picture of a document, and at 16 points a picture
+  of a document is a smudge — beside wifi and battery it was visibly busier
+  than every neighbour. It also sat low now: a solid line over a mostly-empty
+  waveform puts the optical centre above the geometric one, which read as the
+  icon floating.
 - Recordings are named after what was said in them again. The summarizer is
   asked for a title and reliably gives one, but wrapped in whatever markdown it
   favours — and a decorated `**TITLE: …**` was not being read, so a recording

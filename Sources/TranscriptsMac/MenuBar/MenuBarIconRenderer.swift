@@ -52,14 +52,23 @@ enum MenuBarIconRenderer {
         }
     }
 
-    /// The app icon's motif — two text lines over a waveform — redrawn as a
+    /// The app icon's motif — a line of text over a waveform — redrawn as a
     /// menu-bar glyph. Drawn in code rather than shipped as an asset so it stays
     /// crisp at every scale factor and tints/dims exactly like the symbols do.
-    /// The icon's bottom line is dropped: at 16 points, three rows read as the
-    /// mark and four read as noise.
+    ///
+    /// One text line, not the icon's three. The full mark is a picture of a
+    /// document, and at 16 points a picture of a document is a smudge: rendered
+    /// beside wifi and battery it was visibly finer-grained and busier than
+    /// every neighbour, all of which are single bold shapes. One line reads as
+    /// "what was said, written down" and leaves the waveform room to be the
+    /// thing you actually look at.
+    ///
+    /// Everything sits low deliberately. The line is solid ink and the wave is
+    /// mostly gaps, so weighting them equally puts the optical centre above the
+    /// geometric one and the icon looks like it is floating.
     ///
     /// `waveLift` (0…1) lightens only the waveform bars toward white — the
-    /// recording pulse — while the text lines hold the tint, so the flash reads
+    /// recording pulse — while the text line holds the tint, so the flash reads
     /// as sound arriving inside the mark rather than the whole icon blinking.
     private static func mark(color: NSColor?, waveLift: CGFloat = 0) -> NSImage {
         let ink = (color ?? .black).usingColorSpace(.sRGB) ?? .black
@@ -73,16 +82,13 @@ enum MenuBarIconRenderer {
                 NSBezierPath(roundedRect: NSRect(x: x, y: y, width: w, height: h),
                              xRadius: min(w, h) / 2, yRadius: min(w, h) / 2).fill()
             }
-            // Text lines: one full measure, one short — the "transcript".
-            bar(1.0, 13.4, 16.0, 2.2, ink)
-            bar(1.0, 9.6, 10.5, 2.2, ink)
-            // The waveform row, centered in the band below the text.
-            let heights: [CGFloat] = [2.6, 4.8, 7.4, 5.4, 6.6, 3.8, 2.4]
+            bar(1.5, 12.0, 15.0, 2.2, ink)
+            let heights: [CGFloat] = [3.0, 5.4, 8.4, 6.0, 7.4, 4.2, 2.8]
             let barW: CGFloat = 1.8, gap: CGFloat = 0.55
             let total = CGFloat(heights.count) * barW + CGFloat(heights.count - 1) * gap
             var x = (18 - total) / 2
             for h in heights {
-                bar(x, 3.9 - h / 2 + 0.9, barW, h, wave)
+                bar(x, 4.9 - h / 2, barW, h, wave)
                 x += barW + gap
             }
             return true
