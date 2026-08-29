@@ -1381,74 +1381,6 @@ private struct TakePane: View {
 
 // MARK: - Pieces
 
-/// Scrolling level history. Shows the take actually has audio in it while it is
-/// being made — a dead mic is obvious here long before playback.
-private struct LiveWaveform: View {
-    let samples: [Float]
-    let active: Bool
-
-    var body: some View {
-        let count = RecorderModel.waveformWindow
-        Canvas { context, size in
-            let barW = size.width / CGFloat(count)
-            // Right-align so the newest sample sits at the trailing edge and the
-            // trace grows leftward as the window fills.
-            let offset = count - samples.count
-            for (i, s) in samples.enumerated() {
-                let h = max(2, CGFloat(s) * size.height)
-                let x = CGFloat(offset + i) * barW
-                let rect = CGRect(x: x + barW * 0.2,
-                                  y: (size.height - h) / 2,
-                                  width: max(1, barW * 0.6),
-                                  height: h)
-                context.fill(Path(roundedRect: rect, cornerRadius: barW * 0.3),
-                             with: .color(active ? .red : .gray))
-            }
-        }
-        .opacity(active ? 1 : 0.35)
-        .overlay {
-            if !active && samples.isEmpty {
-                Text("Ready").font(.caption).foregroundStyle(.tertiary)
-            }
-        }
-    }
-}
-
-/// Streaming text while the take is running. Auto-scrolls to the tail so the
-/// newest words stay visible without the user chasing them.
-private struct LiveTranscript: View {
-    let text: String
-    let note: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let note {
-                Label(note, systemImage: "info.circle")
-                    .font(.caption2).foregroundStyle(.secondary)
-            }
-            if !text.isEmpty {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        Text(text)
-                            .font(.callout)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .id("tail")
-                    }
-                    .frame(maxHeight: 160)
-                    .onChange(of: text) {
-                        withAnimation { proxy.scrollTo("tail", anchor: .bottom) }
-                    }
-                }
-            } else if note == nil {
-                Text("Listening…").font(.callout).foregroundStyle(.tertiary)
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
-    }
-}
-
 private struct RecordButton: View {
     let isRecording: Bool
     let level: Float
@@ -1470,31 +1402,6 @@ private struct RecordButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isRecording ? "Stop recording" : "Start recording")
-    }
-}
-
-private struct DestinationRow: View {
-    let name: String?
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack {
-                Image(systemName: name == nil ? "folder.badge.plus" : "folder.fill")
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(name ?? "Choose a destination folder")
-                    Text(name == nil
-                         ? "iCloud Drive, OneDrive, Dropbox, or on this device"
-                         : "Recordings are saved here")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right").foregroundStyle(.tertiary)
-            }
-            .padding()
-            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
-        }
-        .buttonStyle(.plain)
     }
 }
 
