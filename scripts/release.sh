@@ -121,9 +121,17 @@ MSG
   # build that was actually fine.
   NOTARY_ARGS=(--keychain-profile transcripts-notary
                --keychain "${NOTARY_KEYCHAIN:-$HOME/Library/Keychains/login.keychain-db}")
-  SUBMIT_ID="$(xcrun notarytool submit "$TMPZIP" "${NOTARY_ARGS[@]}" 2>&1 \
-    | awk '/^  id: /{print $2; exit}')"
-  [[ -n "$SUBMIT_ID" ]] || { echo "✗ notarytool did not return a submission id" >&2; exit 1; }
+  # `|| true`, and to a file rather than a pipe: the crash lands *after* the
+  # upload and the id have been printed, and under `set -eo pipefail` either
+  # form would take the script down with a submission already in flight.
+  SUBMIT_LOG="$ROOT/.build/notarytool-submit.log"
+  xcrun notarytool submit "$TMPZIP" "${NOTARY_ARGS[@]}" > "$SUBMIT_LOG" 2>&1 || true
+  SUBMIT_ID="$(awk '/^  id: /{print $2; exit}' "$SUBMIT_LOG")"
+  if [[ -z "$SUBMIT_ID" ]]; then
+    echo "✗ notarytool did not return a submission id:" >&2
+    cat "$SUBMIT_LOG" >&2
+    exit 1
+  fi
   echo "  submission $SUBMIT_ID"
 
   NOTARY_STATUS="In Progress"
