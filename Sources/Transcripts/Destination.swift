@@ -192,7 +192,30 @@ final class Destination: ObservableObject {
             activeID = defaults.string(forKey: Self.activeKey).flatMap(UUID.init)
                 ?? list.first?.id
         }
+        #if DEBUG
+        seedWorkspaceIfAsked()
+        #endif
     }
+
+    #if DEBUG
+    /// Gives a simulator a workspace on launch, for `scripts/seed-simulator.sh`.
+    ///
+    /// The seeded library is invisible without one: with no destination the
+    /// detail pane is the "where should recordings go?" setup, so a screenshot
+    /// of a well-stocked app is a screenshot of its first-run wizard. The
+    /// bookmark has to be minted in-process — one made anywhere else resolves
+    /// to nothing inside this sandbox — which is why this cannot live in the
+    /// shell script with the rest of the seeding.
+    ///
+    /// DEBUG-only, and the App Store build is Release, so this is compiled out
+    /// of anything a user can install.
+    private func seedWorkspaceIfAsked() {
+        guard CommandLine.arguments.contains("--seed-workspace"), workspaces.isEmpty else { return }
+        let root = URL.documentsDirectory.appendingPathComponent("Transcripts", isDirectory: true)
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        add(root, name: "Personal", managed: false)
+    }
+    #endif
 
     private func save() {
         let defaults = UserDefaults.standard
