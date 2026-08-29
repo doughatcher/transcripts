@@ -8,17 +8,23 @@ public struct PersistStage: PipelineStage {
     private let knowledgeRoot: URL
     private let stampModel: String
     private let copyAudio: Bool
+    /// Optional Obsidian vault to mirror the markdown into. See
+    /// `DestinationsConfig.vaultMirror`.
+    private let vaultMirror: URL?
 
     public init(config: AppConfig, copyAudio: Bool = true) {
         self.knowledgeRoot = config.destinations.resolvedRoot
         self.stampModel = config.ollama.model
         self.copyAudio = copyAudio
+        self.vaultMirror = config.destinations.resolvedVaultMirror
     }
 
-    public init(knowledgeRoot: URL, stampModel: String = "transcripts", copyAudio: Bool = true) {
+    public init(knowledgeRoot: URL, stampModel: String = "transcripts", copyAudio: Bool = true,
+                vaultMirror: URL? = nil) {
         self.knowledgeRoot = knowledgeRoot
         self.stampModel = stampModel
         self.copyAudio = copyAudio
+        self.vaultMirror = vaultMirror
     }
 
     public func run(_ context: inout PipelineContext) async throws {
@@ -50,6 +56,32 @@ public struct PersistStage: PipelineStage {
             }
             try stamped.write(to: target, atomically: true, encoding: .utf8)
             written.append(target)
+
+            // Mirror into the vault, same routed subfolder. Deliberately not
+            // fatal: a vault on a disconnected sync folder must not fail the
+            // run that already filed the real copy.
+            if let vaultMirror {
+                do {
+                    let mirrorDir = vaultMirror.appendingPathComponent(destRel, isDirectory: true)
+                    try FileManager.default.createDirectory(at: mirrorDir, withIntermediateDirectories: true)
+                    // `audio_file` names a sibling, and in the vault there is no
+                    // sibling — the audio stays in the knowledge root. Point at
+                    // where it actually is instead of leaving a dangling name.
+                    var forVault = stamped
+                    if copyAudio {
+                        forVault = Self.setFrontmatterKey(forVault, key: "audio_file", value: "")
+                        forVault = Self.setFrontmatterKey(
+                            forVault, key: "audio_path",
+                            value: destDir.appendingPathComponent(audioName).path)
+                    }
+                    try forVault.write(to: mirrorDir.appendingPathComponent(name),
+                                       atomically: true, encoding: .utf8)
+                } catch {
+                    // Core has no logger (it depends on nothing); the Mac reads
+                    // this back and writes it to the log.
+                    context.userInfo["vaultMirrorError"] = error.localizedDescription
+                }
+            }
         }
 
         // Summary (if separate from the transcript).

@@ -142,6 +142,7 @@ final class AppController: ObservableObject {
         migrateInputPrefs()
         backfillFavoriteInputNames()
         migrateOpenCommand()
+        detectVaultMirror()
         configureWatcher()
         applyArmState()
         refreshRecents()
@@ -915,6 +916,9 @@ final class AppController: ObservableObject {
                 let md = result.finalPaths.first { $0.pathExtension == "md" }
                 let dropped = result.finalPaths.map(\.lastPathComponent).joined(separator: ", ")
                 Log.write("pipeline: done → [\(dropped)] routed to \(result.routing?.destination ?? "?")")
+                if let mirrorError = result.userInfo["vaultMirrorError"] {
+                    Log.write("vault mirror: failed — \(mirrorError)")
+                }
                 let summaryTitle = result.userInfo["summaryTitle"]
                 let fallbackTitle = md.flatMap(Self.frontmatterTitle) ?? recording.title ?? recording.activeApp?.appName
                 self.updateRecord(recordID) { r in
@@ -1585,6 +1589,37 @@ final class AppController: ObservableObject {
         config.openCommand = #"open "obsidian://open?path={path_encoded}""#
         try? configStore.save(config)   // didSet doesn't fire in init
         Log.write("migrated Obsidian open command to the obsidian:// URI")
+    }
+
+    /// Turns on the vault mirror for Obsidian users, once.
+    ///
+    /// An Obsidian user's transcripts belong in their notes, and asking them to
+    /// find and paste their own vault path is asking them to tell the app
+    /// something Obsidian already records. So the first launch looks, and files
+    /// there from then on — markdown only, alongside the iCloud copy the phone
+    /// and iPad read, not instead of it.
+    ///
+    /// Runs once. `vaultMirrorDetected` is what makes clearing the mirror in
+    /// Settings stick rather than being re-detected on the next launch, and it
+    /// is why this is not simply a computed default.
+    private func detectVaultMirror() {
+        guard !config.destinations.vaultMirrorDetected else { return }
+        config.destinations.vaultMirrorDetected = true
+        defer { try? configStore.save(config) }   // didSet doesn't fire in init
+
+        guard let vault = ObsidianVault.mostRecentlyOpened() else {
+            Log.write("vault mirror: no Obsidian vault registered — leaving it off")
+            return
+        }
+        // Filing into the vault a transcript already lives in would write it
+        // twice into the same folder.
+        guard ObsidianVault.root(containing:
+                config.destinations.resolvedRoot.appendingPathComponent("probe.md").path) != vault else {
+            Log.write("vault mirror: knowledge root is already inside '\(vault.lastPathComponent)' — leaving it off")
+            return
+        }
+        config.destinations.vaultMirror = vault.path
+        Log.write("vault mirror: filing markdown into '\(vault.path)'")
     }
 
     // MARK: - Rename

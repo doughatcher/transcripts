@@ -86,11 +86,42 @@ public struct DestinationsConfig: Codable, Equatable, Sendable {
     /// folder the user points it at.
     public var deviceInbox: String?
 
+    /// An Obsidian vault that finished transcripts are *also* filed into, using
+    /// the same routed subfolder. Empty/nil = off.
+    ///
+    /// A mirror rather than a move, because the two roots are doing different
+    /// jobs and neither can do the other's. `knowledgeRoot` is the shared folder
+    /// the phone and iPad read their library from, so it has to be somewhere
+    /// every device can see — iCloud Drive. A vault is where the writing
+    /// happens, and it is usually carried by Obsidian Sync, which no other app
+    /// can read. Filing into one at the expense of the other is what makes
+    /// people choose between reading a transcript on the iPad and having it in
+    /// their notes.
+    ///
+    /// **Markdown only.** The audio stays in `knowledgeRoot`: a vault carried by
+    /// Obsidian Sync has a storage quota, and a month of meetings is gigabytes
+    /// of `.m4a` that nobody reads in Obsidian.
+    public var vaultMirror: String?
+
+    /// Whether we have already gone looking for a vault. Without it, clearing
+    /// the mirror in Settings would be undone by the next launch's detection —
+    /// "off" and "not yet asked" would be the same state.
+    public var vaultMirrorDetected: Bool
+
     // Neutral per-user default so a fresh install files into the user's own folder
     // (an existing pinned root in a saved config is untouched).
-    public init(knowledgeRoot: String = "~/Documents/Transcripts", deviceInbox: String? = nil) {
+    public init(knowledgeRoot: String = "~/Documents/Transcripts", deviceInbox: String? = nil,
+                vaultMirror: String? = nil, vaultMirrorDetected: Bool = false) {
         self.knowledgeRoot = knowledgeRoot
         self.deviceInbox = deviceInbox
+        self.vaultMirror = vaultMirror
+        self.vaultMirrorDetected = vaultMirrorDetected
+    }
+
+    /// Expanded vault-mirror root, or nil when mirroring is off.
+    public var resolvedVaultMirror: URL? {
+        guard let p = vaultMirror?.trimmingCharacters(in: .whitespaces), !p.isEmpty else { return nil }
+        return URL(fileURLWithPath: (p as NSString).expandingTildeInPath)
     }
 
     /// Expanded device-inbox root, or nil when ingest is switched off.
@@ -102,6 +133,20 @@ public struct DestinationsConfig: Codable, Equatable, Sendable {
     /// Expands a leading `~` to the user's home directory.
     public var resolvedRoot: URL {
         URL(fileURLWithPath: (knowledgeRoot as NSString).expandingTildeInPath)
+    }
+
+    /// Tolerant decoding, for the same reason `AppConfig` has it — and with more
+    /// at stake. A new non-optional field would otherwise make every saved
+    /// config fail to decode, and `AppConfig`'s own fallback would quietly swap
+    /// the user's knowledge root for the default one: recordings would start
+    /// filing somewhere they had never chosen.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func v<T: Decodable>(_ key: CodingKeys, _ fallback: T) -> T { (try? c.decode(T.self, forKey: key)) ?? fallback }
+        knowledgeRoot = v(.knowledgeRoot, "~/Documents/Transcripts")
+        deviceInbox = v(.deviceInbox, nil)
+        vaultMirror = v(.vaultMirror, nil)
+        vaultMirrorDetected = v(.vaultMirrorDetected, false)
     }
 }
 

@@ -214,6 +214,33 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Obsidian") {
+                HStack {
+                    TextField("Vault", text: binding(\.destinations.vaultMirror, default: ""))
+                    Button("Choose…") {
+                        if let picked = Self.chooseFolder(title: "Choose your Obsidian vault") {
+                            controller.config.destinations.vaultMirror = Self.tildeify(picked)
+                        }
+                    }
+                    if controller.config.destinations.vaultMirror?.isEmpty == false {
+                        Button("Clear") { controller.config.destinations.vaultMirror = nil }
+                    }
+                }
+                // Offered rather than assumed for a vault other than the one
+                // detected — with several vaults, which one the notes belong in
+                // is the user's call.
+                ForEach(ObsidianVault.known().prefix(3), id: \.self) { vault in
+                    if controller.config.destinations.vaultMirror.map({ (($0 as NSString).expandingTildeInPath) })
+                        != vault.path {
+                        Button("Use “\(vault.lastPathComponent)”") {
+                            controller.config.destinations.vaultMirror = Self.tildeify(vault.path)
+                        }
+                    }
+                }
+                Text("A copy of each finished transcript is filed into your vault, in the same folder Sorting routed it to. The audio is not copied — it stays in the knowledge root, so a vault carried by Obsidian Sync doesn't fill up with recordings. Blank = off.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+
             Section("Devices") {
                 HStack {
                     TextField("Device inbox (iPhone / iPad)",

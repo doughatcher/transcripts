@@ -4,6 +4,16 @@
 
 The release the first iPad taught us to make.
 
+**Obsidian**
+
+- Transcripts finds your vault and files a copy of every finished transcript
+  into it, in the same folder Sorting routed it to — on by default if you use
+  Obsidian, and a Settings row away from being a different vault or none. It is
+  a copy rather than a move, because the iCloud folder is what your phone and
+  iPad read their library from and a vault carried by Obsidian Sync is not
+  something they can see. Markdown only: the audio stays in the knowledge root
+  rather than filling a synced vault with recordings.
+
 **iPhone and iPad**
 
 - Shared transcripts now actually open on the device that didn't write them.

@@ -114,10 +114,33 @@ MSG
   #     --key ~/.appstoreconnect/private_keys/AuthKey_<KEYID>.p8 \
   #     --key-id <KEYID> --issuer <ISSUER> \
   #     --keychain ~/Library/Keychains/login.keychain-db
-  xcrun notarytool submit "$TMPZIP" \
-    --keychain-profile transcripts-notary \
-    --keychain "${NOTARY_KEYCHAIN:-$HOME/Library/Keychains/login.keychain-db}" \
-    --wait
+  # Submit, then poll. `--wait` crashes with a Bus error on this toolchain
+  # (macOS 26 / Xcode 26.6) *after* the upload succeeds, which killed the
+  # release script mid-flight while the submission sailed on to Accepted —
+  # the worst shape of failure, since everything downstream was skipped for a
+  # build that was actually fine.
+  NOTARY_ARGS=(--keychain-profile transcripts-notary
+               --keychain "${NOTARY_KEYCHAIN:-$HOME/Library/Keychains/login.keychain-db}")
+  SUBMIT_ID="$(xcrun notarytool submit "$TMPZIP" "${NOTARY_ARGS[@]}" 2>&1 \
+    | awk '/^  id: /{print $2; exit}')"
+  [[ -n "$SUBMIT_ID" ]] || { echo "✗ notarytool did not return a submission id" >&2; exit 1; }
+  echo "  submission $SUBMIT_ID"
+
+  NOTARY_STATUS="In Progress"
+  for _ in $(seq 1 90); do
+    sleep 20
+    NOTARY_STATUS="$(xcrun notarytool info "$SUBMIT_ID" "${NOTARY_ARGS[@]}" 2>/dev/null \
+      | awk '/status:/{ $1=""; sub(/^ /,""); print; exit }')"
+    [[ "$NOTARY_STATUS" == "In Progress" ]] || break
+    printf '.'
+  done
+  echo
+  if [[ "$NOTARY_STATUS" != "Accepted" ]]; then
+    echo "✗ notarization $NOTARY_STATUS — details:" >&2
+    xcrun notarytool log "$SUBMIT_ID" "${NOTARY_ARGS[@]}" 2>&1 | head -40 >&2
+    exit 1
+  fi
+  echo "  ✓ accepted"
   xcrun stapler staple "$APP"
   echo "  ✓ stapled"
 else

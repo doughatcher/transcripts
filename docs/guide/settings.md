@@ -24,7 +24,17 @@ Open Settings from the menu-bar menu. Six panes.
 ## Destinations
 
 Where recordings are filed, and where the Mac watches for phone captures. Both
-default to `iCloud Drive/Transcripts` when iCloud Drive is available.
+default to `iCloud Drive/Transcripts` when iCloud Drive is available. That is
+what the iPhone and iPad read their library from, so it needs to be a folder
+every device can see.
+
+**Obsidian.** If you use Obsidian, Transcripts finds your vault on first launch
+and files a copy of every finished transcript into it, in the same folder
+Sorting routed it to. It is a copy, not a move: your devices keep reading the
+iCloud library, and your notes get the transcript. Only the markdown is
+mirrored — the audio stays in the knowledge root, so a vault carried by
+Obsidian Sync doesn't fill up with recordings. Pick a different vault or clear
+it in Settings ▸ Sorting ▸ Obsidian; cleared stays cleared.
 
 Changing these does not move anything already written.
 

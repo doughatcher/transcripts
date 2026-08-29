@@ -56,8 +56,45 @@ import Foundation
     /// enrollment to decide whether to show an agency's mark by default; that is
     /// gone, and the defaults must not quietly grow a house style again.
     @Test func defaultsAreNeutral() {
-        #expect(AppConfig.defaultMenuBarIcon == .waveform)
+        // The mark is the app's own, not a house style borrowed from anyone.
+        #expect(AppConfig.defaultMenuBarIcon == .mark)
         #expect(AppConfig.defaultRecordingColorHex == HexColor.recordingRed)
+    }
+
+    /// A saved config predates every field added after it. Decoding must keep
+    /// the roots the user chose: `AppConfig`'s fallback for an unparseable
+    /// `destinations` is a *fresh* one, so a throwing decode here would silently
+    /// move where every future recording is filed.
+    @Test func destinationsSurviveFieldsAddedLater() throws {
+        let json = #"""
+        {"destinations":{"knowledgeRoot":"~/Vaults/Mine","deviceInbox":"~/iCloud/Transcripts"}}
+        """#.data(using: .utf8)!
+        let cfg = try JSONDecoder().decode(AppConfig.self, from: json)
+        #expect(cfg.destinations.knowledgeRoot == "~/Vaults/Mine")
+        #expect(cfg.destinations.deviceInbox == "~/iCloud/Transcripts")
+        // Absent means "not looked yet", so first launch may still detect one.
+        #expect(cfg.destinations.vaultMirror == nil)
+        #expect(cfg.destinations.vaultMirrorDetected == false)
+    }
+
+    /// Clearing the mirror has to stick. The detection flag is what stops the
+    /// next launch from finding the vault again and turning it back on.
+    @Test func clearedVaultMirrorStaysCleared() throws {
+        let json = #"""
+        {"destinations":{"knowledgeRoot":"~/K","vaultMirrorDetected":true}}
+        """#.data(using: .utf8)!
+        let cfg = try JSONDecoder().decode(AppConfig.self, from: json)
+        #expect(cfg.destinations.vaultMirror == nil)
+        #expect(cfg.destinations.vaultMirrorDetected == true)
+        #expect(cfg.destinations.resolvedVaultMirror == nil)
+    }
+
+    /// Blank is off, and a tilde expands — the mirror is hand-editable JSON like
+    /// the rest of the config.
+    @Test func vaultMirrorResolution() {
+        #expect(DestinationsConfig(vaultMirror: "   ").resolvedVaultMirror == nil)
+        #expect(DestinationsConfig(vaultMirror: "~/Cloud Vault").resolvedVaultMirror?.path
+                == (("~/Cloud Vault" as NSString).expandingTildeInPath))
     }
 
     /// A malformed default would render an invisible menu-bar icon.
