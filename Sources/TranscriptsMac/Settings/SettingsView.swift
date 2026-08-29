@@ -313,6 +313,73 @@ struct SettingsView: View {
                     .help("Re-run the current rules over every recording and move any that changed.")
             }
 
+            // Sessions were configurable from the day they shipped and settable
+            // only by hand-editing routing.json, which meant that for anyone who
+            // had not read the guide they did not exist. The Shortcuts action
+            // has always been able to start one; it just offered an empty picker.
+            Section("Sessions") {
+                ForEach($controller.routing.sessions) { $session in
+                    DisclosureGroup {
+                        TextField("Name", text: $session.name)
+
+                        HStack {
+                            TextField("Files go to", text: Binding(
+                                get: { session.destination ?? "" },
+                                set: { session.destination = $0.isEmpty ? nil : $0 }))
+                            Button("Choose…") {
+                                if let picked = Self.chooseSessionFolder(under: controller) {
+                                    session.destination = picked
+                                }
+                            }
+                        }
+
+                        Picker("Ends after", selection: $session.idleTimeout) {
+                            Text("30 minutes idle").tag(TimeInterval(1_800))
+                            Text("1 hour idle").tag(TimeInterval(3_600))
+                            Text("2 hours idle").tag(TimeInterval(7_200))
+                            Text("3 hours idle").tag(TimeInterval(10_800))
+                            Text("Never (end it yourself)").tag(TimeInterval(0))
+                        }
+
+                        HStack {
+                            TextField("…or at (HH:mm)", text: Binding(
+                                get: { session.hardStop ?? "" },
+                                set: { session.hardStop = $0.isEmpty ? nil : $0 }))
+                            if session.hardStop?.isEmpty == false && session.hardStopComponents == nil {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.orange)
+                                    .help("Not a time — use 24-hour HH:mm, e.g. 23:30. Left as is, there is no backstop.")
+                            }
+                        }
+
+                        TextField("When it ends, run", text: Binding(
+                            get: { Self.commandText(session.onComplete) },
+                            set: { session.onComplete = Self.command(from: $0) }))
+                        Text("Runs once, when the whole session is over. ${sessionLabel}, ${sessionName} and the session's files are substituted in.")
+                            .font(.caption2).foregroundStyle(.secondary)
+
+                        Button("Remove “\(session.name)”", role: .destructive) {
+                            controller.routing.sessions.removeAll { $0.id == session.id }
+                        }
+                    } label: {
+                        HStack {
+                            Text(session.name)
+                            Spacer()
+                            Text(session.destination ?? "filed normally")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                Button("Add a session…") {
+                    controller.routing.sessions.append(
+                        SessionProfile(id: Self.freshSessionID(in: controller.routing.sessions),
+                                       name: "New session"))
+                }
+                Text("A session groups an evening's recordings under one name — a game night, a workshop, a day of interviews — and runs its action once at the end rather than after every recording. Start and end one from Shortcuts, so a weekly game can record itself.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+
             Section("Summarization") {
                 Picker("Engine", selection: binding(\.llmProvider)) {
                     Text("Automatic (on-device, self-contained)").tag(LLMProvider.appleOnDevice)
@@ -594,6 +661,59 @@ struct SettingsView: View {
     static func tildeify(_ path: String) -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
+    }
+
+    // MARK: - Sessions
+
+    /// Says no out loud. A picker that closes and leaves the field unchanged
+    /// reads as a bug in the picker.
+    private static func warn(_ message: String, _ detail: String) {
+        let alert = NSAlert()
+        alert.messageText = message
+        alert.informativeText = detail
+        alert.alertStyle = .warning
+        alert.runModal()
+    }
+
+    /// A session destination is a folder *inside* the knowledge root, stored
+    /// relative to it — the same shape the routing table uses. Picking an
+    /// absolute path elsewhere would file the evening outside the library
+    /// entirely, so anything outside the root is refused rather than silently
+    /// stored as something that will not route.
+    static func chooseSessionFolder(under controller: AppController) -> String? {
+        guard let picked = chooseFolder(title: "Choose where this session's recordings go") else { return nil }
+        let root = controller.config.destinations.resolvedRoot.standardizedFileURL.path
+        guard picked.hasPrefix(root) else {
+            warn("That folder is outside your knowledge root",
+                 "A session files into a folder inside \(root). Pick one there, or move your knowledge root first.")
+            return nil
+        }
+        let relative = String(picked.dropFirst(root.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return relative.isEmpty ? "" : relative + "/"
+    }
+
+    /// An id that is not already taken. Ids are referenced by the Shortcuts
+    /// action and by a session that is currently running, so one is minted once
+    /// here and never derived from the name again — renaming "D&D" to "Curse of
+    /// Strahd" must not orphan the evening already in progress.
+    static func freshSessionID(in existing: [SessionProfile]) -> String {
+        let taken = Set(existing.map(\.id))
+        var n = 1
+        while taken.contains("session-\(n)") { n += 1 }
+        return "session-\(n)"
+    }
+
+    /// The completion command as one editable line, matching how the routing
+    /// script is edited above. First word is the executable, the rest arguments.
+    static func commandText(_ command: ExternalCommand?) -> String {
+        guard let command else { return "" }
+        return ([command.executable] + command.arguments).joined(separator: " ")
+    }
+
+    static func command(from text: String) -> ExternalCommand? {
+        let parts = text.split(separator: " ").map(String.init)
+        guard let executable = parts.first else { return nil }
+        return ExternalCommand(executable: executable, arguments: Array(parts.dropFirst()))
     }
 
 }
