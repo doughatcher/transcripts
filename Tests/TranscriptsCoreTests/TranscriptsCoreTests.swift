@@ -1046,6 +1046,107 @@ import Foundation
         #expect(doc.contains("sorted: true"))
     }
 
+    /// The vault gets the readable copy and none of the weight: same routed
+    /// subfolder, markdown only, and a pointer to where the audio actually
+    /// stayed rather than the name of a sibling that isn't beside it.
+    @Test func persistMirrorsMarkdownOnlyIntoTheVault() async throws {
+        let (tmp, scratch, root) = try makePersistFixture()
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        // Not "Vault": the fixture's knowledge root is `vault`, and on a
+        // case-insensitive volume that is the same directory — which is the
+        // clobber `persistRefusesToMirrorOntoTheKnowledgeRoot` covers.
+        let vault = tmp.appendingPathComponent("Obsidian", isDirectory: true)
+        try FileManager.default.createDirectory(at: vault, withIntermediateDirectories: true)
+
+        let rec = Recording(audioURL: scratch.appendingPathComponent("audio.m4a"),
+                            startedAt: Date(timeIntervalSince1970: 1_751_382_000))
+        try Data([0x00]).write(to: rec.audioURL)
+        let transcript = scratch.appendingPathComponent("\(rec.slug).md")
+        try "---\ntitle: \"x\"\naudio_file: \(rec.slug).m4a\n---\n\nbody\n"
+            .write(to: transcript, atomically: true, encoding: .utf8)
+
+        var ctx = PipelineContext(recording: rec, scratchDir: scratch)
+        ctx.transcriptURL = transcript
+        ctx.userInfo["slug"] = rec.slug
+        ctx.routing = RoutingDecision(destination: "Clients/Acme/transcripts/", confidence: 1, note: nil)
+
+        try await PersistStage(knowledgeRoot: root, vaultMirror: vault).run(&ctx)
+
+        // Same routed subfolder as the real copy.
+        let mirrored = vault.appendingPathComponent("Clients/Acme/transcripts/\(rec.slug).md")
+        #expect(FileManager.default.fileExists(atPath: mirrored.path))
+        // Markdown only — a synced vault must not fill up with recordings.
+        #expect(!FileManager.default.fileExists(
+            atPath: vault.appendingPathComponent("Clients/Acme/transcripts/\(rec.slug).m4a").path))
+
+        let doc = try String(contentsOf: mirrored, encoding: .utf8)
+        #expect(doc.contains("audio_path: \(root.path)/Clients/Acme/transcripts/\(rec.slug).m4a"))
+        #expect(doc.contains("audio_file: \n") || doc.contains("audio_file:\n"))
+        #expect(doc.contains("sorted: true"))
+        // The real copy is untouched and still names its sibling.
+        let filed = try String(contentsOf: ctx.finalPaths.first { $0.pathExtension == "md" }!,
+                               encoding: .utf8)
+        #expect(filed.contains("audio_file: \(rec.slug).m4a"))
+        #expect(ctx.userInfo["vaultMirrorError"] == nil)
+    }
+
+    /// Pointing the mirror at the knowledge root would have the mirror write
+    /// over the copy just filed — blanking the `audio_file` the canonical
+    /// transcript needs to find its own audio. Caught first by a fixture whose
+    /// root is `vault` on a case-insensitive volume, which is exactly how a user
+    /// would hit it.
+    @Test func persistRefusesToMirrorOntoTheKnowledgeRoot() async throws {
+        let (tmp, scratch, root) = try makePersistFixture()
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let rec = Recording(audioURL: scratch.appendingPathComponent("audio.m4a"),
+                            startedAt: Date(timeIntervalSince1970: 1_751_382_000))
+        try Data([0x00]).write(to: rec.audioURL)
+        let transcript = scratch.appendingPathComponent("\(rec.slug).md")
+        try "---\ntitle: \"x\"\naudio_file: \(rec.slug).m4a\n---\n\nbody\n"
+            .write(to: transcript, atomically: true, encoding: .utf8)
+
+        var ctx = PipelineContext(recording: rec, scratchDir: scratch)
+        ctx.transcriptURL = transcript
+        ctx.userInfo["slug"] = rec.slug
+
+        // Same directory, spelled differently — the case-insensitive trap.
+        let alias = root.deletingLastPathComponent().appendingPathComponent("VAULT", isDirectory: true)
+        try await PersistStage(knowledgeRoot: root, vaultMirror: alias).run(&ctx)
+
+        let filed = try String(contentsOf: ctx.finalPaths.first { $0.pathExtension == "md" }!,
+                               encoding: .utf8)
+        #expect(filed.contains("audio_file: \(rec.slug).m4a"))
+        #expect(!filed.contains("audio_path:"))
+        #expect(ctx.userInfo["vaultMirrorError"]?.contains("knowledge root") == true)
+    }
+
+    /// A vault on a sync folder that isn't mounted must not fail the run that
+    /// already filed the real copy.
+    @Test func persistSurvivesAnUnwritableVault() async throws {
+        let (tmp, scratch, root) = try makePersistFixture()
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let rec = Recording(audioURL: scratch.appendingPathComponent("audio.m4a"),
+                            startedAt: Date(timeIntervalSince1970: 1_751_382_000))
+        try Data([0x00]).write(to: rec.audioURL)
+        let transcript = scratch.appendingPathComponent("\(rec.slug).md")
+        try "---\ntitle: \"x\"\n---\n\nbody\n".write(to: transcript, atomically: true, encoding: .utf8)
+
+        var ctx = PipelineContext(recording: rec, scratchDir: scratch)
+        ctx.transcriptURL = transcript
+        ctx.userInfo["slug"] = rec.slug
+
+        // A file where the vault directory should be: creating anything under it fails.
+        let blocked = tmp.appendingPathComponent("not-a-dir")
+        try Data([0x00]).write(to: blocked)
+
+        try await PersistStage(knowledgeRoot: root, vaultMirror: blocked).run(&ctx)
+
+        #expect(ctx.finalPaths.contains { $0.pathExtension == "md" })
+        #expect(ctx.userInfo["vaultMirrorError"] != nil)
+    }
+
     @Test func persistKeepsOriginalNamesWithoutSummaryTitle() async throws {
         let (tmp, scratch, root) = try makePersistFixture()
         defer { try? FileManager.default.removeItem(at: tmp) }

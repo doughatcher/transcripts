@@ -63,6 +63,18 @@ public struct PersistStage: PipelineStage {
             if let vaultMirror {
                 do {
                     let mirrorDir = vaultMirror.appendingPathComponent(destRel, isDirectory: true)
+                    let mirrorTarget = mirrorDir.appendingPathComponent(name)
+                    // A mirror pointed at the knowledge root would write over the
+                    // copy just filed — blanking the `audio_file` that copy needs
+                    // and leaving the canonical transcript pointing nowhere. The
+                    // comparison is deliberately not `==` on URLs: these paths
+                    // reach the same file through different spellings, and on a
+                    // case-insensitive volume through different capitalisation.
+                    guard !Self.sameFile(mirrorTarget, target) else {
+                        context.userInfo["vaultMirrorError"] =
+                            "vault resolves to the knowledge root — skipped so the filed copy stays intact"
+                        throw MirrorSkipped.sameAsKnowledgeRoot
+                    }
                     try FileManager.default.createDirectory(at: mirrorDir, withIntermediateDirectories: true)
                     // `audio_file` names a sibling, and in the vault there is no
                     // sibling — the audio stays in the knowledge root. Point at
@@ -74,8 +86,9 @@ public struct PersistStage: PipelineStage {
                             forVault, key: "audio_path",
                             value: destDir.appendingPathComponent(audioName).path)
                     }
-                    try forVault.write(to: mirrorDir.appendingPathComponent(name),
-                                       atomically: true, encoding: .utf8)
+                    try forVault.write(to: mirrorTarget, atomically: true, encoding: .utf8)
+                } catch MirrorSkipped.sameAsKnowledgeRoot {
+                    // Already recorded above; not a failure worth a second note.
                 } catch {
                     // Core has no logger (it depends on nothing); the Mac reads
                     // this back and writes it to the log.
@@ -100,6 +113,23 @@ public struct PersistStage: PipelineStage {
         }
 
         context.finalPaths = written
+    }
+
+    private enum MirrorSkipped: Error { case sameAsKnowledgeRoot }
+
+    /// Whether two URLs name the same file. Compares resource identity when both
+    /// exist (which catches symlinks and the two spellings of a synced folder),
+    /// and falls back to a case-insensitive path match for the target that has
+    /// not been written yet.
+    static func sameFile(_ a: URL, _ b: URL) -> Bool {
+        let fm = FileManager.default
+        if fm.fileExists(atPath: a.path), fm.fileExists(atPath: b.path),
+           let ia = try? a.resourceValues(forKeys: [.fileResourceIdentifierKey]).fileResourceIdentifier,
+           let ib = try? b.resourceValues(forKeys: [.fileResourceIdentifierKey]).fileResourceIdentifier {
+            return ia.isEqual(ib)
+        }
+        return a.standardizedFileURL.path.compare(b.standardizedFileURL.path,
+                                                  options: .caseInsensitive) == .orderedSame
     }
 
     /// Replaces (or inserts) a single frontmatter key in a full `---`-fenced doc.
