@@ -25,6 +25,7 @@ packages:
 
 
 
+
     path: .
 
 options:
@@ -47,11 +48,13 @@ options:
 
 
 
+
     iOS: "17.0"
   createIntermediateGroups: true
 
 targets:
   Transcripts:
+
 
 
 
@@ -180,6 +183,7 @@ targets:
 
 
 
+
     type: app-extension
     platform: iOS
     sources:
@@ -213,6 +217,7 @@ targets:
   # where xcodebuild silently resolves the project. Building the Mac app then
   # built the iOS one instead. One project, distinct scheme names, no ambiguity.
   TranscriptsMac:
+
 
 
 
