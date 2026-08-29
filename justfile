@@ -63,12 +63,22 @@ devices: project
     while read -r ID NAME; do
       [[ -n "$ID" ]] || continue
       echo "▶ Installing to ${NAME//_/ }"
-      if xcrun devicectl device install app --device "$ID" "$APP" > .build/install-$ID.log 2>&1; then
-        echo "  ✓ installed"
-      else
-        echo "  ✗ failed — see .build/install-$ID.log (device locked?)" >&2
-        tail -3 .build/install-$ID.log >&2
-      fi
+      # Retry: the two ways this fails in practice are both temporary. A locked
+      # device refuses outright, and the wireless tunnel drops the connection
+      # ("reset by peer") often enough to be worth riding out rather than
+      # reporting as a failure the user has to act on.
+      for attempt in 1 2 3 4 5; do
+        if xcrun devicectl device install app --device "$ID" "$APP" > .build/install-$ID.log 2>&1; then
+          echo "  ✓ installed"
+          break
+        fi
+        if [[ $attempt -eq 5 ]]; then
+          echo "  ✗ failed after 5 tries — see .build/install-$ID.log" >&2
+          grep -m1 -o 'NSLocalizedFailureReason = .*' .build/install-$ID.log >&2 || tail -3 .build/install-$ID.log >&2
+        else
+          sleep 5
+        fi
+      done
     done <<< "$IDS"
 
 # Archive the iOS app and upload it to TestFlight. Signing and profiles are
