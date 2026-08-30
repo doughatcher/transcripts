@@ -82,16 +82,19 @@ func rgb(_ r: Int, _ g: Int, _ b: Int) -> CGColor {
 
 let args = CommandLine.arguments
 let macOS = args.contains("--macos")
-// macOS defaults to `.brand` so that re-running make-icns.sh cannot silently
-// restyle the Mac icon into iOS's white-ground light variant. iOS defaults to
-// `.light`, which is the appearance the system pairs with `.dark` and
-// `.tinted` in the asset catalog.
+// Both platforms default to `.brand`. iOS used to default to `.light`, on the
+// reasoning that a white ground is what the system pairs with `.dark` and
+// `.tinted` — true of the pairing, wrong about the icon. Rendered at the two
+// sizes it is actually seen at, the white tile has no edge against the App
+// Store's white page and almost none against a light home screen, while the
+// violet ground holds at 60pt and matches the Mac. The default asset is still
+// the one the system pairs with the other two; it just is not white any more.
 let appearance: Appearance =
     args.contains("--brand")  ? .brand
     : args.contains("--dark")   ? .dark
     : args.contains("--tinted") ? .tinted
     : args.contains("--light")  ? .light
-    : (macOS ? .brand : .light)
+    : .brand
 let layersDir: String? = args.firstIndex(of: "--layers").map { args[args.index(after: $0)] }
 
 // MARK: - Geometry
