@@ -99,14 +99,5 @@ some require every participant's consent. Only record where you lawfully may.
 
 MIT — see [LICENSE](LICENSE). Copyright © 2026 Doug Hatcher.
 
-Transcripts was carved out of Scribe under MIT on 15 August 2026, went
-proprietary ninety minutes later, and returned to MIT on 21 August 2026. The
-grant is retroactive: LICENSE has been rewritten across the whole history, so
-the forty-eight commits made inside that proprietary window now carry the same
-terms as the commits on either side of it, and a checkout of any commit gets
-the licence that actually applies to it.
-
-The rewrite leaves no trace of itself in git, so this paragraph is the record
-of it.
-
-Third-party components and their terms are listed in [NOTICE](NOTICE).
+Third-party components, and the licence history behind this file, are in
+[NOTICE](NOTICE).
