@@ -298,6 +298,23 @@ struct ContentView: View {
         }
         .refreshable { model.refreshLibrary() }
         .task {
+            #if DEBUG
+            // Open on a recording rather than the recorder, for screenshots.
+            // The detail pane is the half of this screen worth showing — the
+            // transcript and its scrubber — and nothing but a tap reaches it,
+            // which `simctl` cannot do.
+            // Prefer a take that has been through the Mac — a title and a
+            // summary as well as a transcript — because the newest one is
+            // usually the shortest, and a pane holding eight seconds of a note
+            // to self shows none of what the pane is for.
+            if CommandLine.arguments.contains("--seed-select-take"),
+               let best = model.takes
+                   .filter({ $0.title != nil && $0.summary?.isEmpty == false })
+                   .max(by: { $0.duration < $1.duration })
+                   ?? model.takes.max(by: { $0.startedAt < $1.startedAt }) {
+                selection = .take(best.id)
+            }
+            #endif
             // The first scan can land before iCloud has materialised anything it
             // was asked for; a second pass a few seconds later picks those up
             // without the user needing to know why the list was short.
