@@ -302,6 +302,43 @@ if [[ "${PUBLISH:-1}" == "1" && "$NOTARIZE" == "1" ]]; then
     exit 1
   fi
 
+  # --- 9. Tag it, and publish the release on GitHub --------------------------
+  # The zip, the appcast and the cask all said which version shipped; the
+  # repository did not. For an MIT project that is the one that matters — with
+  # no tag there is no way to check out the source a published binary was built
+  # from, which is the whole basis of "the privacy claims are checkable".
+  #
+  # The tag is pushed before the release is created so the release points at a
+  # ref that already exists, and both are idempotent: re-running a release that
+  # got half way leaves one tag and one release rather than erroring.
+  if command -v gh >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then
+    TAG="v$VERSION"
+    echo "▶ Tagging $TAG"
+    # The version stamp itself is part of what shipped, so commit it if the
+    # release script's own edit is still sitting in the working tree.
+    if ! git diff --quiet -- project.yml; then
+      git add project.yml && git commit -qm "Stamp $VERSION" || true
+    fi
+    git tag -af "$TAG" -m "Transcripts $VERSION" >/dev/null
+    REMOTE="$(git remote | grep -Eqx 'origin' && echo origin || git remote | head -1)"
+    if [[ -n "$REMOTE" ]]; then
+      git push -q "$REMOTE" HEAD 2>/dev/null || true
+      git push -qf "$REMOTE" "$TAG" 2>/dev/null || true
+    fi
+    NOTES_FILE="$(mktemp)"
+    sed -n "/^## $VERSION\$/,/^## /p" docs/guide/changelog.md 2>/dev/null | sed '1d;$d' > "$NOTES_FILE"
+    [[ -s "$NOTES_FILE" ]] || echo "See the user guide for what's new." > "$NOTES_FILE"
+    printf '\n---\n\nDownload: %s/%s\n' "$BASE_URL" "$ZIP_NAME" >> "$NOTES_FILE"
+    PRE=(); [[ "$VERSION" == *-* ]] && PRE=(--prerelease)
+    if gh release view "$TAG" >/dev/null 2>&1; then
+      gh release edit "$TAG" --notes-file "$NOTES_FILE" >/dev/null && echo "  ✓ release updated"
+    else
+      gh release create "$TAG" "${PRE[@]}" --title "Transcripts $VERSION" \
+        --notes-file "$NOTES_FILE" "$ZIP" >/dev/null && echo "  ✓ release published with the artifact"
+    fi
+    rm -f "$NOTES_FILE"
+  fi
+
   cat <<DONE
 
 ✓ Published $VERSION → $BASE_URL
