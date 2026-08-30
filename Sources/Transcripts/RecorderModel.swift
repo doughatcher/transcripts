@@ -55,9 +55,18 @@ final class RecorderModel: ObservableObject {
     @Published private(set) var transcriptionNote: String?
     @Published private(set) var takes: [Take] = []
     /// Finished transcripts from the shared folder — everything the Mac has
-    /// processed, from any device. Read-only here.
+    /// processed, from any device.
     @Published private(set) var library: [TranscriptEntry] = []
+    /// The same, for what has been archived. A second list rather than a flag on
+    /// the first: the library view never wants both, and keeping them apart
+    /// means no filtering to forget in the two places rows are built.
+    @Published private(set) var archived: [TranscriptEntry] = []
     @Published var lastError: String?
+    /// Why the last rename, archive or delete didn't happen. Separate from
+    /// `lastError`, which is the recorder's and is shown inline on the recorder
+    /// pane — a library edit fails while you are looking at the library, and
+    /// needs to say so there.
+    @Published var libraryError: String?
 
     let destination = Destination()
     /// The session this device is recording into, if any.
@@ -196,10 +205,12 @@ final class RecorderModel: ObservableObject {
             return
         }
         Task.detached(priority: .utility) {
-            let found = Destination.withScope(bookmark: bookmark) {
-                SharedLibrary.scan(root: root)
+            // One scope for both walks: opening it twice to read two folders in
+            // the same tree is work for nothing.
+            let (live, filed) = Destination.withScope(bookmark: bookmark) {
+                (SharedLibrary.scan(root: root), SharedLibrary.scanArchived(root: root))
             }
-            await MainActor.run { self.library = found }
+            await MainActor.run { self.library = live; self.archived = filed }
         }
     }
 
@@ -1023,6 +1034,84 @@ final class RecorderModel: ObservableObject {
         saveMeta()
         guard let i = takes.firstIndex(where: { $0.id == take.id }) else { return }
         takes[i].title = title
+    }
+
+    // MARK: - Tidying the shared library
+
+    /// Retitles a transcript in the shared folder.
+    func rename(_ entry: TranscriptEntry, to title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != entry.title,
+              let bookmark = destination.active?.bookmark else { return }
+        edit { try SharedLibrary.rename(entry, to: trimmed, bookmark: bookmark) } then: {
+            // Patched in place rather than rescanned. The file hasn't moved, and
+            // a rescan walks the whole folder — the row would sit under its old
+            // name for as long as that took, on the one screen watching for it
+            // to change.
+            if let i = self.library.firstIndex(where: { $0.id == entry.id }) {
+                self.library[i].title = trimmed
+            }
+            if let i = self.archived.firstIndex(where: { $0.id == entry.id }) {
+                self.archived[i].title = trimmed
+            }
+        }
+    }
+
+    /// Moves a transcript into `Archive/`, out of the library but not off disk.
+    func archive(_ entry: TranscriptEntry) {
+        guard let root = destination.root, let bookmark = destination.active?.bookmark else { return }
+        edit { try SharedLibrary.archive(entry, root: root, bookmark: bookmark) } then: {
+            self.library.removeAll { $0.id == entry.id }
+            // Dropping the row is the instant half; where the file landed is a
+            // new URL, and only a rescan knows it.
+            self.refreshLibrary()
+        }
+    }
+
+    /// Puts an archived transcript back where it was filed.
+    func unarchive(_ entry: TranscriptEntry) {
+        guard let root = destination.root, let bookmark = destination.active?.bookmark else { return }
+        edit { try SharedLibrary.unarchive(entry, root: root, bookmark: bookmark) } then: {
+            self.archived.removeAll { $0.id == entry.id }
+            self.refreshLibrary()
+        }
+    }
+
+    /// Sends a transcript and its audio to the Trash, on every device sharing
+    /// the folder.
+    func delete(_ entry: TranscriptEntry) {
+        guard let bookmark = destination.active?.bookmark else { return }
+        edit { try SharedLibrary.trash(entry, bookmark: bookmark) } then: {
+            self.library.removeAll { $0.id == entry.id }
+            self.archived.removeAll { $0.id == entry.id }
+        }
+    }
+
+    /// Runs a change to the shared folder off the main actor, then applies what
+    /// it meant to the lists here.
+    ///
+    /// Off-main because all three touch a File Provider, which is free to take
+    /// seconds over a coordinated write while it talks to its daemon — and this
+    /// actor is also driving the recorder's meters. A failure sets
+    /// `libraryError` rather than being swallowed: a row that quietly stayed put
+    /// reads as the tap not registering, and the second tap is the one made
+    /// harder by the first having "not worked".
+    private func edit(_ change: @escaping @Sendable () throws -> Void,
+                      then settle: @escaping @MainActor () -> Void) {
+        Task.detached(priority: .userInitiated) {
+            do {
+                try change()
+                await MainActor.run { settle() }
+            } catch {
+                await MainActor.run {
+                    // `describe` appends the domain and code, which is right for
+                    // a Foundation error nobody wrote a sentence for and noise
+                    // on the ones where somebody did.
+                    self.libraryError = (error as? LocalizedError)?.errorDescription
+                        ?? Self.describe(error)
+                }
+            }
+        }
     }
 
     // MARK: - Merge

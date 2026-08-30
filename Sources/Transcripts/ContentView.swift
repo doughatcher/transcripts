@@ -61,6 +61,17 @@ struct ContentView: View {
     @State private var renaming: RecorderModel.Take?
     @State private var draftTitle = ""
 
+    /// The shared transcript being renamed, and its own field contents. Separate
+    /// from the take's: the two rows offer the same verb but change different
+    /// things — one a local label, one a key inside a file every device reads.
+    @State private var renamingEntry: TranscriptEntry?
+    @State private var entryTitle = ""
+    /// The shared transcript a delete has been asked for. Confirmed, unlike a
+    /// take's: a take is a local copy of something the Mac also has, and this is
+    /// the finished article, possibly the only copy anywhere.
+    @State private var deletingEntry: TranscriptEntry?
+    @State private var showingArchive = false
+
     @State private var showingPrivacy = false
 
     private var searched: [Row] {
@@ -129,71 +140,14 @@ struct ContentView: View {
                         .tag(Selection.newRecording)
                 }
                 ForEach(grouped, id: \.key) { group in
-                  Section(Self.dayLabel(group.key)) {
-                    ForEach(group.rows) { row in
-                      switch row {
-                      case .shared(let entry):
-                        TranscriptRow(entry: entry).tag(Selection.transcript(entry.url))
-                      case .local(let take):
-                        TakeRow(take: take)
-                            .tag(Selection.take(take.id))
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    model.deleteLocal(take)
-                                } label: { Label("Delete", systemImage: "trash") }
+                    Section(Self.dayLabel(group.key)) {
+                        ForEach(group.rows) { row in
+                            switch row {
+                            case .shared(let entry): sharedRow(entry)
+                            case .local(let take): takeRow(take)
                             }
-                            // Repairs on the leading edge, the destructive one on
-                            // the trailing edge. That is the iOS convention, and
-                            // it means the careless swipe — the one you make
-                            // walking — cannot be the one that deletes.
-                            .swipeActions(edge: .leading) {
-                                Button {
-                                    draftTitle = take.title ?? ""
-                                    renaming = take
-                                } label: { Label("Rename", systemImage: "pencil") }
-                                    .tint(.indigo)
-
-                                if model.takes.count >= 2 {
-                                    Button {
-                                        mergeAnchor = take
-                                    } label: { Label("Merge", systemImage: "arrow.triangle.merge") }
-                                        .tint(.teal)
-                                }
-                            }
-                            // Long press rather than a toolbar button. These are
-                            // occasional repairs — a wrong title, a recording
-                            // that broke in two — and putting them on the chrome
-                            // made the library look like something to be
-                            // managed rather than just read.
-                            .contextMenu {
-                                Button {
-                                    draftTitle = take.title ?? ""
-                                    renaming = take
-                                } label: { Label("Rename", systemImage: "pencil") }
-
-                                if let text = take.draft, !text.isEmpty {
-                                    ShareLink(item: text) {
-                                        Label("Share transcript", systemImage: "square.and.arrow.up")
-                                    }
-                                }
-                                ShareLink(item: take.audio) {
-                                    Label("Share audio", systemImage: "waveform")
-                                }
-
-                                if model.takes.count >= 2 {
-                                    Button {
-                                        mergeAnchor = take
-                                    } label: { Label("Merge with…", systemImage: "arrow.triangle.merge") }
-                                }
-
-                                Divider()
-                                Button(role: .destructive) {
-                                    model.deleteLocal(take)
-                                } label: { Label("Delete", systemImage: "trash") }
-                            }
-                      }
+                        }
                     }
-                  }
                 }
             }
             .navigationTitle("Transcripts")
@@ -202,6 +156,17 @@ struct ContentView: View {
             // response and the phone had nowhere to answer it — the Mac has had
             // an About pane the whole time.
             .toolbar {
+                // Only once there is something in it. An empty drawer advertised
+                // on the chrome of every screen is a feature asking to be
+                // noticed; this one appears the moment it has a reason to.
+                if !model.archived.isEmpty {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { showingArchive = true } label: {
+                            Image(systemName: "archivebox")
+                        }
+                        .accessibilityLabel("Archived")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showingPrivacy = true } label: {
                         Image(systemName: "hand.raised")
@@ -210,6 +175,11 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $showingPrivacy) { PrivacySheet() }
+            .sheet(isPresented: $showingArchive) {
+                ArchiveSheet(entries: model.archived,
+                             onUnarchive: { model.unarchive($0) },
+                             onDelete: { model.delete($0) })
+            }
             // Always shown, not the default pull-down-to-reveal. A search field
             // you have to know is there is not a search field, and in a sidebar
             // there is no scroll gesture that obviously uncovers it.
@@ -235,6 +205,34 @@ struct ContentView: View {
                 Button("Cancel", role: .cancel) { renaming = nil }
             } message: {
                 Text("Titles are written by the model from what it heard, so they are sometimes wrong. Clearing the name puts the date back.")
+            }
+            .alert("Rename transcript", isPresented: Binding(
+                get: { renamingEntry != nil },
+                set: { if !$0 { renamingEntry = nil } })) {
+                TextField("Title", text: $entryTitle)
+                Button("Save") {
+                    if let entry = renamingEntry { model.rename(entry, to: entryTitle) }
+                    renamingEntry = nil
+                }
+                Button("Cancel", role: .cancel) { renamingEntry = nil }
+            } message: {
+                Text("Changes the title inside the transcript, so every device sees it. The filename stays as it is, and so do the links to it.")
+            }
+            .alert("Delete this transcript?", isPresented: Binding(
+                get: { deletingEntry != nil },
+                set: { if !$0 { deletingEntry = nil } }),
+                presenting: deletingEntry) { entry in
+                Button("Delete", role: .destructive) { delete(entry) }
+                Button("Cancel", role: .cancel) { deletingEntry = nil }
+            } message: { entry in
+                Text("“\(entry.title)” and its audio move to the Trash, where Files can still get them back. Every device sharing this folder loses the transcript. Archive keeps it without it being in the way.")
+            }
+            .alert("Couldn't do that", isPresented: Binding(
+                get: { model.libraryError != nil },
+                set: { if !$0 { model.libraryError = nil } })) {
+                Button("OK", role: .cancel) { model.libraryError = nil }
+            } message: {
+                Text(model.libraryError ?? "")
             }
             .sheet(item: $mergeAnchor) { anchor in
                 MergeSheet(anchor: anchor,
@@ -280,7 +278,14 @@ struct ContentView: View {
                 }
             case .transcript(let url):
                 if let entry = model.library.first(where: { $0.url == url }) {
-                    TranscriptPane(entry: entry)
+                    // The pane presents nothing itself: rename and delete both
+                    // need a modal, and a sheet already covering the detail
+                    // column on iPhone would have to own its own copies of both.
+                    // These hand the decision back to the one place holding it.
+                    TranscriptPane(entry: entry,
+                                   onRename: { startRename(entry) },
+                                   onArchive: { archive(entry) },
+                                   onDelete: { deletingEntry = entry })
                 } else {
                     ContentUnavailableView("Transcript gone", systemImage: "doc",
                                            description: Text("It is no longer in the shared folder."))
@@ -331,6 +336,136 @@ struct ContentView: View {
                 model.refreshLibrary()
             }
         }
+    }
+
+    // MARK: - Sidebar rows
+    //
+    // Split out of `body` rather than written inline. Two rows with a swipe set,
+    // a menu and a tag each is more than the type checker will do in one
+    // expression — it gave up on the whole view, and the error it gives up with
+    // names neither the row nor the modifier that pushed it over.
+
+    /// A finished transcript from the shared folder.
+    ///
+    /// Archive on the trailing edge, not delete — the opposite of the take row
+    /// below, and for the reason that row already gives: the careless swipe, the
+    /// one you make walking, must not be the destructive one. Deleting a take
+    /// costs a local copy of something the Mac also has. Deleting one of these
+    /// costs the finished article, so the swipe files it away and only the menu
+    /// can bin it.
+    @ViewBuilder
+    private func sharedRow(_ entry: TranscriptEntry) -> some View {
+        TranscriptRow(entry: entry)
+            .tag(Selection.transcript(entry.url))
+            .swipeActions(edge: .trailing) {
+                Button { archive(entry) } label: {
+                    Label("Archive", systemImage: "archivebox")
+                }
+                .tint(.orange)
+            }
+            .swipeActions(edge: .leading) {
+                Button { startRename(entry) } label: {
+                    Label("Rename", systemImage: "pencil")
+                }
+                .tint(.indigo)
+            }
+            .contextMenu { transcriptActions(entry) }
+    }
+
+    /// A recording this device made that the Mac hasn't turned into a transcript
+    /// yet.
+    @ViewBuilder
+    private func takeRow(_ take: RecorderModel.Take) -> some View {
+        TakeRow(take: take)
+            .tag(Selection.take(take.id))
+            .swipeActions(edge: .trailing) {
+                Button(role: .destructive) {
+                    model.deleteLocal(take)
+                } label: { Label("Delete", systemImage: "trash") }
+            }
+            // Repairs on the leading edge, the destructive one on the trailing
+            // edge. That is the iOS convention, and it means the careless swipe —
+            // the one you make walking — cannot be the one that deletes.
+            .swipeActions(edge: .leading) {
+                Button {
+                    draftTitle = take.title ?? ""
+                    renaming = take
+                } label: { Label("Rename", systemImage: "pencil") }
+                    .tint(.indigo)
+
+                if model.takes.count >= 2 {
+                    Button {
+                        mergeAnchor = take
+                    } label: { Label("Merge", systemImage: "arrow.triangle.merge") }
+                        .tint(.teal)
+                }
+            }
+            // Long press rather than a toolbar button. These are occasional
+            // repairs — a wrong title, a recording that broke in two — and
+            // putting them on the chrome made the library look like something to
+            // be managed rather than just read.
+            .contextMenu { takeActions(take) }
+    }
+
+    @ViewBuilder
+    private func takeActions(_ take: RecorderModel.Take) -> some View {
+        Button {
+            draftTitle = take.title ?? ""
+            renaming = take
+        } label: { Label("Rename", systemImage: "pencil") }
+
+        if let text = take.draft, !text.isEmpty {
+            ShareLink(item: text) {
+                Label("Share transcript", systemImage: "square.and.arrow.up")
+            }
+        }
+        ShareLink(item: take.audio) {
+            Label("Share audio", systemImage: "waveform")
+        }
+
+        if model.takes.count >= 2 {
+            Button {
+                mergeAnchor = take
+            } label: { Label("Merge with…", systemImage: "arrow.triangle.merge") }
+        }
+
+        Divider()
+        Button(role: .destructive) {
+            model.deleteLocal(take)
+        } label: { Label("Delete", systemImage: "trash") }
+    }
+
+    /// The full set, for the long press. The swipes carry the two you reach for;
+    /// this is where the third lives, behind the deliberate gesture, because it
+    /// is the one there is no undo for.
+    @ViewBuilder
+    private func transcriptActions(_ entry: TranscriptEntry) -> some View {
+        Button { startRename(entry) } label: { Label("Rename", systemImage: "pencil") }
+        Button { archive(entry) } label: { Label("Archive", systemImage: "archivebox") }
+        Divider()
+        Button(role: .destructive) { deletingEntry = entry } label: {
+            Label("Delete", systemImage: "trash")
+        }
+    }
+
+    private func startRename(_ entry: TranscriptEntry) {
+        entryTitle = entry.title
+        renamingEntry = entry
+    }
+
+    /// Both of these can take the row out from under an open detail pane — on
+    /// iPad it is the pane beside the list, on iPhone the one you are standing
+    /// in. Sending the selection home first means the change reads as the thing
+    /// you asked for rather than as the app losing the transcript.
+    private func archive(_ entry: TranscriptEntry) {
+        if selection == .transcript(entry.url) { selection = .newRecording }
+        model.archive(entry)
+    }
+
+    private func delete(_ entry: TranscriptEntry) {
+        if selection == .transcript(entry.url) { selection = .newRecording }
+        model.delete(entry)
+        deletingEntry = nil
     }
 }
 
@@ -614,6 +749,75 @@ private struct PrivacySheet: View {
 /// Picks what to join a take with. Reached from a take's context menu, so the
 /// anchor is already chosen and this only asks "and which others" — which is
 /// the whole reason it can be a sheet rather than a mode over the library.
+/// The archive, as a drawer rather than a filter on the library.
+///
+/// Archiving is for getting something out of the way, and a list you can toggle
+/// into is still part of the list you were reading. This is shut unless you went
+/// looking, and it is the only place the two ways back out are offered.
+private struct ArchiveSheet: View {
+    let entries: [TranscriptEntry]
+    let onUnarchive: (TranscriptEntry) -> Void
+    let onDelete: (TranscriptEntry) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    /// Its own confirmation rather than the library's: an alert attached to the
+    /// screen underneath a sheet does not reliably reach the top of the stack,
+    /// and a destructive action that appears to do nothing is worse than one
+    /// that asks twice.
+    @State private var confirming: TranscriptEntry?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(entries) { entry in
+                    TranscriptRow(entry: entry)
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) { confirming = entry } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                        .swipeActions(edge: .leading) {
+                            Button { onUnarchive(entry) } label: {
+                                Label("Unarchive", systemImage: "arrow.uturn.backward")
+                            }
+                            .tint(.indigo)
+                        }
+                        .contextMenu {
+                            Button { onUnarchive(entry) } label: {
+                                Label("Unarchive", systemImage: "arrow.uturn.backward")
+                            }
+                            Divider()
+                            Button(role: .destructive) { confirming = entry } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                }
+            }
+            .overlay {
+                if entries.isEmpty {
+                    // Reachable: unarchive the last one while the sheet is open.
+                    ContentUnavailableView("Nothing archived", systemImage: "archivebox",
+                        description: Text("Archived recordings move into an Archive folder beside your transcripts. Nothing is deleted, and every device sees the same archive."))
+                }
+            }
+            .navigationTitle("Archived")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+            .alert("Delete this transcript?", isPresented: Binding(
+                get: { confirming != nil },
+                set: { if !$0 { confirming = nil } }),
+                presenting: confirming) { entry in
+                Button("Delete", role: .destructive) { onDelete(entry); confirming = nil }
+                Button("Cancel", role: .cancel) { confirming = nil }
+            } message: { entry in
+                Text("“\(entry.title)” and its audio move to the Trash, where Files can still get them back.")
+            }
+        }
+    }
+}
+
 private struct MergeSheet: View {
     let anchor: RecorderModel.Take
     let candidates: [RecorderModel.Take]
@@ -700,6 +904,11 @@ private struct TranscriptRow: View {
 private struct TranscriptPane: View {
     @EnvironmentObject private var model: RecorderModel
     let entry: TranscriptEntry
+    /// Rename, archive and delete, owned by `ContentView` — see the comment
+    /// where this pane is built.
+    let onRename: () -> Void
+    let onArchive: () -> Void
+    let onDelete: () -> Void
     /// nil while loading or failed; `settled` says which.
     @State private var text: String?
     @State private var settled = false
@@ -788,6 +997,24 @@ private struct TranscriptPane: View {
         }
         .navigationTitle("Transcript")
         .navigationBarTitleDisplayMode(.inline)
+        // The list has these on a swipe, and on iPhone the list is somewhere you
+        // are not: you decide a transcript is mistitled while reading it, and
+        // going back a screen to say so is the step that stops you bothering.
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button(action: onRename) { Label("Rename", systemImage: "pencil") }
+                    Button(action: onArchive) { Label("Archive", systemImage: "archivebox") }
+                    Divider()
+                    Button(role: .destructive, action: onDelete) {
+                        Label("Delete", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .accessibilityLabel("Actions")
+            }
+        }
         .task(id: entry.url) { await load() }
     }
 

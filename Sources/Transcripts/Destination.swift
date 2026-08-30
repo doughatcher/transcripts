@@ -172,7 +172,11 @@ final class Destination: ObservableObject {
     /// Providers: an uncoordinated write races the sync daemon, and the provider
     /// is free to ignore or clobber it. Coordination is what makes the change one
     /// the provider agrees to upload.
-    static func coordinatedWrite(at url: URL, _ body: (URL) throws -> Void) throws {
+    /// `nonisolated` alongside `withScope` above, and for the same reason: the
+    /// library's edits run off the main actor so a File Provider taking its time
+    /// over a write doesn't stall the recorder's meters. It touches no instance
+    /// state, so there is nothing here for the actor to protect.
+    nonisolated static func coordinatedWrite(at url: URL, _ body: (URL) throws -> Void) throws {
         var coordinationError: NSError?
         var thrown: Error?
         NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: &coordinationError) { actual in
