@@ -99,5 +99,4 @@ some require every participant's consent. Only record where you lawfully may.
 
 MIT — see [LICENSE](LICENSE). Copyright © 2026 Doug Hatcher.
 
-Third-party components, and the licence history behind this file, are in
-[NOTICE](NOTICE).
+Third-party components and their terms are listed in [NOTICE](NOTICE).

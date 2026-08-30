@@ -32,20 +32,6 @@ verbatim:
 Scribe continues as its own project. The iOS application is a fresh carve-out
 and derives nothing from it.
 
-Licence history
----------------
-
-Transcripts was carved out of Scribe under MIT on 15 August 2026, went
-proprietary ninety minutes later, and returned to MIT on 21 August 2026. The
-grant is retroactive: LICENSE has been rewritten across the whole history, so
-the forty-eight commits made inside that proprietary window carry the same terms
-as the commits on either side of it, and a checkout of any commit gets the
-licence that actually applies to it.
-
-This is recorded because the rewrite left no trace of itself in git. Anyone
-holding a copy taken during that window — or auditing the history and finding
-the dates do not line up — is covered by the same MIT grant as everyone else.
-
 The iOS app has no third-party dependencies. The list below applies to the
 macOS build only.
 
