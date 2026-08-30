@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.6
+
+- Settings stops lagging when you click between its tabs. Every render was
+  enumerating audio devices, resolving the chosen input again for each row, and
+  asking the system about the login item — and because the tab bar rebuilds all
+  five tabs, one click paid for all of it. The device enumeration also wrote the
+  config file to disk mid-render, which invalidated the pane it was drawing.
+
 ## 1.0.5
 
 - The iPhone and iPad icon is the violet tile the Mac already wore. The white
