@@ -15,6 +15,30 @@ struct SettingsView: View {
     /// that re-runs the lot on each keystroke in the vault field.
     @State private var knownVaults: [URL] = []
 
+    /// The same discipline for the audio devices and the login item, and here it
+    /// was costing real time. `TabView` builds every tab's body, not just the
+    /// visible one, so each click on the tab bar re-ran all of it — and this
+    /// pane observes `AppController`, whose `inputLevel` and `tick` publish many
+    /// times a second, so it also re-ran while nothing was being clicked at all.
+    ///
+    /// Per render it was: a CoreAudio device enumeration, a second CoreAudio
+    /// call to resolve the chosen input, and an `SMAppService` status query.
+    /// Worse, the enumeration went through `availableInputs()`, which caches
+    /// device names into `config` — and `config`'s `didSet` writes the file to
+    /// disk and republishes. A view body that writes to disk and invalidates
+    /// itself is not a view body; it settles only because the names stop
+    /// changing.
+    @State private var connectedInputs: [AudioInputDevice] = []
+    @State private var resolvedInput: AudioInputDevice?
+    @State private var launchAtLogin = false
+
+    /// Off the render path deliberately — this is the call that may write config.
+    private func refreshDeviceState() {
+        connectedInputs = controller.availableInputs()
+        resolvedInput = controller.resolvedInput
+        launchAtLogin = controller.launchAtLoginEnabled
+    }
+
     var body: some View {
         TabView(selection: Binding(get: { forcedTab ?? selection },
                                    set: { selection = $0 })) {
@@ -30,7 +54,12 @@ struct SettingsView: View {
             // Accessory apps open Settings behind other windows; bring it forward.
             NSApp.activate(ignoringOtherApps: true)
             DispatchQueue.main.async { NSApp.keyWindow?.orderFrontRegardless() }
+            refreshDeviceState()
         }
+        // A mic plugged in while Settings is open should still appear, so the
+        // list refreshes when the window comes forward rather than never.
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSApplication.didBecomeActiveNotification)) { _ in refreshDeviceState() }
     }
 
     // MARK: - General
@@ -56,8 +85,8 @@ struct SettingsView: View {
             }
             Section("App") {
                 Toggle("Launch Transcripts at login", isOn: Binding(
-                    get: { controller.launchAtLoginEnabled },
-                    set: { controller.setLaunchAtLogin($0) }
+                    get: { launchAtLogin },
+                    set: { controller.setLaunchAtLogin($0); launchAtLogin = $0 }
                 ))
                 Picker("Menu bar icon", selection: binding(\.menuBarIcon)) {
                     Text("Transcripts mark").tag(MenuBarIconStyle.mark)
@@ -430,7 +459,6 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var inputDevicePicker: some View {
-        let connectedInputs = controller.availableInputs()
         let favoriteInputs = controller.favoriteInputs(connectedDevices: connectedInputs)
         let favoriteUIDs = Set(favoriteInputs.map(\.uid))
         let otherInputs = connectedInputs.filter { !favoriteUIDs.contains($0.uid) }
@@ -438,7 +466,7 @@ struct SettingsView: View {
         HStack(spacing: 6) {
             Image(systemName: "mic")
             Text("Recording from:")
-            if let r = controller.resolvedInput {
+            if let r = resolvedInput {
                 Text(r.name).foregroundStyle(.secondary)
             } else {
                 Text("no input found").foregroundStyle(.orange)
@@ -487,7 +515,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func favoriteInputRow(_ favorite: AppController.FavoriteInputChoice, index: Int, count: Int) -> some View {
-        let inUse = controller.resolvedInput?.uid == favorite.uid
+        let inUse = resolvedInput?.uid == favorite.uid
         let forced = controller.config.overrideInputUID == favorite.uid
 
         HStack(spacing: 8) {
@@ -546,7 +574,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func availableInputRow(_ dev: AudioInputDevice) -> some View {
-        let inUse = controller.resolvedInput?.uid == dev.uid
+        let inUse = resolvedInput?.uid == dev.uid
         let forced = controller.config.overrideInputUID == dev.uid
 
         HStack(spacing: 8) {
