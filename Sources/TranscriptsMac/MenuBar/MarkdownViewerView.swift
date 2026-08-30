@@ -21,6 +21,12 @@ struct MarkdownViewerView: View {
             VStack(alignment: .leading, spacing: 14) {
                 headerCard
 
+                // Above the summary, the way the phone places it: the first
+                // thing you want after "what was this" is often "play it".
+                if let audioURL {
+                    TranscriptScrubber(url: audioURL)
+                }
+
                 if let loadError {
                     Label(loadError, systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.orange)
@@ -88,6 +94,39 @@ struct MarkdownViewerView: View {
         }
     }
 
+    // MARK: - The audio beside the document
+
+    /// The recording this document was made from, when it is where the
+    /// frontmatter says it is.
+    ///
+    /// Three spellings, because three things write these files. `audio_file`
+    /// names a sibling, which is what the copy filed into the knowledge root
+    /// gets. `audio_path` is absolute and is what the vault mirror writes
+    /// instead, because in the vault there is no sibling — the audio stayed in
+    /// the knowledge root. Documents written before either key existed have
+    /// neither, and there the shared base name is the only lead: Persist names
+    /// the pair from one stem precisely so they stay findable from each other.
+    ///
+    /// Every branch checks the file is actually there. A live transcript has a
+    /// name for audio that is still being recorded, and offering a transport
+    /// for it would be a scrubber over a file whose length is a lie.
+    private var audioURL: URL? {
+        let manager = FileManager.default
+        if let name = frontmatter["audio_file"], !name.isEmpty {
+            let sibling = url.deletingLastPathComponent().appendingPathComponent(name)
+            if manager.fileExists(atPath: sibling.path) { return sibling }
+        }
+        if let path = frontmatter["audio_path"], !path.isEmpty,
+           manager.fileExists(atPath: path) {
+            return URL(fileURLWithPath: path)
+        }
+        for ext in ["m4a", "caf"] {
+            let guess = url.deletingPathExtension().appendingPathExtension(ext)
+            if manager.fileExists(atPath: guess.path) { return guess }
+        }
+        return nil
+    }
+
     // MARK: - Loading / parsing
 
     private func load() {
@@ -140,7 +179,6 @@ struct MarkdownBlock: Identifiable {
     enum Kind { case h1, h2, h3, bullet, paragraph }
     let kind: Kind
     let text: String
-
     @ViewBuilder var view: some View {
         switch kind {
         case .h1: Text(text).font(.title.bold()).padding(.top, 8)
