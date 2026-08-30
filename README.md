@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/icon.png" alt="" width="128" height="128">
+</p>
+
 <h1 align="center">Transcripts</h1>
 
 <p align="center">
