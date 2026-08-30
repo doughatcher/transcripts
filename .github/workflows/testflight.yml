@@ -20,6 +20,9 @@ on:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
+      runner:
+        description: "Runner image (blank = macos-26; xcode-27-arm64 to try the next toolchain)"
+        required: false
       version:
         description: "Marketing version, e.g. 1.0.0"
         required: true
@@ -45,19 +48,29 @@ jobs:
   testflight:
     name: Upload to TestFlight
     needs: test
-    runs-on: macos-26
+    # Chosen at dispatch time so a newer toolchain can be tried without editing
+    # this file. Apple periodically stops accepting App Store builds from the
+    # current release Xcode before the next one has an RC — when that happens
+    # the only newer toolchain in existence is on the xcode-27 preview image.
+    runs-on: ${{ inputs.runner || 'macos-26' }}
     steps:
       - uses: actions/checkout@v4
 
-      # A beta Xcode builds against a beta SDK, and App Store Connect refuses
-      # those outright. Better to fail here, before signing, than to find out
-      # from a rejection email after the upload.
+      # A beta Xcode builds against a beta SDK, which App Store Connect normally
+      # refuses — better to fail here than to learn it from a rejection email
+      # after the upload. It stops being a hard failure only when a beta runner
+      # was asked for on purpose, which is how you test whether Apple has begun
+      # accepting the next train before its RC exists.
       - name: Refuse a beta toolchain
         run: |
           xcodebuild -version
           if xcodebuild -version | grep -qi beta; then
-            echo "::error::Beta Xcode cannot produce an App Store build."
-            exit 1
+            if [ -n "${{ inputs.runner }}" ]; then
+              echo "::warning::Beta Xcode, requested deliberately. TestFlight will take it; the App Store may not."
+            else
+              echo "::error::Beta Xcode cannot produce an App Store build."
+              exit 1
+            fi
           fi
 
       - name: Resolve version
