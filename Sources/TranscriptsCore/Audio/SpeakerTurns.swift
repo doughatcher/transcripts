@@ -40,6 +40,29 @@ public struct AttributedSegment: Equatable, Sendable {
     }
 }
 
+/// One speaker's uninterrupted stretch of the recording, on the common timeline.
+///
+/// This used to be a `(speaker, text)` tuple, and that tuple is where every
+/// timestamp in the Mac pipeline was being thrown away: the transcriber hands
+/// back real `CMTimeRange` seconds, `assign` carries them onto the shared
+/// timeline, and then `turns` dropped them on the floor one line before the
+/// document was written. A struct with somewhere to put `start` is the whole
+/// fix.
+public struct SpeakerTurn: Equatable, Sendable {
+    public let speaker: String
+    /// Seconds from the start of the recording. The **first** segment's, kept
+    /// through coalescing, so it points at where this speaker began rather than
+    /// where their last sentence did.
+    public let start: Double
+    public let text: String
+
+    public init(speaker: String, start: Double, text: String) {
+        self.speaker = speaker
+        self.start = start
+        self.text = text
+    }
+}
+
 /// What a diarization pass yields: per-speaker time spans plus the voice
 /// embedding behind each label — the raw material for voice profiles (#6).
 public struct DiarizationOutcome: Sendable {
@@ -152,25 +175,102 @@ public enum SpeakerTurns {
     /// Interleaves labeled segments from any number of tracks (already shifted onto
     /// one timeline) into ordered turns, coalescing consecutive same-speaker
     /// segments into a single turn.
-    public static func turns(_ segments: [AttributedSegment]) -> [(speaker: String, text: String)] {
+    public static func turns(_ segments: [AttributedSegment]) -> [SpeakerTurn] {
         let ordered = segments
             .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .sorted { $0.start < $1.start }
-        var out: [(speaker: String, text: String)] = []
+        var out: [SpeakerTurn] = []
         for seg in ordered {
             let text = seg.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Coalescing keeps the first segment's start: a speaker who talks for
+            // ninety seconds is one turn, and the useful place to jump to is
+            // where they started.
             if let last = out.last, last.speaker == seg.speaker {
-                out[out.count - 1].text += " " + text
+                out[out.count - 1] = SpeakerTurn(speaker: last.speaker,
+                                          start: last.start,
+                                          text: last.text + " " + text)
             } else {
-                out.append((seg.speaker, text))
+                out.append(SpeakerTurn(speaker: seg.speaker, start: seg.start, text: text))
             }
         }
         return out
     }
 
-    /// Renders turns as markdown paragraphs: `**Me:** …`.
-    public static func markdown(_ turns: [(speaker: String, text: String)]) -> String {
-        turns.map { "**\($0.speaker):** \($0.text)" }.joined(separator: "\n\n")
+    /// Renders turns as markdown paragraphs: `**Me:** [12:04] …`.
+    ///
+    /// The stamp goes **after** the speaker token, never before it, and that
+    /// ordering is load-bearing rather than cosmetic. `SpeakerNames.parseTurns`
+    /// finds a turn by `line.hasPrefix("**")`; a leading `[12:04]` would make it
+    /// parse zero turns, so `validated` would return an empty mapping and every
+    /// model-inferred speaker name would be silently discarded. No error, no log
+    /// — speakers would just quietly stop being named.
+    ///
+    /// `timed` because not every engine has a clock. The `Transcriber` protocol's
+    /// default `transcribeSegments` wraps a plain transcript in one segment at
+    /// zero, which is indistinguishable from a recording that genuinely starts on
+    /// speech — so the caller, which knows which engine ran, says.
+    public static func markdown(_ turns: [SpeakerTurn], timed: Bool) -> String {
+        turns.map { turn in
+            let stamped = timed ? "\(stamp(turn.start)) " : ""
+            return "**\(turn.speaker):** \(stamped)\(turn.text)"
+        }.joined(separator: "\n\n")
+    }
+
+    // MARK: - Timestamps
+
+    /// `[12:04]`, or `[1:02:04]` once a meeting runs past the hour.
+    public static func stamp(_ seconds: Double) -> String {
+        let total = Int(max(0, seconds).rounded())
+        let (h, m, s) = (total / 3600, (total % 3600) / 60, total % 60)
+        return h > 0 ? String(format: "[%d:%02d:%02d]", h, m, s)
+                     : String(format: "[%d:%02d]", m, s)
+    }
+
+    /// Reads a leading `[mm:ss]` or `[h:mm:ss]` off a turn's text.
+    ///
+    /// nil when there isn't one, which is every transcript written before this
+    /// existed. That is deliberately the same answer as "malformed": readers can
+    /// treat the stamp as optional and need no format version in the frontmatter
+    /// to know whether to look for it.
+    public static func readStamp(_ text: String) -> (seconds: Double, rest: String)? {
+        guard text.hasPrefix("["), let close = text.firstIndex(of: "]") else { return nil }
+        let parts = text[text.index(after: text.startIndex)..<close].split(separator: ":")
+        guard (2...3).contains(parts.count) else { return nil }
+        var seconds = 0.0
+        for part in parts {
+            guard let value = Int(part), value >= 0 else { return nil }
+            seconds = seconds * 60 + Double(value)
+        }
+        // Minutes and seconds are two digits in everything we write; anything
+        // else is prose that happens to open with a bracket.
+        guard parts.dropFirst().allSatisfy({ $0.count == 2 }) else { return nil }
+        return (seconds, String(text[text.index(after: close)...]).trimmingCharacters(in: .whitespaces))
+    }
+
+    /// Splits `**Speaker:** [12:04] text` into its parts. nil for any line that
+    /// is not a turn — a heading, a bullet, ordinary prose.
+    public static func readTurnLine(_ line: String) -> (speaker: String, seconds: Double?, text: String)? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("**"), let close = trimmed.range(of: ":**") else { return nil }
+        let speaker = String(trimmed[trimmed.index(trimmed.startIndex, offsetBy: 2)..<close.lowerBound])
+        let body = String(trimmed[close.upperBound...]).trimmingCharacters(in: .whitespaces)
+        guard let (seconds, rest) = readStamp(body) else { return (speaker, nil, body) }
+        return (speaker, seconds, rest)
+    }
+
+    /// The same document with the turn timestamps taken back out.
+    ///
+    /// For the summarizer, which is handed the transcript body verbatim: a stamp
+    /// on every turn is noise in the prompt and context spent on nothing, and on
+    /// a fifty-minute meeting there are hundreds of them. Only stamps sitting in
+    /// a turn prefix are removed, so a `[bracketed]` aside in the prose survives.
+    public static func stripStamps(_ text: String) -> String {
+        text.split(separator: "\n", omittingEmptySubsequences: false).map { line -> String in
+            guard let (speaker, seconds, rest) = readTurnLine(String(line)), seconds != nil else {
+                return String(line)
+            }
+            return "**\(speaker):** \(rest)"
+        }.joined(separator: "\n")
     }
 
     /// Rewrites a stored transcript so a speaker's turns carry a corrected name —
@@ -196,7 +296,7 @@ public enum SpeakerTurns {
     }
 
     /// The distinct speakers in speaking order (for the document frontmatter).
-    public static func speakers(_ turns: [(speaker: String, text: String)]) -> [String] {
+    public static func speakers(_ turns: [SpeakerTurn]) -> [String] {
         var seen: Set<String> = []
         var out: [String] = []
         for t in turns where !seen.contains(t.speaker) {

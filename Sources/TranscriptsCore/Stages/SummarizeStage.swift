@@ -214,10 +214,17 @@ public struct SummarizeStage: PipelineStage {
 
     /// Returns just the transcript prose (drops the `## Transcript` heading).
     static func transcriptBody(_ body: String) -> String {
+        let text: String
         if let r = body.range(of: "## Transcript") {
-            return String(body[r.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            text = String(body[r.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        } else {
+            text = body
         }
-        return body
+        // Turn timestamps come back out before the model sees this. They are for
+        // a reader jumping to a moment; to a summarizer they are a few hundred
+        // tokens of noise spent on nothing, on the long meetings where context is
+        // already the scarce thing.
+        return SpeakerTurns.stripStamps(text)
     }
 
     /// Pulls a leading `TITLE: ...` line out of the model output; returns the title

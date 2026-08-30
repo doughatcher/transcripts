@@ -55,10 +55,12 @@ public enum SpeakerNames {
         var out: [(String, String)] = []
         for rawLine in transcript.components(separatedBy: "\n") {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
-            guard line.hasPrefix("**"), let close = line.range(of: ":**") else { continue }
-            let speaker = String(line[line.index(line.startIndex, offsetBy: 2)..<close.lowerBound])
-            let text = String(line[close.upperBound...]).trimmingCharacters(in: .whitespaces)
-            out.append((speaker, text))
+            // Shares `readTurnLine` with the readers, so the timestamp is
+            // stripped here in exactly the same place it is recognised there. The
+            // evidence search below looks for names near handoff cues, and a
+            // leading `[12:04]` is neither.
+            guard let turn = SpeakerTurns.readTurnLine(line) else { continue }
+            out.append((turn.speaker, turn.text))
         }
         return out
     }

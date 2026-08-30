@@ -324,7 +324,94 @@ import Foundation
         #expect(turns.map(\.speaker) == ["Me", "Others", "Me"])
         #expect(turns[1].text == "Loud and clear.")
         #expect(SpeakerTurns.speakers(turns) == ["Me", "Others"])
-        #expect(SpeakerTurns.markdown(turns).hasPrefix("**Me:** Hi, can you hear me?"))
+        // The system track's turn is stamped on the *mic* timeline: 3s into its
+        // own track, 2s of offset, so 5s into the recording.
+        #expect(turns[1].start == 5)
+        #expect(SpeakerTurns.markdown(turns, timed: true)
+            .hasPrefix("**Me:** [0:00] Hi, can you hear me?"))
+        #expect(SpeakerTurns.markdown(turns, timed: false)
+            .hasPrefix("**Me:** Hi, can you hear me?"))
+    }
+
+    @Test func coalescedTurnKeepsTheFirstSegmentsStart() {
+        // A speaker who talks for ninety seconds is one turn, and the useful
+        // place to jump to is where they started, not where they stopped.
+        let segs = [
+            AttributedSegment(speaker: "Me", start: 12, text: "First."),
+            AttributedSegment(speaker: "Me", start: 74, text: "Still me."),
+            AttributedSegment(speaker: "Me", start: 101, text: "Done."),
+        ]
+        let turns = SpeakerTurns.turns(segs)
+        #expect(turns.count == 1)
+        #expect(turns[0].start == 12)
+        #expect(SpeakerTurns.markdown(turns, timed: true)
+            == "**Me:** [0:12] First. Still me. Done.")
+    }
+
+    @Test func stampAndReadStampRoundTrip() {
+        #expect(SpeakerTurns.stamp(0) == "[0:00]")
+        #expect(SpeakerTurns.stamp(64) == "[1:04]")
+        #expect(SpeakerTurns.stamp(3_724) == "[1:02:04]")
+        #expect(SpeakerTurns.readStamp("[1:02:04] hello")?.seconds == 3_724)
+        #expect(SpeakerTurns.readStamp("[1:04] hello")?.rest == "hello")
+        // Prose that merely opens with a bracket is not a stamp — this is the
+        // guard that keeps "[no speech detected]" and "[inaudible] ..." intact.
+        #expect(SpeakerTurns.readStamp("[no speech detected]") == nil)
+        #expect(SpeakerTurns.readStamp("[1:4] hello") == nil)
+        #expect(SpeakerTurns.readStamp("no bracket") == nil)
+    }
+
+    @Test func readTurnLineHandlesStampedAndUnstampedTurns() {
+        let stamped = SpeakerTurns.readTurnLine("**Tracy:** [12:04] Morning.")
+        #expect(stamped?.speaker == "Tracy")
+        #expect(stamped?.seconds == 724)
+        #expect(stamped?.text == "Morning.")
+        // Every transcript written before this existed. Same call, nil seconds —
+        // which is why the readers need no format version to know what to do.
+        let plain = SpeakerTurns.readTurnLine("**Tracy:** Morning.")
+        #expect(plain?.seconds == nil)
+        #expect(plain?.text == "Morning.")
+        #expect(SpeakerTurns.readTurnLine("## Transcript") == nil)
+    }
+
+    /// The mitigation that protects the summaries: stamps come back out before
+    /// the transcript reaches the model.
+    @Test func stripStampsRemovesTurnStampsAndLeavesProseAlone() {
+        let doc = """
+        **Me:** [0:00] Morning.
+
+        **Tracy:** [1:04] Hi. [not a stamp] stays.
+
+        Plain paragraph with [brackets] in it.
+        """
+        let out = SpeakerTurns.stripStamps(doc)
+        #expect(out.contains("**Me:** Morning."))
+        #expect(out.contains("**Tracy:** Hi. [not a stamp] stays."))
+        #expect(out.contains("Plain paragraph with [brackets] in it."))
+        #expect(!out.contains("[0:00]"))
+        #expect(!out.contains("[1:04]"))
+    }
+
+    /// The mitigation that protects speaker naming: the stamp must never come
+    /// first, or `parseTurns` finds nothing and every inferred name is dropped.
+    @Test func stampedTurnsStillParseForSpeakerNaming() {
+        let doc = """
+        **Speaker 1:** [0:00] Thanks Tracy, go ahead.
+
+        **Speaker 2:** [0:09] Sure, happy to.
+        """
+        let turns = SpeakerNames.parseTurns(doc)
+        #expect(turns.count == 2)
+        #expect(turns[0].speaker == "Speaker 1")
+        // Stripped here too, so the evidence search sees prose and not a clock.
+        #expect(turns[0].text == "Thanks Tracy, go ahead.")
+        #expect(SpeakerNames.validated(["Speaker 2": "Tracy"], transcript: doc) == ["Speaker 2": "Tracy"])
+    }
+
+    @Test func renameSpeakerStillWorksOnStampedTurns() {
+        let doc = "**Speaker 2:** [1:04] Hello there."
+        #expect(SpeakerTurns.renameSpeaker(in: doc, from: "Speaker 2", to: "Tracy")
+            == "**Tracy:** [1:04] Hello there.")
     }
 
     @Test func speakerTurnsCoalesceConsecutiveSameSpeaker() {

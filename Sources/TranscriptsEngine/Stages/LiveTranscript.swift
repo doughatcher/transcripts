@@ -19,13 +19,9 @@ import TranscriptsCore
 /// (marked "call ended") and is replaced when the next recording begins.
 @MainActor
 public final class LiveTranscript {
-    private struct Turn {
-        let start: Double
-        let speaker: String
-        let text: String
-    }
-
-    private var turns: [Turn] = []
+    /// `AttributedSegment` rather than a private twin of it: it is already
+    /// (speaker, start, text), and it is what `SpeakerTurns` coalesces.
+    private var turns: [AttributedSegment] = []
     private var header = ""
     private var footer = ""
     private let paths: [URL]
@@ -61,7 +57,7 @@ public final class LiveTranscript {
     public func append(speaker: String, start: Double, text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        turns.append(Turn(start: start, speaker: speaker, text: trimmed))
+        turns.append(AttributedSegment(speaker: speaker, start: start, text: trimmed))
         flush()
     }
 
@@ -84,9 +80,11 @@ public final class LiveTranscript {
     private func flush() {
         // Coalesce consecutive same-speaker turns in timeline order — same shape
         // the batch document uses.
-        let merged = SpeakerTurns.turns(turns.sorted { $0.start < $1.start }
-            .map { AttributedSegment(speaker: $0.speaker, start: $0.start, text: $0.text) })
-        let body = SpeakerTurns.markdown(merged)
+        let merged = SpeakerTurns.turns(turns.sorted { $0.start < $1.start })
+        // Stamped, like the batch document. This is the file an assistant is
+        // pointed at mid-call, and "what was said around twenty minutes in" is
+        // most of what anyone asks it.
+        let body = SpeakerTurns.markdown(merged, timed: true)
         let doc = header + "\n" + body + "\n" + footer
         for url in paths {
             try? doc.write(to: url, atomically: true, encoding: .utf8)

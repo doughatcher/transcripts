@@ -117,8 +117,14 @@ public struct TranscribeStage: PipelineStage {
             }
         }
         if transcriptBlock == nil {
-            let text = try await transcriber.transcribe(audioURL: audioURL, model: model)
-            transcriptBlock = Self.formatTranscript(text)
+            // The timed variant even here. A single-track recording — a voice
+            // memo, a room mic, a call where system audio never came through —
+            // has no speakers to attribute, but it has exactly as much timing as
+            // an attributed one, and it is the path a lot of recordings take.
+            let segments = try await transcriber.transcribeSegments(audioURL: audioURL, model: model)
+            transcriptBlock = Self.isTimed(segments)
+                ? Self.timedParagraphs(segments)
+                : Self.formatTranscript(segments.map(\.text).joined(separator: " "))
         }
         // One unique, timestamped base name shared by the transcript (.md) and the
         // archived audio (.m4a), so successive recordings never overwrite each other.
@@ -229,6 +235,11 @@ public struct TranscribeStage: PipelineStage {
                 }
             }
 
+            // Both tracks go through the same engine, so either both have a
+            // clock or neither does — but read it off the segments rather than
+            // assuming, because the protocol lets an engine be swapped underneath
+            // this and the untimed default would otherwise stamp every turn 0:00.
+            let timed = Self.isTimed(mine) || Self.isTimed(theirs)
             let labeled = mine.map { AttributedSegment(speaker: "Me", start: $0.start, text: $0.text) }
                 + SpeakerTurns.assign(theirs, spans: spans, fallback: "Others")
                     .map { AttributedSegment(speaker: $0.speaker, start: $0.start + offset, text: $0.text) }
@@ -238,11 +249,51 @@ public struct TranscribeStage: PipelineStage {
             // Sample windows are on the system track's own timeline (no offset) —
             // the same track we clip from — and keyed by the display labels.
             let windows = SpeakerTurns.sampleWindows(spans)
-            return (SpeakerTurns.markdown(turns), SpeakerTurns.speakers(turns), embeddings, windows, confidence, affiliations)
+            return (SpeakerTurns.markdown(turns, timed: timed), SpeakerTurns.speakers(turns),
+                    embeddings, windows, confidence, affiliations)
         } catch {
             Log.write("transcribe: attribution failed (\(error)) — using the mixed transcript")
             return nil
         }
+    }
+
+    /// Whether an engine actually returned timings.
+    ///
+    /// The `Transcriber` protocol's default `transcribeSegments` wraps a plain
+    /// transcript in one zero-length segment at zero, and `StubTranscriber` comes
+    /// through that path — so "nothing anywhere is past zero" means no clock,
+    /// not a recording of silence. Getting this wrong would stamp a whole
+    /// transcript `[0:00]`, which is worse than no stamps at all: it looks like
+    /// data.
+    static func isTimed(_ segments: [TranscriptSegment]) -> Bool {
+        segments.contains { $0.start > 0 || $0.end > 0 }
+    }
+
+    /// Groups timed segments into readable paragraphs, each opening with the
+    /// stamp of the segment it starts on.
+    ///
+    /// The same ~360-character target `TranscriptFormatter` aims at, but grouping
+    /// forward from segments that already know their own time rather than
+    /// re-splitting a run-on string that has forgotten. Reflowing prose can be
+    /// done at render time; recovering a timestamp cannot.
+    static func timedParagraphs(_ segments: [TranscriptSegment], target: Int = 360) -> String {
+        var paragraphs: [String] = []
+        var start: Double?
+        var current = ""
+        func flush() {
+            guard let at = start, !current.isEmpty else { return }
+            paragraphs.append("\(SpeakerTurns.stamp(at)) \(current)")
+            current = ""; start = nil
+        }
+        for segment in segments {
+            let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { continue }
+            if start == nil { start = segment.start }
+            current = current.isEmpty ? text : current + " " + text
+            if current.count >= target { flush() }
+        }
+        flush()
+        return paragraphs.joined(separator: "\n\n")
     }
 
     /// Breaks a single run-on transcript into readable paragraphs so the stored `.md`
