@@ -10,7 +10,9 @@ import UniformTypeIdentifiers
 /// keeps the single-column flow for free.
 struct ContentView: View {
     @EnvironmentObject private var model: RecorderModel
-    @State private var selection: Selection? = .newRecording
+    /// Deliberately nil at launch — see `openingSelection`.
+    @State private var selection: Selection?
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var picking = false
     /// Whether the picker that's open was launched from "Set up for me" (we own a
     /// Transcripts folder inside what they pick) or "Choose a folder" (use it as-is).
@@ -302,6 +304,7 @@ struct ContentView: View {
             }
         }
         .refreshable { model.refreshLibrary() }
+        .onAppear(perform: openingSelection)
         .task {
             #if DEBUG
             // Open on a recording rather than the recorder, for screenshots.
@@ -444,6 +447,31 @@ struct ContentView: View {
         Button(role: .destructive) {
             model.deleteLocal(take)
         } label: { Label("Delete", systemImage: "trash") }
+    }
+
+    /// What is selected when the app opens.
+    ///
+    /// At compact width `NavigationSplitView` is a stack, so a selected row is a
+    /// pushed screen: preselecting the recorder meant the phone opened on a big
+    /// record button with the library behind a back tap. That is the wrong way
+    /// round for an app you open to read far more often than to record — and the
+    /// list already carries "New Recording" pinned at its top, so nothing is
+    /// further away than it was.
+    ///
+    /// An iPad shows both columns at once, so there the selection only decides
+    /// what the detail column displays, and the recorder is the right thing for
+    /// it to display. Nothing changes on that side.
+    ///
+    /// First run is the exception, on either. With no destination chosen the
+    /// detail is the "where do recordings go?" setup, and with the microphone
+    /// unasked it is the permissions explainer. Both have to be in front of the
+    /// user rather than behind a row they have no reason to tap — a record
+    /// button with nowhere to send the audio is the trap `SetupPane` exists to
+    /// prevent, and hiding the setup would reinstate it.
+    private func openingSelection() {
+        guard selection == nil else { return }
+        let readyToRecord = model.destination.active != nil && !model.needsPermissionPriming
+        if sizeClass == .regular || !readyToRecord { selection = .newRecording }
     }
 
     /// The full set, for the long press. The swipes carry the two you reach for;
