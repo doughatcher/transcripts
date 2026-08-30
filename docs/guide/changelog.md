@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.1.0-beta.1
+
+**iPhone and iPad**
+
+- Transcripts filed by the Mac can be renamed, archived and deleted from the
+  phone. Only recordings still waiting to be picked up could be, which left the
+  finished article — most of the library, and all of what a phone is usually
+  doing — with no way to fix a title the model got wrong. Swipe one way to
+  rename, the other to archive; delete is behind a long press and asks first.
+  Renaming changes the title inside the transcript, so every device sees it,
+  and leaves the filename alone so nothing that links to the note breaks.
+- Archiving moves a transcript and its audio into an `Archive` folder beside
+  your transcripts, keeping the folder it was filed into. Nothing is deleted,
+  every device sees the same archive, and unarchiving puts it back exactly
+  where it was. Deleting moves both to the Trash, where Files can still
+  recover them.
+
+**Mac**
+
+- The transcript reader can play the recording it was made from. It could show
+  you what the model heard and give you no way to hear it, which is worst on
+  the lines it got wrong — a garbled sentence is visibly wrong and
+  unrecoverable without the tape.
+
+**Both**
+
+- Transcripts carry the time each speaker started, and clicking one jumps the
+  audio there. The timings were always being computed and thrown away one line
+  before the document was written. Turns now read `**Me:** [12:04] …`, in the
+  finished document and in the live mid-call transcript an assistant reads
+  during a meeting.
+- Recordings made before this update have no timestamps and read exactly as
+  they did. New ones get them; there is nothing to migrate, and nothing to
+  turn on.
+
 ## 1.0.6
 
 - Settings stops lagging when you click between its tabs. Every render was
