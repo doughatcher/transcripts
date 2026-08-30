@@ -53,7 +53,7 @@ final class TranscriptAudio: NSObject, ObservableObject {
         if player.isPlaying { pause() } else { play() }
     }
 
-    private func play() {
+    func play() {
         guard let player else { return }
         player.play()
         playing = true
@@ -107,6 +107,10 @@ extension TranscriptAudio: AVAudioPlayerDelegate {
 /// document and the muscle memory should carry between them.
 struct TranscriptScrubber: View {
     let url: URL
+    /// Set by clicking a timestamp in the transcript. Consumed and cleared here,
+    /// so the player stays the only thing that owns playback state — the
+    /// document just says where it would like to be.
+    var seekTo: Binding<TimeInterval?> = .constant(nil)
 
     @StateObject private var audio = TranscriptAudio()
 
@@ -153,6 +157,14 @@ struct TranscriptScrubber: View {
         .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
         .task(id: url) { audio.load(url) }
         .onDisappear { audio.stop() }
+        .onChange(of: seekTo.wrappedValue) { _, target in
+            guard let target else { return }
+            audio.seek(to: target)
+            // Jumping to a moment is a request to hear it. Seeking silently and
+            // making you find the play button would be the pedantic reading.
+            audio.play()
+            seekTo.wrappedValue = nil
+        }
     }
 
     /// `mm:ss`, or `h:mm:ss` once there is an hour to show. The header card's

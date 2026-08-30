@@ -325,6 +325,17 @@ struct ContentView: View {
             // without the user needing to know why the list was short.
             try? await Task.sleep(nanoseconds: 4_000_000_000)
             model.refreshLibrary()
+            #if DEBUG
+            // Same purpose as `--seed-select-take` above, for the other kind of
+            // row — the shared transcript, whose pane holds the scrubber and the
+            // timestamp gutter. It has to wait for the scan: the library is
+            // filled by a detached task, so at first render there is nothing to
+            // select yet.
+            if CommandLine.arguments.contains("--seed-select-transcript") {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                if let first = model.library.first { selection = .transcript(first.url) }
+            }
+            #endif
         }
         .onReceive(NotificationCenter.default.publisher(
             for: UIApplication.didBecomeActiveNotification)) { _ in
@@ -915,6 +926,8 @@ private struct TranscriptPane: View {
     @State private var audio: URL?
     @State private var audioSettled = false
     @State private var query = ""
+    /// Set by tapping a timestamp; the scrubber picks it up and clears it.
+    @State private var seekTo: TimeInterval?
 
     var body: some View {
         ScrollView {
@@ -932,7 +945,7 @@ private struct TranscriptPane: View {
 
                 if entry.audioFile != nil {
                     if let audio {
-                        AudioScrubber(url: audio, disabled: model.isRecording)
+                        AudioScrubber(url: audio, disabled: model.isRecording, seekTo: $seekTo)
                     } else if !audioSettled {
                         Label("Fetching the audio…", systemImage: "icloud.and.arrow.down")
                             .font(.caption).foregroundStyle(.secondary)
@@ -1043,18 +1056,54 @@ private struct TranscriptPane: View {
     }
 
     /// One line of the document, with just enough markdown to match what the
-    /// Mac writes: `##` section headings, `**bold**` speaker names and bullet
-    /// lists. Anything fancier renders as the plain text it is.
+    /// Mac writes: `##` section headings, `**bold**` speaker names, bullet lists
+    /// and `[12:04]` turn stamps. Anything fancier renders as the plain text it
+    /// is.
     @ViewBuilder
     private func line(_ raw: String) -> some View {
         if raw.hasPrefix("#") {
             Text(raw.drop(while: { $0 == "#" }).trimmingCharacters(in: .whitespaces))
                 .font(.headline)
                 .padding(.top, 8)
+        } else if let turn = SpeakerTurns.readTurnLine(raw), let at = turn.seconds {
+            stamped(at: at, speaker: turn.speaker, text: turn.text)
+        } else if let (at, rest) = SpeakerTurns.readStamp(raw) {
+            // No speaker to name: a single-track recording, where there is
+            // nobody to attribute to but just as much timing.
+            stamped(at: at, speaker: nil, text: rest)
         } else {
             Text(highlighted(raw))
                 .font(.callout)
                 .textSelection(.enabled)
+        }
+    }
+
+    /// A turn, with its moment in a gutter you can tap to hear it.
+    ///
+    /// The same gutter the live feed has used all along — a monospaced caption in
+    /// a fixed column — so a finished transcript reads like the one you watched
+    /// being written. The speaker goes back into the text as markdown rather
+    /// than being rendered separately, which keeps search highlighting working
+    /// across the whole line.
+    @ViewBuilder
+    private func stamped(at: TimeInterval, speaker: String?, text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Button { seekTo = at } label: {
+                Text(Clock.mmss(at))
+                    .font(.caption2.monospacedDigit())
+                    .frame(width: 44, alignment: .trailing)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(audio == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.tint))
+            // Stamps still render without audio — they are the record of when
+            // something was said, which they were before they were tappable.
+            .disabled(audio == nil)
+            .accessibilityLabel("Play from \(Clock.mmss(at))")
+
+            Text(highlighted(speaker.map { "**\($0):** \(text)" } ?? text))
+                .font(.callout)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

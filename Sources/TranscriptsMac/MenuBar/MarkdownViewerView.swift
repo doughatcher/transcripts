@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import TranscriptsCore
 import TranscriptsEngine
 
 /// A lightweight, dependency-free Markdown reader for a single recording document.
@@ -15,6 +16,8 @@ struct MarkdownViewerView: View {
     @State private var frontmatter: [String: String] = [:]
     @State private var blocks: [MarkdownBlock] = []
     @State private var loadError: String?
+    /// Set by clicking a timestamp; the scrubber picks it up and clears it.
+    @State private var seekTo: TimeInterval?
 
     var body: some View {
         ScrollView {
@@ -24,7 +27,7 @@ struct MarkdownViewerView: View {
                 // Above the summary, the way the phone places it: the first
                 // thing you want after "what was this" is often "play it".
                 if let audioURL {
-                    TranscriptScrubber(url: audioURL)
+                    TranscriptScrubber(url: audioURL, seekTo: $seekTo)
                 }
 
                 if let loadError {
@@ -33,7 +36,11 @@ struct MarkdownViewerView: View {
                 }
 
                 ForEach(blocks) { block in
-                    block.view
+                    // Only wired up when there is audio to jump into; without it
+                    // the stamps still render, as the plain record of when
+                    // something was said that they were before anything was
+                    // clickable.
+                    block.view(onSeek: audioURL == nil ? nil : { seekTo = $0 })
                 }
             }
             .padding(.horizontal, 28)
@@ -176,10 +183,25 @@ struct MarkdownViewerView: View {
 /// One rendered block of the document.
 struct MarkdownBlock: Identifiable {
     let id = UUID()
-    enum Kind { case h1, h2, h3, bullet, paragraph }
+    enum Kind { case h1, h2, h3, bullet, paragraph, turn }
     let kind: Kind
     let text: String
-    @ViewBuilder var view: some View {
+    /// Seconds into the recording, for a `.turn` that carried a `[12:04]` stamp.
+    /// nil on every block of every transcript written before stamps existed,
+    /// which is what makes this render correctly without a format version.
+    var start: Double?
+    /// The speaker of a `.turn`, kept out of `text` so the stamp can sit between
+    /// the name and the words.
+    var speaker: String?
+
+    init(kind: Kind, text: String, start: Double? = nil, speaker: String? = nil) {
+        self.kind = kind
+        self.text = text
+        self.start = start
+        self.speaker = speaker
+    }
+
+    @ViewBuilder func view(onSeek: ((Double) -> Void)?) -> some View {
         switch kind {
         case .h1: Text(text).font(.title.bold()).padding(.top, 8)
         case .h2: Text(text).font(.title2.bold()).padding(.top, 6)
@@ -195,7 +217,35 @@ struct MarkdownBlock: Identifiable {
                 .lineSpacing(5)
                 .font(.body)
                 .padding(.bottom, 2)
+        case .turn:
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                if let start {
+                    Button { onSeek?(start) } label: {
+                        Text(Self.clock(start))
+                            .font(.caption.monospacedDigit())
+                            .frame(width: 52, alignment: .trailing)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(onSeek == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.tint))
+                    .disabled(onSeek == nil)
+                    .help("Play from here")
+                }
+                Self.inline(speaker.map { "**\($0):** \(text)" } ?? text)
+                    .lineSpacing(5)
+                    .font(.body)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.bottom, 2)
         }
+    }
+
+    /// `12:04` — the stamp without its brackets, which are punctuation for a
+    /// text file and clutter in a gutter.
+    static func clock(_ t: TimeInterval) -> String {
+        let total = Int(max(0, t).rounded())
+        let (h, m, s) = (total / 3600, (total % 3600) / 60, total % 60)
+        return h > 0 ? String(format: "%d:%02d:%02d", h, m, s)
+                     : String(format: "%d:%02d", m, s)
     }
 
     /// Renders inline Markdown (bold/italic/links) safely, falling back to plain text.
@@ -223,6 +273,31 @@ struct MarkdownBlock: Identifiable {
                 blocks.append(.init(kind: .h1, text: String(line.dropFirst(2))))
             } else if line.hasPrefix("- ") || line.hasPrefix("* ") {
                 blocks.append(.init(kind: .bullet, text: String(line.dropFirst(2))))
+            } else if let turn = SpeakerTurns.readTurnLine(line), turn.seconds != nil {
+                // Reflowed like any other prose — a ninety-second turn is still a
+                // wall of text — but the speaker and the stamp ride on the first
+                // paragraph and the remainder falls through as plain paragraphs.
+                // That is exactly what a long turn already did with its `**Me:**`
+                // prefix, so nothing about reading one changes.
+                let paragraphs = TranscriptFormatter.format(turn.text)
+                    .components(separatedBy: "\n\n").filter { !$0.isEmpty }
+                for (i, para) in paragraphs.enumerated() {
+                    if i == 0 {
+                        blocks.append(.init(kind: .turn, text: para,
+                                            start: turn.seconds, speaker: turn.speaker))
+                    } else {
+                        blocks.append(.init(kind: .paragraph, text: para))
+                    }
+                }
+            } else if let (seconds, rest) = SpeakerTurns.readStamp(line) {
+                // A stamped paragraph with no speaker: what a single-track
+                // recording produces, where there is nobody to attribute to.
+                let paragraphs = TranscriptFormatter.format(rest)
+                    .components(separatedBy: "\n\n").filter { !$0.isEmpty }
+                for (i, para) in paragraphs.enumerated() {
+                    blocks.append(.init(kind: i == 0 ? .turn : .paragraph, text: para,
+                                        start: i == 0 ? seconds : nil))
+                }
             } else {
                 // Break run-on transcript lines into readable paragraphs at render
                 // time, so historical transcripts (stored as one blob) read well too.

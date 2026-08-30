@@ -48,7 +48,7 @@ final class TakeAudio: NSObject, ObservableObject {
         if player.isPlaying { pause() } else { play() }
     }
 
-    private func play() {
+    func play() {
         guard let player else { return }
         do {
             // .spokenAudio is a playback mode — pairing it with .record throws
@@ -125,6 +125,11 @@ struct AudioScrubber: View {
     /// Recording and playback cannot share the audio session, so the transport
     /// goes flat rather than fighting for it.
     let disabled: Bool
+    /// Set by tapping a timestamp in a transcript. Consumed and cleared here, so
+    /// the player stays the only thing that owns playback state — the document
+    /// just says where it would like to be. Defaulted, because a take's pane has
+    /// no timestamps to tap.
+    var seekTo: Binding<TimeInterval?> = .constant(nil)
 
     @StateObject private var audio = TakeAudio()
     @State private var scrubbing = false
@@ -175,6 +180,14 @@ struct AudioScrubber: View {
         .onDisappear { audio.stop() }
         .onChange(of: disabled) { _, nowDisabled in
             if nowDisabled { audio.pause() }
+        }
+        .onChange(of: seekTo.wrappedValue) { _, target in
+            guard let target else { return }
+            audio.seek(to: target)
+            // Tapping a moment is a request to hear it — unless a recording is
+            // running, which owns the audio session and would refuse anyway.
+            if !disabled { audio.play() }
+            seekTo.wrappedValue = nil
         }
     }
 }
