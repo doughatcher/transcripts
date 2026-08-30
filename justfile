@@ -104,7 +104,8 @@ testflight:
       echo "✗ Working tree is dirty. CI builds what you push, so commit first." >&2
       exit 1
     fi
-    REMOTE="$(git remote | grep -Fxq origin && echo origin || git remote | head -1)"
+    REMOTE="$(git remote -v | awk '/github\.com.*\(push\)/{print $1; exit}')"
+    [[ -n "$REMOTE" ]] || { echo "✗ no git remote points at github.com" >&2; exit 1; }
     echo "▶ Pushing to $REMOTE"
     git push -q "$REMOTE" HEAD:main
     VERSION="$(grep -o 'MARKETING_VERSION: "[^"]*"' project.yml | tail -1 | sed 's/.*"\(.*\)"/\1/')"

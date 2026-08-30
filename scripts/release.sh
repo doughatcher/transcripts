@@ -320,7 +320,9 @@ if [[ "${PUBLISH:-1}" == "1" && "$NOTARIZE" == "1" ]]; then
       git add project.yml && git commit -qm "Stamp $VERSION" || true
     fi
     git tag -af "$TAG" -m "Transcripts $VERSION" >/dev/null
-    REMOTE="$(git remote | grep -Eqx 'origin' && echo origin || git remote | head -1)"
+    # By where it points, not by its name: a clone can carry several remotes
+    # and the first one alphabetically has no reason to be the real one.
+    REMOTE="$(git remote -v | awk '/github\.com.*\(push\)/{print $1; exit}')"
     if [[ -n "$REMOTE" ]]; then
       git push -q "$REMOTE" HEAD 2>/dev/null || true
       git push -qf "$REMOTE" "$TAG" 2>/dev/null || true
