@@ -21,7 +21,9 @@ open: project
     open Transcripts.xcodeproj
 
 # Build and install straight onto the paired iPhone and iPad, without waiting
-# for TestFlight to process a build. Same headless signing as `testflight`.
+# for TestFlight to process a build. Development signing, from the App Store
+# Connect key in .env.signing — which is fine here and is exactly why this is
+# not the path a store build takes; see `testflight`.
 #
 # Devices are addressed by devicectl identifier, never by name: this iPad is
 # named with a Unicode right quote that does not survive shell round-tripping,
@@ -81,40 +83,34 @@ devices: project
       done
     done <<< "$IDS"
 
-# Archive the iOS app and upload it to TestFlight. Signing and profiles are
-# minted headlessly from the App Store Connect API key in .env.signing
-# (gitignored) — there is no Apple ID signed into Xcode on this machine, so
-# -allowProvisioningUpdates alone would fail with "No Accounts".
-# Version and build number come from project.yml; scripts/release.sh stamps
-# them, so run this after a release (or bump them by hand for a TestFlight-only
-# iteration).
-testflight: project
+# Upload a build to TestFlight and App Store Connect, by way of CI.
+#
+# This used to archive and upload from here, and that produced a build Apple
+# rejected while the identical commit built by .github/workflows/testflight.yml
+# was accepted. The local path signed with a *development* identity, and it ran
+# none of the checks the workflow makes on the exported IPA: the assertion that
+# no networking symbol reached the binary — which is the App Store privacy
+# answer, verified rather than promised — and the ITMS-90626 Siri-description
+# check, which matters because App Store processing applies that one *after*
+# upload and then discards the build silently.
+#
+# Two upload paths meant one of them was always the untested one. So this is a
+# thin wrapper now: push, dispatch the workflow, follow it. Slower than a local
+# archive, and it produces builds that are accepted.
+testflight:
     #!/usr/bin/env bash
     set -euo pipefail
-    set -a; source .env.signing; set +a
-    KEY="$(eval echo "$ASC_KEY_PATH")"
-    echo "▶ Archiving iOS"
-    xcodebuild archive -project Transcripts.xcodeproj -scheme Transcripts \
-      -destination 'generic/platform=iOS' \
-      -archivePath .build/Transcripts-ios.xcarchive \
-      DEVELOPMENT_TEAM=6Q9BX97LMS \
-      -allowProvisioningUpdates \
-      -authenticationKeyPath "$KEY" \
-      -authenticationKeyID "$ASC_KEY_ID" \
-      -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-      > .build/ios-archive.log 2>&1 \
-      || { echo "✗ archive failed — tail of .build/ios-archive.log:" >&2; tail -20 .build/ios-archive.log >&2; exit 1; }
-    echo "▶ Uploading to App Store Connect"
-    # /usr/bin first: exportArchive builds the IPA with `rsync` from PATH and
-    # passes Apple-only flags that Homebrew's rsync 3.4.1 rejects ("syntax or
-    # usage error"), which surfaces as the unhelpful "Copy failed".
-    PATH="/usr/bin:$PATH" xcodebuild -exportArchive \
-      -archivePath .build/Transcripts-ios.xcarchive \
-      -exportOptionsPlist scripts/exportOptions-appstore.plist \
-      -allowProvisioningUpdates \
-      -authenticationKeyPath "$KEY" \
-      -authenticationKeyID "$ASC_KEY_ID" \
-      -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-      > .build/ios-upload.log 2>&1 \
-      || { echo "✗ upload failed — tail of .build/ios-upload.log:" >&2; tail -20 .build/ios-upload.log >&2; exit 1; }
-    echo "✓ Uploaded — TestFlight processes it in a few minutes."
+    if [[ -n "$(git status --porcelain)" ]]; then
+      echo "✗ Working tree is dirty. CI builds what you push, so commit first." >&2
+      exit 1
+    fi
+    REMOTE="$(git remote | grep -Fxq origin && echo origin || git remote | head -1)"
+    echo "▶ Pushing to $REMOTE"
+    git push -q "$REMOTE" HEAD:main
+    VERSION="$(grep -o 'MARKETING_VERSION: "[^"]*"' project.yml | tail -1 | sed 's/.*"\(.*\)"/\1/')"
+    echo "▶ Dispatching the TestFlight workflow for $VERSION"
+    gh workflow run testflight.yml -f version="$VERSION"
+    sleep 8
+    RUN="$(gh run list --workflow=testflight.yml --limit 1 --json databaseId -q '.[0].databaseId')"
+    echo "▶ https://github.com/hatcher-ltd/transcripts/actions/runs/$RUN"
+    gh run watch "$RUN" --exit-status
