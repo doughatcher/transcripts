@@ -1,7 +1,13 @@
 # Changelog
 
-## 1.0.4
+## 1.0.5
 
+- The iPhone and iPad icon is the violet tile the Mac already wore. The white
+  one had no edge against the App Store's white page or a light home screen.
+- Sessions can be made in Settings ▸ Sorting ▸ Sessions instead of only by
+  hand-editing `routing.json` — name, folder, when it ends, and what runs when
+  it does. Starting one from Shortcuts always worked; the picker was just empty
+  unless you had edited the file.
 - A title containing `#` or `_` survives being read. "C# to F# Migration" was
   being filed as "C to F Migration" — in the transcript, its filename and the
   Recordings list — because unwrapping the model's markdown reached inside the
