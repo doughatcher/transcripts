@@ -71,15 +71,34 @@ fi
 
 echo "▶ Building $APP_NAME ($XC_CONFIG) …"
 mkdir -p "$ROOT/.build"
-xcodebuild build \
-  ${XCSIGN[@]+"${XCSIGN[@]}"} \
-  -project "$ROOT/Transcripts.xcodeproj" \
-  -scheme "$SCHEME" \
-  -configuration "$XC_CONFIG" \
-  -destination "platform=macOS,arch=$(uname -m)" \
-  -derivedDataPath "$DERIVED" \
-  > "$ROOT/.build/xcodebuild.log" 2>&1 \
-  || { echo "✗ build failed — tail of .build/xcodebuild.log:" >&2; tail -30 "$ROOT/.build/xcodebuild.log" >&2; exit 1; }
+BUILD_LOG="$ROOT/.build/xcodebuild.log"
+XCARGS=(build
+  ${XCSIGN[@]+"${XCSIGN[@]}"}
+  -project "$ROOT/Transcripts.xcodeproj"
+  -scheme "$SCHEME"
+  -configuration "$XC_CONFIG"
+  -destination "platform=macOS,arch=$(uname -m)"
+  -derivedDataPath "$DERIVED")
+
+# Locally the log is noise and lives in a file. In CI it is the only evidence
+# there will ever be: GitHub serves a job's log only once the job ends, so a
+# build that hangs rather than fails leaves a file nobody can read and a step
+# that says nothing for forty minutes. Stream it there, and let the workflow
+# keep the file as an artifact.
+set +e
+if [[ -n "${CI:-}" ]]; then
+  xcodebuild "${XCARGS[@]}" 2>&1 | tee "$BUILD_LOG"
+  BUILD_RC=${PIPESTATUS[0]}
+else
+  xcodebuild "${XCARGS[@]}" > "$BUILD_LOG" 2>&1
+  BUILD_RC=$?
+fi
+set -e
+if [[ "$BUILD_RC" -ne 0 ]]; then
+  echo "✗ build failed — tail of .build/xcodebuild.log:" >&2
+  tail -30 "$BUILD_LOG" >&2
+  exit 1
+fi
 
 BUILT="$DERIVED/Build/Products/$XC_CONFIG/$APP_NAME.app"
 [[ -d "$BUILT" ]] || { echo "✗ no bundle at $BUILT" >&2; exit 1; }

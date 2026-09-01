@@ -160,6 +160,16 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: gh workflow run testflight.yml -f version="${VERSION%%-*}"
 
+      # Survives a cancel or a timeout, which is exactly when it is wanted: the
+      # streamed step log is lost if the job never ends on its own.
+      - name: Keep the build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log-${{ inputs.version }}
+          path: .build/xcodebuild.log
+          if-no-files-found: warn
+
       - name: Keep the zip
         if: always()
         uses: actions/upload-artifact@v4
