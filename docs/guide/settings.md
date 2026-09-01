@@ -13,11 +13,28 @@ Open Settings from the menu-bar menu. Six panes.
 - **Auto-record** — watch for calls and start on its own.
 - **Capture system audio** — record the other participants as well as you.
 - **Launch at login** — start with the Mac.
-- **Menu bar icon** and **recording colour** — the Transcripts mark (a line of
-  text over a waveform, after the app icon), a plain waveform, or a microphone,
-  and the colour it turns while recording. The icon dims when auto-record is
-  off, shows solid while watching, and pulses with the input level while
-  recording.
+- **Menu bar icon** and **recording colour** — how the menu bar shows what
+  Transcripts is doing, and the colour it turns while recording.
+
+  The default is **transport**, borrowed from a tape deck: a square when
+  stopped, a hollow record light while auto-record is watching, and a filled
+  disc while rolling, with a ring around it that swells with the input level.
+  Three different shapes, so the state is legible from the corner of your eye.
+
+  Also on offer: the **Transcripts mark** (a line of text over a waveform, after
+  the app icon), a plain **waveform**, or a **microphone**. These keep the older
+  behaviour of one shape that dims when auto-record is off, shows solid while
+  watching, and pulses with the input level while recording.
+- **My microphone records a room** — for an in-person meeting, a game night or
+  an interview, where several people share one microphone. Transcripts splits
+  that track by voice rather than treating all of it as you, and each voice can
+  be named. Detected calls are left alone: there the other side is captured on
+  its own track, which is better evidence than any clustering.
+
+  More voices than people is normal. Someone doing an accent genuinely sounds
+  like someone else, and several voices can be named as the same person. The
+  slider leans towards splitting for that reason — two people merged into one
+  voice cannot be separated afterwards, while one person split in two can.
 - **Recent recordings in menu** — how many to list. The Recordings window always
   shows everything.
 

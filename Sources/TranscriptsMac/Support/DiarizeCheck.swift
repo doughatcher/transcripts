@@ -9,6 +9,11 @@ import TranscriptsEngine
 ///
 ///   TRANSCRIPTS_DIARIZE=/path/to/call.m4a ~/Applications/Transcripts.app/Contents/MacOS/Transcripts
 ///
+/// For a room recording — one microphone, several people — set `TRANSCRIPTS_ROOM=1`
+/// to loosen the short-speech gate, and `TRANSCRIPTS_CLUSTER=0.65` to sweep the
+/// sensitivity. This is the way to find out how many voices a real recording
+/// actually resolves into, rather than guessing at a setting.
+///
 /// Exit codes: 0 = diarization produced speaker spans · 1 = no such file ·
 /// 3 = diarization unavailable (model download blocked?) — timestamped
 /// transcription is still exercised so Tier 1 attribution stays verifiable.
@@ -16,6 +21,16 @@ import TranscriptsEngine
 enum DiarizeCheck {
     static var requestedPath: String? {
         ProcessInfo.processInfo.environment["TRANSCRIPTS_DIARIZE"]
+    }
+
+    /// One microphone with a room in front of it.
+    static var roomMode: Bool {
+        ProcessInfo.processInfo.environment["TRANSCRIPTS_ROOM"] == "1"
+    }
+
+    /// Clustering sensitivity override (lower = more speakers); nil = default.
+    static var clusteringThreshold: Float? {
+        Float(ProcessInfo.processInfo.environment["TRANSCRIPTS_CLUSTER"] ?? "")
     }
 
     static func runAndExit(path: String) {
@@ -37,9 +52,14 @@ enum DiarizeCheck {
         var diarizationOK = false
         do {
             print("• diarizing (first run downloads the Core ML models) …")
+            if roomMode {
+                print("• room mode, sensitivity \(clusteringThreshold.map { String(format: "%.2f", $0) } ?? "default")")
+            }
             // rememberVoices off: a probe must never write to the profile store.
-            let outcome = try await FluidAudioDiarizer(rememberVoices: false)
-                .diarize(systemAudio: url, micAudio: nil)
+            let outcome = try await FluidAudioDiarizer(rememberVoices: false,
+                                                       clusteringThreshold: clusteringThreshold,
+                                                       roomMode: roomMode)
+                .diarize(track: url, enrollSelfFrom: nil)
             spans = SpeakerTurns.renumber(outcome.spans)
             diarizationOK = true
             let speakers = Set(spans.map(\.speaker)).sorted()

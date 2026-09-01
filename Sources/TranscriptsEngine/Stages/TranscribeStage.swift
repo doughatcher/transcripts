@@ -26,7 +26,18 @@ public extension Transcriber {
 /// the implementation refresh the operator's own profile from the one track
 /// whose speaker is known by construction.
 public protocol Diarizer: Sendable {
-    func diarize(systemAudio: URL, micAudio: URL?) async throws -> DiarizationOutcome
+    /// Splits `track` into per-speaker spans.
+    ///
+    /// `enrollSelfFrom` is a track known to be the operator alone, used to seed
+    /// the "Me" voice so their bleed into `track` folds into one cluster. It is
+    /// nil when no such track exists — notably a room recording, where the one
+    /// microphone carries everybody and there is no slice that is reliably you.
+    ///
+    /// Named `track` rather than `systemAudio` on purpose: while this said
+    /// "systemAudio" it read as call-only machinery, and the fact that it works
+    /// perfectly well on a microphone that happens to have five people in front
+    /// of it went unnoticed.
+    func diarize(track: URL, enrollSelfFrom: URL?) async throws -> DiarizationOutcome
 }
 
 /// Placeholder transcriber used until WhisperKit is wired. It produces a clearly
@@ -48,27 +59,41 @@ public struct TranscribeStage: PipelineStage {
     /// (or when it fails) the other participants are labeled as one voice.
     public let diarizer: (any Diarizer)?
 
-    public init(transcriber: Transcriber, model: String, diarizer: (any Diarizer)? = nil) {
+    public init(transcriber: Transcriber, model: String, diarizer: (any Diarizer)? = nil,
+                roomMode: Bool = false) {
         self.transcriber = transcriber
         self.model = model
         self.diarizer = diarizer
+        self.roomMode = roomMode
     }
+
+    /// True when the microphone is expected to carry more than one person, so
+    /// the mic track is split by voice instead of being taken as the operator.
+    public let roomMode: Bool
 
     /// Uses the on-device `SpeechTranscriber` engine on macOS 26+, falling back to
     /// the stub on older systems (where the pipeline still runs, just without real
     /// speech-to-text).
-    public init(model: String, rememberVoices: Bool = false, matchThreshold: Float = 0.65) {
+    public init(model: String, rememberVoices: Bool = false, matchThreshold: Float = 0.65,
+                roomMode: Bool = false, clusteringThreshold: Float? = nil) {
         if #available(macOS 26, iOS 26, *) {
             self.transcriber = SpeechTranscriberEngine()
         } else {
             self.transcriber = StubTranscriber()
         }
         self.model = model
+        self.roomMode = roomMode
         // No diarizer → the other side stays a single "Others" (the reliable
         // default). Diarization + name-matching only when the user opts in, since
         // naming voices is best-effort and will occasionally misattribute.
-        self.diarizer = rememberVoices
-            ? FluidAudioDiarizer(rememberVoices: true, matchThreshold: matchThreshold) : nil
+        //
+        // Room mode needs it regardless of `rememberVoices`: telling five people
+        // at a table apart is the entire point there, and is useful long before
+        // anyone has been given a name.
+        self.diarizer = (rememberVoices || roomMode)
+            ? FluidAudioDiarizer(rememberVoices: rememberVoices, matchThreshold: matchThreshold,
+                                 clusteringThreshold: clusteringThreshold, roomMode: roomMode)
+            : nil
     }
 
     public func run(_ context: inout PipelineContext) async throws {
@@ -83,7 +108,38 @@ public struct TranscribeStage: PipelineStage {
         var speakers: [String] = []
         var speakerConfidence: [String: Float] = [:]
         var speakerAffiliations: [String: String] = [:]
-        if let micURL = rec.micAudioURL, let sysURL = rec.systemAudioURL {
+        // A room recording is the other shape this can take: one microphone with
+        // everybody in front of it. The call layout — mic is you, system audio is
+        // them — is exactly wrong there, and taking it would label the whole
+        // table "Me".
+        let roomTrack: URL? = roomMode ? (rec.micAudioURL ?? audioURL) : nil
+        if let roomTrack {
+            if let attributed = await roomTranscript(micURL: roomTrack) {
+                transcriptBlock = attributed.markdown
+                speakers = attributed.speakers
+                speakerConfidence = attributed.confidence
+                speakerAffiliations = attributed.affiliations
+                if !attributed.embeddings.isEmpty,
+                   let data = try? JSONEncoder().encode(attributed.embeddings) {
+                    let embURL = context.scratchDir.appendingPathComponent("speaker-embeddings.json")
+                    try? data.write(to: embURL, options: .atomic)
+                    context.userInfo["speakerEmbeddings"] = embURL.path
+                }
+                // Clips come off the same track that was diarized, so the naming
+                // grid can play each voice back and ask who it is.
+                let clips = await cutSpeakerClips(attributed.sampleWindows, from: roomTrack,
+                                                  into: context.scratchDir)
+                if !clips.isEmpty, let data = try? JSONEncoder().encode(clips) {
+                    let clipsURL = context.scratchDir.appendingPathComponent("speaker-clips.json")
+                    try? data.write(to: clipsURL, options: .atomic)
+                    context.userInfo["speakerClips"] = clipsURL.path
+                }
+                if !attributed.confidence.isEmpty,
+                   let data = try? JSONEncoder().encode(attributed.confidence) {
+                    context.userInfo["speakerConfidence"] = String(decoding: data, as: UTF8.self)
+                }
+            }
+        } else if let micURL = rec.micAudioURL, let sysURL = rec.systemAudioURL {
             if let attributed = await attributedTranscript(
                 micURL: micURL, sysURL: sysURL, offset: rec.systemAudioStartOffset ?? 0) {
                 transcriptBlock = attributed.markdown
@@ -203,6 +259,56 @@ public struct TranscribeStage: PipelineStage {
         return clips
     }
 
+    /// One track, everybody on it.
+    ///
+    /// Simpler than the call path in the way that matters: there is no "your
+    /// side" to hold aside, so every cluster the diarizer finds is just another
+    /// person at the table and gets a Speaker number, or a name when one of the
+    /// enrolled voices matches it.
+    private func roomTranscript(
+        micURL: URL
+    ) async -> (markdown: String, speakers: [String], embeddings: [String: [Float]],
+                sampleWindows: [String: (start: Double, seconds: Double)],
+                confidence: [String: Float], affiliations: [String: String])? {
+        do {
+            let noSpeech = "[no speech detected]"
+            let segments = try await transcriber.transcribeSegments(audioURL: micURL, model: model)
+                .filter { $0.text != noSpeech }
+            guard !segments.isEmpty, let diarizer else { return nil }
+
+            let outcome: DiarizationOutcome
+            do {
+                outcome = try await diarizer.diarize(track: micURL, enrollSelfFrom: nil)
+            } catch {
+                // The recording still stands as a plain transcript; losing the
+                // speaker labels must never cost the evening.
+                Log.write("transcribe: room diarization unavailable (\(error)) — one unlabeled transcript")
+                return nil
+            }
+
+            let map = SpeakerTurns.labelMap(outcome.spans)
+            let spans = SpeakerTurns.renumber(outcome.spans)
+            var embeddings: [String: [Float]] = [:]
+            var confidence: [String: Float] = [:]
+            var affiliations: [String: String] = [:]
+            for (id, emb) in outcome.embeddings { embeddings[map[id] ?? id] = emb }
+            for (id, c) in outcome.confidence { confidence[map[id] ?? id] = c }
+            for (id, a) in outcome.affiliations { affiliations[map[id] ?? id] = a }
+
+            let labeled = SpeakerTurns.assign(segments, spans: spans, fallback: "Speaker 1")
+                .map { AttributedSegment(speaker: $0.speaker, start: $0.start, text: $0.text) }
+            let turns = SpeakerTurns.turns(labeled)
+            guard !turns.isEmpty else { return nil }
+            let found = SpeakerTurns.speakers(turns)
+            Log.write("transcribe: room — \(turns.count) turn(s) across \(found.count) voice(s): \(found.joined(separator: ", "))")
+            return (SpeakerTurns.markdown(turns, timed: Self.isTimed(segments)), found,
+                    embeddings, SpeakerTurns.sampleWindows(spans), confidence, affiliations)
+        } catch {
+            Log.write("transcribe: room attribution failed (\(error)) — using the plain transcript")
+            return nil
+        }
+    }
+
     private func attributedTranscript(
         micURL: URL, sysURL: URL, offset: Double
     ) async -> (markdown: String, speakers: [String], embeddings: [String: [Float]],
@@ -221,7 +327,7 @@ public struct TranscribeStage: PipelineStage {
             var affiliations: [String: String] = [:]
             if let diarizer, !theirs.isEmpty {
                 do {
-                    let outcome = try await diarizer.diarize(systemAudio: sysURL, micAudio: micURL)
+                    let outcome = try await diarizer.diarize(track: sysURL, enrollSelfFrom: micURL)
                     // Named voices (from our matcher) pass through; anonymous
                     // clusters become "Speaker N". Re-key embeddings/confidence to
                     // the display labels so downstream speaks the same language.

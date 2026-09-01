@@ -35,10 +35,26 @@ public enum SpeakerMatch {
 
     public struct Profile: Equatable, Sendable {
         public let name: String
-        public let embedding: [Float]
-        public init(name: String, embedding: [Float]) {
+        /// Every remembered voiceprint for this person, matched individually.
+        ///
+        /// Individually, not averaged, because one person does not necessarily
+        /// have one voice. A player running a character at a table speaks in a
+        /// register nothing like their own, and the mean of the two is a voice
+        /// that matches neither of them.
+        public let embeddings: [[Float]]
+
+        public init(name: String, embeddings: [[Float]]) {
             self.name = name
-            self.embedding = embedding
+            self.embeddings = embeddings
+        }
+
+        public init(name: String, embedding: [Float]) {
+            self.init(name: name, embeddings: [embedding])
+        }
+
+        /// Closeness to the nearest remembered voice, not the average one.
+        public func similarity(to embedding: [Float]) -> Float {
+            embeddings.map { VoiceMath.cosine(embedding, $0) }.max() ?? 0
         }
     }
 
@@ -51,13 +67,24 @@ public enum SpeakerMatch {
     /// its profile outright, and because each profile is single-use, a loosely
     /// similar second cluster can't also claim it. Determinism (ties broken by
     /// cluster then name) keeps the output stable across runs.
+    ///
+    /// `oneClusterPerPerson` is that single-use rule, and it is the default
+    /// because on a call it is true and load-bearing — without it one loosely
+    /// similar voice after another claims the same colleague, which is how a
+    /// four-person call once came out with seven people in it.
+    ///
+    /// A room recording turns it off. When somebody runs three characters in an
+    /// evening the diarizer quite correctly reports three voices, and all three
+    /// of them are that person; refusing to name more than one of them leaves
+    /// the rest as anonymous Speaker numbers forever.
     public static func assign(clusters: [String: [Float]],
                               profiles: [Profile],
-                              threshold: Float) -> [Assignment] {
+                              threshold: Float,
+                              oneClusterPerPerson: Bool = true) -> [Assignment] {
         var pairs: [(cluster: String, name: String, sim: Float)] = []
         for (cluster, emb) in clusters {
             for profile in profiles {
-                pairs.append((cluster, profile.name, VoiceMath.cosine(emb, profile.embedding)))
+                pairs.append((cluster, profile.name, profile.similarity(to: emb)))
             }
         }
         pairs.sort {
@@ -70,7 +97,8 @@ public enum SpeakerMatch {
         var takenProfiles = Set<String>()
         var byCluster: [String: Assignment] = [:]
         for p in pairs where p.sim >= threshold {
-            guard !takenClusters.contains(p.cluster), !takenProfiles.contains(p.name) else { continue }
+            guard !takenClusters.contains(p.cluster) else { continue }
+            if oneClusterPerPerson, takenProfiles.contains(p.name) { continue }
             takenClusters.insert(p.cluster)
             takenProfiles.insert(p.name)
             byCluster[p.cluster] = Assignment(cluster: p.cluster, name: p.name, confidence: p.sim)
