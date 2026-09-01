@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import TranscriptsCore
+import TranscriptsEngine
 import UserNotifications
 
 struct SettingsView: View {
@@ -83,12 +84,24 @@ struct SettingsView: View {
                 TextField("Archive codec", text: binding(\.archiveCodec))
                 NotificationStatusRow()
             }
+            Section("Overlay") {
+                Toggle("Show the overlay during calls", isOn: binding(\.overlay.enabled))
+                Text("A small floating panel showing key facts, and answers to questions raised — drawn only from what was said in the call and from your notes. It never answers from the model's own knowledge, and always says where an answer came from.")
+                    .font(.caption2).foregroundStyle(.secondary)
+                Toggle("Search my notes for answers", isOn: binding(\.overlay.searchNotes))
+                    .disabled(!controller.config.overlay.enabled)
+                Text(controller.config.overlay.searchNotes
+                     ? "Reads the Markdown notes under your transcripts folder to answer questions. Everything stays on this Mac."
+                     : "Answers come only from earlier in the same call.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
             Section("App") {
                 Toggle("Launch Transcripts at login", isOn: Binding(
                     get: { launchAtLogin },
                     set: { controller.setLaunchAtLogin($0); launchAtLogin = $0 }
                 ))
                 Picker("Menu bar icon", selection: binding(\.menuBarIcon)) {
+                    Text("Transport (stop · standby · record)").tag(MenuBarIconStyle.transport)
                     Text("Transcripts mark").tag(MenuBarIconStyle.mark)
                     Text("Waveform").tag(MenuBarIconStyle.waveform)
                     Text("Microphone").tag(MenuBarIconStyle.microphone)
@@ -149,6 +162,26 @@ struct SettingsView: View {
 
     private var voicesTab: some View {
         Form {
+            Section("In-person recordings") {
+                Toggle("My microphone records a room", isOn: binding(\.micRecordsARoom))
+                Text("For meetings, games or interviews where several people share one microphone. Transcripts splits the microphone track by voice instead of treating all of it as you. Detected calls are unaffected — there the other side is captured separately, which is better evidence than any clustering.")
+                    .font(.caption2).foregroundStyle(.secondary)
+                Slider(value: binding(\.roomVoiceSensitivity), in: 0.55...0.80, step: 0.01) {
+                    Text("Telling voices apart")
+                } minimumValueLabel: {
+                    Text("Split").font(.caption2)
+                } maximumValueLabel: {
+                    Text("Merge").font(.caption2)
+                }
+                .disabled(!controller.config.micRecordsARoom)
+                Text(controller.config.roomVoiceSensitivity > 0
+                     ? "At \(String(format: "%.2f", controller.config.roomVoiceSensitivity)) — small changes matter a lot here."
+                     : "Using the default (\(String(format: "%.2f", FluidAudioDiarizer.roomClusteringThreshold))), which leans towards splitting.")
+                    .font(.caption2).foregroundStyle(.secondary)
+                Text("More voices than people is normal and fine: someone doing a character genuinely sounds like someone else, and you can name several voices as the same person. Two people merged into one voice cannot be separated afterwards, so err towards splitting.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+
             Section("Speaker names") {
                 Toggle("Name speakers automatically (best-effort)", isOn: binding(\.rememberVoices))
                 Text("Off by default, transcripts label your voice **Me** and everyone else **Others** - always correct. Turn this on and Transcripts splits the other side into individual people and learns their voices to name them on future calls.")

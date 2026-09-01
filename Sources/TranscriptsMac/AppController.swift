@@ -92,11 +92,39 @@ final class AppController: ObservableObject {
         let micAudioURL: URL
         let systemAudioURL: URL?
         let systemAudioStartOffset: Double?
+
+        var persisted: RelaunchState.Fragment {
+            RelaunchState.Fragment(startedAt: startedAt,
+                                   micAudioPath: micAudioURL.path,
+                                   systemAudioPath: systemAudioURL?.path,
+                                   systemAudioStartOffset: systemAudioStartOffset)
+        }
+
+        init(startedAt: Date, micAudioURL: URL, systemAudioURL: URL?, systemAudioStartOffset: Double?) {
+            self.startedAt = startedAt
+            self.micAudioURL = micAudioURL
+            self.systemAudioURL = systemAudioURL
+            self.systemAudioStartOffset = systemAudioStartOffset
+        }
+
+        init(_ f: RelaunchState.Fragment) {
+            startedAt = f.startedAt
+            micAudioURL = URL(fileURLWithPath: f.micAudioPath)
+            systemAudioURL = f.systemAudioPath.map { URL(fileURLWithPath: $0) }
+            systemAudioStartOffset = f.systemAudioStartOffset
+        }
     }
 
     /// Fragments awaiting stitching. Cleared when a recording starts fresh, so a
     /// crash or a new meeting can't graft yesterday's audio onto today's.
-    private var carriedFragments: [CarriedFragment] = []
+    ///
+    /// Mirrored to disk on every change: these used to live only in memory, which
+    /// meant restarting the app during a meeting lost the pieces it had already
+    /// set aside. Persisting them is what lets one evening survive several
+    /// rebuilds and still come out as a single recording.
+    private var carriedFragments: [CarriedFragment] = [] {
+        didSet { relaunch.saveFragments(carriedFragments.map(\.persisted)) }
+    }
     /// Voice profiles (#6 Tier B): pending "remember this voice?" suggestions
     /// surfaced as menu banners. Note the pipeline's diarizer writes the same
     /// speakers.json via its own store instance; both sides do load-modify-save
@@ -112,6 +140,20 @@ final class AppController: ObservableObject {
     private var liveTranscript: LiveTranscript?
     private var liveMicTranscriber: Any?
     private var liveSystemTranscriber: Any?
+    /// The overlay's engine and panel. `Any`-typed for the same reason the
+    /// transcribers are: the overlay only has turns to work with on macOS 26.
+    private var overlayEngine: Any?
+    private let overlayPanel = OverlayPanel()
+    /// Marker + fragment store that lets a relaunch pick a meeting back up.
+    private let relaunch = RelaunchState(directory: HistoryStore.dir)
+    /// Timer that lets a call with no questions still accrue facts.
+    private var overlayTimer: Timer?
+    /// True while the overlay is showing. Published so the menu's toggle and the
+    /// panel's own close button can never disagree about the state.
+    @Published private(set) var overlayVisible = false
+    /// Fragments carried into the current recording by a relaunch — surfaced in
+    /// the menu so a resumed meeting is visible rather than merely logged.
+    @Published private(set) var resumedFragmentCount = 0
     /// The history record for the in-flight recording.
     private var currentRecordID: UUID?
     /// True while the current recording was auto-started by call detection, so we
@@ -262,9 +304,14 @@ final class AppController: ObservableObject {
 
     /// `isRecovery` marks a dead-mic auto-restart: the session's dead-device list
     /// is kept (so the silent mic can't be re-picked) instead of reset.
-    func startRecording(isRecovery: Bool = false) {
+    /// `continuing` marks a resume after the app was restarted mid-meeting: like
+    /// `isRecovery` it keeps the fragments already set aside, because the whole
+    /// point is that this is the same meeting.
+    func startRecording(isRecovery: Bool = false, continuing: Bool = false) {
         guard recorder == nil else { return }
-        if !isRecovery { deadInputUIDs.removeAll(); pendingRecoveryDevice = nil; carriedFragments.removeAll() }
+        if !isRecovery && !continuing {
+            deadInputUIDs.removeAll(); pendingRecoveryDevice = nil; carriedFragments.removeAll()
+        }
         deadAirSnoozeUntil = nil
         lastLiveTurnAt = nil
         liveStallWarned = false
@@ -350,6 +397,10 @@ final class AppController: ObservableObject {
                     callKey: callKey, namedFromWindow: meetingName != nil, renamedByUser: nil,
                     silent: nil))
                 self.refreshRecents()
+                // The marker is what tells the next launch this meeting was still
+                // going. Deleted only by a deliberate stop.
+                relaunch.writeMarker(RelaunchState.Marker(
+                    startedAt: now, title: title, isCall: self.recordingIsCall, heartbeatAt: now))
                 Log.write("startRecording: capturing into \(dir.path)")
                 if #available(macOS 26, *) {
                     self.startLiveTranscript(recorder: rec, title: title, startedAt: now,
@@ -376,6 +427,9 @@ final class AppController: ObservableObject {
         systemCapturer = nil
         let recordID = currentRecordID
         currentRecordID = nil
+        // A carry-forward stop is a pause in one meeting, so the marker stays and
+        // the next launch resumes. Only a deliberate stop retires it.
+        if !carryForward { relaunch.clearMarker(); resumedFragmentCount = 0 }
         finishLiveTranscript()
         do {
             var recording = try rec.stop()
@@ -523,11 +577,13 @@ final class AppController: ObservableObject {
 
         let mic = LiveTrackTranscriber { [weak self] seg in
             Task { @MainActor in
-                self?.lastLiveTurnAt = Date()
-                self?.liveTranscript?.append(speaker: "Me", start: seg.start, text: seg.text)
+                self?.appendLiveTurn(speaker: "Me", start: seg.start, text: seg.text)
             }
+        } onPartial: { [weak self] text in
+            Task { @MainActor in self?.showLivePartial(speaker: "Me", text: text) }
         }
         liveMicTranscriber = mic
+        startOverlay()
         Task { @MainActor in
             if await mic.start() {
                 rec.onBuffer = { [weak mic] buffer in mic?.feed(buffer) }
@@ -549,9 +605,10 @@ final class AppController: ObservableObject {
                 if case .recording(let since) = self.state, let first = capturer?.firstSampleAt {
                     start += first.timeIntervalSince(since)
                 }
-                self.lastLiveTurnAt = Date()
-                self.liveTranscript?.append(speaker: "Others", start: start, text: seg.text)
+                self.appendLiveTurn(speaker: "Others", start: start, text: seg.text)
             }
+        } onPartial: { [weak self] text in
+            Task { @MainActor in self?.showLivePartial(speaker: "Others", text: text) }
         }
         liveSystemTranscriber = sys
         Task { @MainActor in
@@ -566,9 +623,146 @@ final class AppController: ObservableObject {
         }
     }
 
+    /// Everything that happens when a live engine finalizes a turn, in one
+    /// place: the file both readers watch, and the overlay. The two tracks used
+    /// to do this separately and had already drifted apart once.
+    private func appendLiveTurn(speaker: String, start: Double, text: String) {
+        lastLiveTurnAt = Date()
+        liveTranscript?.append(speaker: speaker, start: start, text: text)
+        if let engine = overlayEngine as? OverlayEngine {
+            Task { await engine.ingest(speaker: speaker, start: start, text: text) }
+        }
+    }
+
+    /// The live edge: text still being revised, which reaches the screen seconds
+    /// before the analyzer is willing to call the phrase finished. It goes to
+    /// the overlay's pill and to a clearly-marked section of the live file, and
+    /// never into the transcript itself.
+    private func showLivePartial(speaker: String, text: String) {
+        liveTranscript?.setPartial(speaker: speaker, text: text)
+        if overlayVisible { overlayPanel.showPartial(text) }
+    }
+
+    // MARK: - Overlay
+
+    /// Builds the overlay for this call and shows its panel.
+    ///
+    /// The vault index is built off the main actor before the engine starts: on
+    /// a large vault it is seconds of file reading, and it must not be seconds
+    /// the recorder spends not recording. Until it lands the overlay answers
+    /// from the call alone, which is the same behaviour as having no notes.
+    private func startOverlay() {
+        guard config.overlay.enabled else { return }
+        let cfg = config
+        let model = Self.makeChatModel(for: cfg)
+        var options = OverlayEngine.Options()
+        // No language model in the chain means nothing can phrase an answer;
+        // the engine quotes and attributes the best passage instead of asking
+        // ExtractiveChatModel for JSON it does not produce. See OverlayEngine.
+        options.retrievalOnly = !Self.hasLanguageModel(for: cfg)
+
+        // Which lanes can actually fill is decided here, so say so once rather
+        // than leaving "why is Facts always empty" to be guessed at.
+        Log.write("overlay: \(llmStatus)\(options.retrievalOnly ? " — retrieval only, no conclusion/facts lanes" : "")")
+        let engine = OverlayEngine(model: model, vault: nil, options: options) { [weak self] cards in
+            Task { @MainActor in self?.overlayPanel.update(cards) }
+        }
+        overlayEngine = engine
+
+        if cfg.overlay.searchNotes {
+            let root = cfg.destinations.resolvedRoot
+            Task.detached(priority: .utility) {
+                let index = PassageIndex.vault(root: root)
+                Log.write("overlay: indexed \(index.count) passages from \(root.path)")
+                await engine.attach(vault: index)
+            }
+        }
+
+        overlayPanel.onClose = { [weak self] in self?.hideOverlay() }
+        // Persisted when the drag settles, so a dragged position survives a crash
+        // rather than only a clean quit. `config`'s didSet writes it.
+        overlayPanel.onMoved = { [weak self] origin in
+            guard let self else { return }
+            self.config.overlay.originX = origin.x
+            self.config.overlay.originY = origin.y
+        }
+        let origin = cfg.overlay.originX.flatMap { x in
+            cfg.overlay.originY.map { CGPoint(x: x, y: $0) }
+        }
+        overlayPanel.show(origin: origin)
+        overlayVisible = true
+
+        // A quiet stretch still deserves the facts from the stretch before it.
+        overlayTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let engine = self?.overlayEngine as? OverlayEngine else { return }
+                await engine.tick()
+            }
+        }
+    }
+
+    /// Tears the overlay down. Safe to call when it was never started.
+    private func stopOverlay() {
+        overlayTimer?.invalidate()
+        overlayTimer = nil
+        overlayEngine = nil
+        hideOverlay()
+    }
+
+    /// Hides the panel for the rest of this call without discarding what the
+    /// engine has gathered — showing it again brings the cards back.
+    func hideOverlay() {
+        // Remember where it was dragged to. Assigning to `config` persists it
+        // (see its `didSet`), which is why this is done once here rather than
+        // on every frame of a drag.
+        if let origin = overlayPanel.currentOrigin,
+           origin.x != config.overlay.originX || origin.y != config.overlay.originY {
+            config.overlay.originX = origin.x
+            config.overlay.originY = origin.y
+        }
+        overlayPanel.hide()
+        overlayVisible = false
+    }
+
+    /// Menu action. Only meaningful while a recording with an engine is running.
+    func toggleOverlay() {
+        guard overlayEngine != nil else { return }
+        if overlayVisible {
+            hideOverlay()
+        } else {
+            let origin = config.overlay.originX.flatMap { x in
+                config.overlay.originY.map { CGPoint(x: x, y: $0) }
+            }
+            overlayPanel.show(origin: origin)
+            overlayVisible = true
+            // Bring back what the engine already has, rather than an empty panel
+            // waiting on the next turn.
+            if let engine = overlayEngine as? OverlayEngine {
+                Task { @MainActor in
+                    let digest = await engine.digest()
+                    self.overlayPanel.update(digest)
+                }
+            }
+        }
+    }
+
+    /// Whether the resolved chain has anything that can actually write a
+    /// sentence. Mirrors `makeChatModel`'s ordering.
+    static func hasLanguageModel(for cfg: AppConfig) -> Bool {
+        if cfg.llmProvider == .ollama { return true }
+        #if canImport(FoundationModels)
+        if FoundationModelsChatModel.isAvailable { return true }
+        #endif
+        #if arch(arm64)
+        if MLXChatModel.isAvailable { return true }
+        #endif
+        return false
+    }
+
     /// Finalizes both live engines and stamps the live doc "ended". The batch
     /// pipeline (running next) produces the authoritative vault document.
     private func finishLiveTranscript() {
+        stopOverlay()
         guard #available(macOS 26, *) else { return }
         let mic = liveMicTranscriber as? LiveTrackTranscriber
         let sys = liveSystemTranscriber as? LiveTrackTranscriber
@@ -647,6 +841,9 @@ final class AppController: ObservableObject {
                     // Window titles improve mid-call (join screen → the real
                     // meeting window) — re-sample every ~15s and upgrade.
                     if self.tick % 15 == 0 { self.refreshMeetingContext() }
+                    // Keeps the relaunch marker fresh, so a three-hour session
+                    // stays resumable rather than ageing out of the window.
+                    if self.tick % 30 == 0 { self.relaunch.heartbeat() }
                 }
                 // Dead-mic trip wire: fires only on *digital* silence (a dead or
                 // hardware-muted device). A healthy mic in a quiet room shows
@@ -894,7 +1091,14 @@ final class AppController: ObservableObject {
 
     private func runPipeline(for recording: Recording, recordID: UUID? = nil, seedTranscript: URL? = nil, retryAttempt: Int = 0) {
         let cfg = config
-        let stages = nativeStages(for: cfg)
+        // Room mode describes a microphone with several people in front of it,
+        // which a detected call is definitionally not: there the mic is you and
+        // the system track is everyone else, and that split is better evidence
+        // than any amount of clustering. Deciding it per recording rather than
+        // once in Settings is what lets the same Mac record a game night and a
+        // Teams call without the setting being wrong for one of them.
+        let isCall = recordID.flatMap { id in history.records.first { $0.id == id }?.isCall } ?? false
+        let stages = nativeStages(for: cfg, roomMode: cfg.micRecordsARoom && !isCall)
         let runner: CommandRunner = ProcessCommandRunner()
         let engine = PipelineEngine(config: cfg, runner: runner, nativeStages: stages) { msg in
             Log.write("pipeline: \(msg)")
@@ -1394,14 +1598,26 @@ final class AppController: ObservableObject {
             audioURL: audio, startedAt: r.recordedAt, endedAt: r.endedAt ?? Date(),
             activeApp: r.activeApp.map { ActiveAppContext(appName: $0, capturedAt: r.recordedAt) })
         if let dir = r.captureDir.map({ URL(fileURLWithPath: $0) }) {
-            let mic = dir.appendingPathComponent("audio.caf")
-            let system = dir.appendingPathComponent("system.caf")
             let fm = FileManager.default
-            if fm.fileExists(atPath: mic.path), fm.fileExists(atPath: system.path) {
+            // Prefer the assembled tracks when the meeting was stitched back
+            // together from fragments. `audio.caf` is only the *last* fragment —
+            // on a session that survived a few relaunches that is the final few
+            // minutes of the evening, and reprocessing from it would quietly
+            // throw away the other three hours.
+            let assembledMic = dir.appendingPathComponent("meeting-mic.m4a")
+            let assembledSystem = dir.appendingPathComponent("meeting-system.m4a")
+            let mic = fm.fileExists(atPath: assembledMic.path)
+                ? assembledMic : dir.appendingPathComponent("audio.caf")
+            let system = fm.fileExists(atPath: assembledSystem.path)
+                ? assembledSystem : dir.appendingPathComponent("system.caf")
+            if fm.fileExists(atPath: mic.path) {
                 rec.micAudioURL = mic
-                rec.systemAudioURL = system
-                rec.systemAudioStartOffset = 0
-                Log.write("recovery: both tracks present — diarizing from mic + system")
+                if fm.fileExists(atPath: system.path) {
+                    rec.systemAudioURL = system
+                    rec.systemAudioStartOffset = 0
+                }
+                Log.write("recovery: reprocessing from \(mic.lastPathComponent)"
+                          + (rec.systemAudioURL != nil ? " + \(system.lastPathComponent)" : ""))
             }
         }
         return rec
@@ -1522,6 +1738,21 @@ final class AppController: ObservableObject {
     }
 
     private func recoverInterrupted() {
+        // Fragments set aside by an earlier run of the app, before anything else
+        // decides what to do with the recordings around them.
+        carriedFragments = relaunch.loadFragments().map(CarriedFragment.init)
+        if !carriedFragments.isEmpty {
+            Log.write("relaunch: picked up \(carriedFragments.count) held fragment(s) from a previous run")
+        }
+
+        // The app went away while a recording was live and recently enough that
+        // the meeting is still going: carry the audio forward and pick it back
+        // up, instead of filing half an evening as a finished note.
+        if let marker = relaunch.resumableMarker() {
+            resumeAfterRelaunch(marker)
+            return
+        }
+
         let interrupted = history.records.filter { $0.status == .recording || $0.status == .processing }
         guard !interrupted.isEmpty else { return }
         Log.write("recovery: \(interrupted.count) interrupted recording(s) found at launch")
@@ -1536,6 +1767,68 @@ final class AppController: ObservableObject {
             runPipeline(for: rebuildRecording(from: r, audio: audio), recordID: r.id)
         }
         refreshRecents()
+    }
+
+    /// Picks a meeting back up after the app was restarted underneath it.
+    ///
+    /// Every interrupted capture becomes a carried fragment rather than a note,
+    /// and recording restarts immediately. The stitching that mic recovery
+    /// already used then reassembles the whole evening on one wall-clock
+    /// timeline when it finally ends — so the only trace of the restart is a
+    /// couple of seconds of silence where the app was gone.
+    private func resumeAfterRelaunch(_ marker: RelaunchState.Marker) {
+        let interrupted = history.records.filter { $0.status == .recording }
+        for r in interrupted {
+            guard let dir = r.captureDir.map({ URL(fileURLWithPath: $0) }) else { continue }
+            let mic = dir.appendingPathComponent("audio.caf")
+            guard FileManager.default.fileExists(atPath: mic.path),
+                  (try? mic.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0 > 1_000 else {
+                updateRecord(r.id) { $0.status = .failed; $0.errorText = "interrupted before audio was saved" }
+                continue
+            }
+            let system = dir.appendingPathComponent("system.caf")
+            let hasSystem = FileManager.default.fileExists(atPath: system.path)
+            carriedFragments.append(CarriedFragment(
+                startedAt: r.recordedAt,
+                micAudioURL: mic,
+                systemAudioURL: hasSystem ? system : nil,
+                // The offset was never persisted; the two tracks start together
+                // closely enough that assuming zero beats dropping the track.
+                systemAudioStartOffset: hasSystem ? 0 : nil))
+            // No note for a fragment — the recording that ends the meeting owns it.
+            history.remove(r.id)
+        }
+        refreshRecents()
+        resumedFragmentCount = carriedFragments.count
+        Log.write("relaunch: resuming '\(marker.title)' with \(carriedFragments.count) fragment(s) carried")
+        recordingIsCall = marker.isCall
+        startRecording(continuing: true)
+    }
+
+    // MARK: - Restarting under a live recording
+
+    /// Stops a live recording the safe way and hands back once the audio is on
+    /// disk. Called when the app is quitting — by the user, or by a rebuild.
+    ///
+    /// The capture is carried forward rather than filed, so relaunching picks the
+    /// meeting back up. Nothing here is strictly required to save the audio (an
+    /// LPCM CAF survives being killed outright), but doing it properly also
+    /// flushes the last buffer, finalizes the system-audio writer, and stamps the
+    /// live transcript — and it makes "rebuild the app mid-session" an ordinary
+    /// thing rather than a gamble.
+    func prepareForRelaunch(_ done: @escaping () -> Void) {
+        guard recorder != nil else { done(); return }
+        Log.write("relaunch: quitting with a recording live — carrying it forward")
+        stopRecordingAndProcess(carryForward: true)
+        // stopRecordingAndProcess finishes its file work in a detached task; give
+        // it a moment to land, then go. The CAF is valid either way, so this is a
+        // courtesy deadline, not a correctness one.
+        Task { @MainActor in
+            for _ in 0..<40 where self.recorder != nil || self.state == .processing {
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+            done()
+        }
     }
 
     // MARK: - Backups (retained local copies)
@@ -1957,12 +2250,14 @@ final class AppController: ObservableObject {
             runner: ProcessCommandRunner())
     }
 
-    private func nativeStages(for cfg: AppConfig) -> [PipelineStage] {
+    private func nativeStages(for cfg: AppConfig, roomMode: Bool = false) -> [PipelineStage] {
         let llm = Self.makeChatModel(for: cfg)
         return [
             EncodeStage(codec: cfg.archiveCodec),
             TranscribeStage(model: cfg.whisper.model, rememberVoices: cfg.rememberVoices,
-                            matchThreshold: Float(cfg.nameMatchConfidence)),
+                            matchThreshold: Float(cfg.nameMatchConfidence),
+                            roomMode: roomMode,
+                            clusteringThreshold: cfg.roomVoiceSensitivity > 0 ? Float(cfg.roomVoiceSensitivity) : nil),
             SummarizeStage(model: llm),
             classifyStage(for: cfg, model: llm),
             PersistStage(config: cfg),
@@ -2445,6 +2740,7 @@ final class AppController: ObservableObject {
     func recordingIcon() -> NSImage {
         let tint = NSColor.fromHex(config.recordingColorHex)
         switch config.menuBarIcon {
+        case .transport: return MenuBarIconRenderer.transportPulse(level: inputLevel, tint: tint)
         case .waveform: return MenuBarIconRenderer.levelPulse(level: inputLevel, tint: tint)
         case .mark: return MenuBarIconRenderer.markPulse(level: inputLevel, tint: tint)
         case .microphone:

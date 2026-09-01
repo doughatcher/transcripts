@@ -1,5 +1,62 @@
 # Changelog
 
+## Unreleased
+
+**Mac**
+
+- Restarting Transcripts while it is recording no longer ends the recording. It
+  picks the same one back up: the piece already captured is set aside, capture
+  resumes within a second or two, and stopping reassembles every piece into one
+  recording on a single timeline. Quit it, crash it, or rebuild it mid-session —
+  the evening still comes out as one take. Only the gap has to be short (about
+  ten minutes); a marker left by a crash days ago is filed, not resumed.
+- The menu says "Resumed after relaunch" while that is in effect, so it is never
+  something you have to take on faith.
+- The menu-bar icon now follows tape-transport convention by default: a square
+  when stopped, a hollow record light while auto-record is watching, and a
+  filled disc while rolling that flashes from red towards white and swells as
+  the room gets louder. Three shapes rather than one shape in three shades —
+  which is the difference between reading the state and squinting at it — and a
+  disc that brightens when somebody speaks, so a dead microphone looks different
+  from a quiet room. The Transcripts mark, the waveform and the microphone are all
+  still there in Settings, unchanged; an existing install keeps whichever it was
+  already set to.
+- Live text now appears as it is spoken rather than when the recogniser decides
+  a phrase has ended. The overlay's pill shows the words mid-sentence, and the
+  live transcript file grows a **Being said now** section at the bottom carrying
+  the same not-yet-final text. The transcript itself is untouched by this: it
+  still only ever contains finalised turns, because a record that revises itself
+  is not a record.
+- **Recordings of a room** are now split by voice. A microphone with five people
+  in front of it used to come out labelled entirely as you, because the whole
+  attribution path assumed a call — mic is you, system audio is everyone else.
+  Turn on "My microphone records a room" in Settings and the microphone track is
+  diarized instead, each voice getting a number or a remembered name. Detected
+  calls are unaffected.
+- Voices are matched against every sample remembered for a person rather than
+  the average of them, and one person can now own several voices in a room
+  recording. Both exist for the same reason: someone running a character at a
+  table does not sound like themselves, and averaging the two produced a
+  voiceprint matching neither.
+- A new **overlay**: a small glass panel floating over your call. At rest it
+  shows the last thing said, straight from the transcript with no summarizing in
+  the way. Hover it and it opens into three lanes — the last conclusion, facts
+  and figures, and the last question with its answer. The live transcript was
+  already writing all of this down, but reading it meant looking away from the
+  meeting, which is the one thing you cannot do during a meeting.
+- Answers come only from earlier in the same call or from the Markdown notes
+  under your transcripts folder, and every one says which, and when. The model
+  phrases an answer out of text that was found first; it is never the source. A
+  question nothing supports is shown unanswered rather than filled in, and an
+  answer that does not hold up against the passage it came from is discarded
+  before it reaches the screen — on a live call an invented answer is worse than
+  an empty panel. The same rule governs the conclusion and the figures.
+- Off by default. Settings ▸ General ▸ Overlay, with a separate switch for
+  whether your notes are searched. Everything stays on your Mac.
+- With no language model available the overlay quotes instead of phrasing: it
+  shows the best-matching passage verbatim with its source, and leaves the
+  conclusion and figures lanes empty rather than guessing at them.
+
 ## 1.1.0-beta.1
 
 **iPhone and iPad**

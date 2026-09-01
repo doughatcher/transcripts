@@ -32,6 +32,28 @@ struct MenuBarView: View {
                 .foregroundStyle(.tint)
             }
 
+            // A resumed meeting should be visible, not just in the log — otherwise
+            // "did my restart cost me the last hour" has no answer on screen.
+            if controller.isRecording, controller.resumedFragmentCount > 0 {
+                Label("Resumed after relaunch — \(controller.resumedFragmentCount) earlier "
+                      + "\(controller.resumedFragmentCount == 1 ? "piece" : "pieces") will be stitched in",
+                      systemImage: "arrow.triangle.merge")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if controller.isRecording, controller.config.overlay.enabled {
+                Button {
+                    controller.toggleOverlay()
+                } label: {
+                    Label(controller.overlayVisible ? "Hide overlay" : "Show overlay",
+                          systemImage: controller.overlayVisible ? "rectangle.topthird.inset.filled" : "rectangle")
+                        .font(.callout)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
+            }
+
             if showingNote { noteEditor }
 
             Divider()
