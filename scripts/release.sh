@@ -98,7 +98,15 @@ MSG
     exit 1
   fi
   echo "▶ Signing — $DEVID"
+  # --entitlements is load-bearing here. --options runtime (which notarization
+  # requires) makes the hardened runtime refuse the microphone outright unless
+  # the signature carries com.apple.security.device.audio-input: no TCC prompt,
+  # requestAccess returns denied, and the app records nothing. 1.1.0-beta.2
+  # shipped that way — the entitlements file existed, the signature never
+  # carried it. Local make-app.sh builds skip the hardened runtime, which is
+  # why they always recorded fine.
   codesign --force --deep --options runtime --timestamp \
+    --entitlements "Sources/TranscriptsMac/Support/Transcripts.entitlements" \
     --sign "$DEVID" --identifier "$BUNDLE_ID" "$APP"
 
   echo "▶ Notarizing (this takes a few minutes)"
