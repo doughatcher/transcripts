@@ -87,7 +87,7 @@ XCARGS=(build
 # keep the file as an artifact.
 set +e
 if [[ -n "${CI:-}" ]]; then
-  xcodebuild "${XCARGS[@]}" 2>&1 | tee "$BUILD_LOG"
+  NSUnbufferedIO=YES xcodebuild "${XCARGS[@]}" 2>&1 | tee "$BUILD_LOG"
   BUILD_RC=${PIPESTATUS[0]}
 else
   xcodebuild "${XCARGS[@]}" > "$BUILD_LOG" 2>&1
