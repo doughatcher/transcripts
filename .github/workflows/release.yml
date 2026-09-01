@@ -1,0 +1,169 @@
+# Cut the Mac release from CI. Runs scripts/release.sh — the same script the
+# laptop runs — on a hosted macos-26 runner, which has carried the macOS 26 SDK
+# since the TestFlight workflow moved there. Compilation was never the blocker;
+# the Developer ID certificate living in one laptop's keychain was.
+#
+# Dispatch-driven, not tag-driven: release.sh pushes the tag itself at the end,
+# and a tag trigger here would race it. A successful publish dispatches the
+# TestFlight workflow with the same version, so one dispatch still ships both
+# platforms — the tag pushed by a workflow token does not fire other workflows
+# on its own.
+#
+# Secrets, beyond the TestFlight set (ASC_*, TEAM_ID) already configured:
+#
+#   DEVELOPER_ID_CERT_P12       base64 of the "Developer ID Application" .p12
+#                               (Keychain Access → My Certificates → export)
+#   DEVELOPER_ID_CERT_PASSWORD  its password
+#   CLOUDFLARE_API_TOKEN        Pages deploy token for `wrangler pages deploy`
+#   TAP_PUSH_TOKEN              PAT with contents:write on hatcher-ltd/homebrew-tap
+#
+# Degradation is deliberate and loud: with no DEVELOPER_ID_CERT_P12 the run
+# builds an UNSIGNED dry-run artifact (NOTARIZE=0 PUBLISH=0) so the pipeline
+# stays testable; with the cert but no CLOUDFLARE_API_TOKEN it signs and
+# notarizes but publishes nothing (PUBLISH=0), because a release where the
+# site, the appcast and the cask disagree is the failure release.sh exists to
+# prevent. The notary profile is stored from the ASC API key the repo already
+# holds — notarytool takes the same key TestFlight uploads with.
+
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 1.1.0-beta.3"
+        required: true
+
+permissions:
+  contents: write   # release.sh pushes the tag and creates the GitHub release
+  actions: write    # ...and this workflow dispatches testflight.yml after
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # release.sh commits the version stamp before tagging; a runner has no
+      # identity of its own.
+      - name: Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      # mlx-swift's Metal shaders need Xcode's separately-downloaded Metal
+      # Toolchain; without it the app builds but ships no default.metallib and
+      # the summarizer kills the process at first use. make-app.sh gates on the
+      # shaders being present, so a missing toolchain fails here, loudly.
+      - name: Metal toolchain
+        run: sudo xcodebuild -downloadComponent MetalToolchain || xcodebuild -downloadComponent MetalToolchain
+
+      # Secrets cannot be tested in `if:` expressions, so the mode is resolved
+      # once, here, and everything downstream reads it.
+      - name: Resolve mode
+        id: mode
+        env:
+          CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          NOTARIZE=0; PUBLISH=0
+          if [ -n "$CERT_P12" ]; then
+            NOTARIZE=1
+            if [ -n "$CF_TOKEN" ]; then
+              PUBLISH=1
+            else
+              echo "::warning::No CLOUDFLARE_API_TOKEN — signing and notarizing, publishing nothing."
+            fi
+          else
+            echo "::warning::No DEVELOPER_ID_CERT_P12 — building an UNSIGNED dry-run artifact. Do not distribute it."
+          fi
+          echo "notarize=$NOTARIZE" >> "$GITHUB_OUTPUT"
+          echo "publish=$PUBLISH"   >> "$GITHUB_OUTPUT"
+          echo "▶ NOTARIZE=$NOTARIZE PUBLISH=$PUBLISH"
+
+      # A dedicated keychain, unlocked with a password that exists only for
+      # this run — the same pattern testflight.yml uses. The notary profile is
+      # stored into the same keychain and release.sh is pointed at it via
+      # NOTARY_KEYCHAIN, which it already honors.
+      - name: Import Developer ID certificate and notary profile
+        if: steps.mode.outputs.notarize == '1'
+        env:
+          CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/release.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/devid.p12"
+          security import "$RUNNER_TEMP/devid.p12" -k "$KEYCHAIN" \
+            -P "$CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          rm "$RUNNER_TEMP/devid.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" \
+            $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
+          printf '%s' "$ASC_PRIVATE_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+          xcrun notarytool store-credentials transcripts-notary \
+            --key "$RUNNER_TEMP/AuthKey.p8" \
+            --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" \
+            --keychain "$KEYCHAIN"
+          rm "$RUNNER_TEMP/AuthKey.p8"
+          echo "NOTARY_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+
+      # release.sh updates the cask through a local checkout (TAP_DIR) and
+      # skips it, loudly, when there is none.
+      - name: Clone the tap (when a push token exists)
+        if: steps.mode.outputs.publish == '1'
+        env:
+          TAP_PUSH_TOKEN: ${{ secrets.TAP_PUSH_TOKEN }}
+        run: |
+          if [ -z "$TAP_PUSH_TOKEN" ]; then
+            echo "::warning::No TAP_PUSH_TOKEN — the cask will not be updated this run."
+            exit 0
+          fi
+          git clone -q "https://x-access-token:${TAP_PUSH_TOKEN}@github.com/hatcher-ltd/homebrew-tap" "$RUNNER_TEMP/tap"
+          git -C "$RUNNER_TEMP/tap" config user.name "github-actions[bot]"
+          git -C "$RUNNER_TEMP/tap" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          echo "TAP_DIR=$RUNNER_TEMP/tap" >> "$GITHUB_ENV"
+
+      - name: Run release.sh
+        env:
+          NOTARIZE: ${{ steps.mode.outputs.notarize }}
+          PUBLISH: ${{ steps.mode.outputs.publish }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/release.sh "${{ inputs.version }}"
+
+      # One dispatch ships both platforms: the tag release.sh just pushed came
+      # from a workflow token, which deliberately does not trigger workflows.
+      - name: Dispatch TestFlight
+        if: steps.mode.outputs.publish == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: gh workflow run testflight.yml -f version="${VERSION%%-*}"
+
+      - name: Keep the zip
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Transcripts-${{ inputs.version }}
+          path: site/public/Transcripts-*.zip
+          if-no-files-found: warn
