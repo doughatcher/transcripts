@@ -15,6 +15,9 @@ import TranscriptsCore
 @available(macOS 26, iOS 26, *)
 public final class LiveTrackTranscriber: @unchecked Sendable {
     private let onSegment: @Sendable (TranscriptSegment) -> Void
+    /// In-progress text for the same stretch of speech, superseded by its own
+    /// finalized segment moments later.
+    private let onPartial: (@Sendable (String) -> Void)?
     private var continuation: AsyncStream<AnalyzerInput>.Continuation?
     private var analyzer: SpeechAnalyzer?
     private var collector: Task<Void, Never>?
@@ -22,8 +25,10 @@ public final class LiveTrackTranscriber: @unchecked Sendable {
     private var analyzerFormat: AVAudioFormat?
     private let queue = DispatchQueue(label: "ltd.hatcher.transcripts.livetranscribe")
 
-    public init(onSegment: @escaping @Sendable (TranscriptSegment) -> Void) {
+    public init(onSegment: @escaping @Sendable (TranscriptSegment) -> Void,
+                onPartial: (@Sendable (String) -> Void)? = nil) {
         self.onSegment = onSegment
+        self.onPartial = onPartial
     }
 
     /// Sets up the analyzer. Returns false (and stays inert) when live
@@ -35,8 +40,13 @@ public final class LiveTrackTranscriber: @unchecked Sendable {
             var locale = await SpeechTranscriber.supportedLocale(equivalentTo: Locale.current)
             if locale == nil { locale = await SpeechTranscriber.supportedLocales.first }
             guard let locale else { return false }
+            // Volatile results are the difference between text appearing as it is
+            // spoken and text appearing when the analyzer decides a phrase is
+            // over — seconds later. Asking for them costs nothing when nobody
+            // consumes them, and they are what the overlay's pill shows.
             let transcriber = SpeechTranscriber(locale: locale, transcriptionOptions: [],
-                                                reportingOptions: [], attributeOptions: [])
+                                                reportingOptions: onPartial == nil ? [] : [.volatileResults],
+                                                attributeOptions: [])
             if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
                 try await request.downloadAndInstall()
             }
@@ -51,11 +61,20 @@ public final class LiveTrackTranscriber: @unchecked Sendable {
             self.analyzer = analyzer
 
             let handle = onSegment
+            let handlePartial = onPartial
             collector = Task {
                 do {
                     for try await result in transcriber.results {
                         let text = String(result.text.characters).trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !text.isEmpty else { continue }
+                        // Volatile results are a running guess at the current
+                        // phrase and are replaced wholesale, so they can only
+                        // feed something that shows the live edge — never the
+                        // transcript, which is a record and must not churn.
+                        guard result.isFinal else {
+                            handlePartial?(text)
+                            continue
+                        }
                         handle(TranscriptSegment(start: result.range.start.seconds,
                                                  end: result.range.end.seconds,
                                                  text: text))

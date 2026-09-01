@@ -25,6 +25,18 @@ public final class LiveTranscript {
     private var header = ""
     private var footer = ""
     private let paths: [URL]
+    /// The phrase each track is part-way through saying, keyed by speaker.
+    ///
+    /// Kept out of `turns` on purpose: this text is a running guess that gets
+    /// replaced wholesale, and the transcript is a record. It is rendered below
+    /// the transcript, clearly marked, so a reader — or an assistant asked what
+    /// is being said *right now* — sees the live edge without the record ever
+    /// containing anything that was later retracted.
+    private var partials: [String: String] = [:]
+    /// Volatile results arrive many times a second. The file is rewritten whole
+    /// on every flush, so they are coalesced rather than written through.
+    private var partialFlushAt = Date.distantPast
+    private static let partialInterval: TimeInterval = 0.7
 
     /// `vaultRoot` nil (or unwritable) degrades to the App Support copy only.
     public init(vaultRoot: URL?) {
@@ -58,6 +70,18 @@ public final class LiveTranscript {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         turns.append(AttributedSegment(speaker: speaker, start: start, text: trimmed))
+        // The finalized text supersedes whatever guess was showing for this track.
+        partials[speaker] = nil
+        flush()
+    }
+
+    /// Updates the in-progress line for one track. Cheap to call often.
+    public func setPartial(speaker: String, text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard partials[speaker] != trimmed else { return }
+        partials[speaker] = trimmed.isEmpty ? nil : trimmed
+        guard Date().timeIntervalSince(partialFlushAt) >= Self.partialInterval else { return }
+        partialFlushAt = Date()
         flush()
     }
 
@@ -72,6 +96,7 @@ public final class LiveTranscript {
 
     /// Marks the document finished (the batch pipeline's vault doc supersedes it).
     public func end() {
+        partials = [:]
         footer = "\n> Call ended \(ISO8601DateFormatter().string(from: Date())) — the final summarized document is in the vault.\n"
         header = header.replacingOccurrences(of: "status: recording", with: "status: ended")
         flush()
@@ -85,7 +110,16 @@ public final class LiveTranscript {
         // pointed at mid-call, and "what was said around twenty minutes in" is
         // most of what anyone asks it.
         let body = SpeakerTurns.markdown(merged, timed: true)
-        let doc = header + "\n" + body + "\n" + footer
+        var edge = ""
+        if !partials.isEmpty {
+            edge = "\n## Being said now\n\n"
+                + partials.keys.sorted().compactMap { key in
+                    partials[key].map { "> **\(key):** \($0)…" }
+                }.joined(separator: "\n>\n")
+                + "\n\n> Not yet final — this text is still being revised and is\n"
+                + "> replaced by the transcript above once the speaker finishes.\n"
+        }
+        let doc = header + "\n" + body + "\n" + edge + footer
         for url in paths {
             try? doc.write(to: url, atomically: true, encoding: .utf8)
         }
