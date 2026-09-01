@@ -48,9 +48,31 @@ DERIVED="$ROOT/.build/xcode"
 # default.metallib — MLX then kills the process (not throws) the first time the
 # built-in summarizer runs. Needs Xcode's separately-downloaded Metal Toolchain
 # (xcodebuild -downloadComponent MetalToolchain).
+# Sign with a STABLE identity so TCC keeps its grant across rebuilds. Ad-hoc
+# signing regenerates the code identity every compile, which invalidates the
+# grant — macOS then reports `authorized` and feeds the app SILENCE.
+#
+# WITHOUT entitlements: this app is unsandboxed, and a self-signed build
+# carrying sandbox entitlements is a known way to end up authorized but silent.
+#
+# Resolved BEFORE the build, because project.yml names this identity as the
+# target's CODE_SIGN_IDENTITY: on a machine without it in the keychain — any
+# CI runner — xcodebuild refuses at build-description time and never compiles
+# a line. There is nothing to fail over: the bundle is re-signed below either
+# way, and release.sh signs it again with Developer ID. So when the identity
+# is absent, build unsigned and let the signing step downstream be the one
+# that decides the identity.
+SIGN_ID="-"; SIGN_DESC="ad-hoc (unstable — run scripts/make-signing-cert.sh)"
+XCSIGN=(CODE_SIGNING_ALLOWED=NO)
+if security find-identity -p codesigning 2>/dev/null | grep -q "$APP_NAME Local Signing"; then
+  SIGN_ID="$APP_NAME Local Signing"; SIGN_DESC="$APP_NAME Local Signing (stable)"
+  XCSIGN=()
+fi
+
 echo "▶ Building $APP_NAME ($XC_CONFIG) …"
 mkdir -p "$ROOT/.build"
 xcodebuild build \
+  ${XCSIGN[@]+"${XCSIGN[@]}"} \
   -project "$ROOT/Transcripts.xcodeproj" \
   -scheme "$SCHEME" \
   -configuration "$XC_CONFIG" \
@@ -79,16 +101,6 @@ if [[ "$(uname -m)" == "arm64" && "${REQUIRE_METAL:-1}" != "0" ]]; then
   echo "  ✓ MLX Metal shaders present"
 fi
 
-# Sign with a STABLE identity so TCC keeps its grant across rebuilds. Ad-hoc
-# signing regenerates the code identity every compile, which invalidates the
-# grant — macOS then reports `authorized` and feeds the app SILENCE.
-#
-# WITHOUT entitlements: this app is unsandboxed, and a self-signed build
-# carrying sandbox entitlements is a known way to end up authorized but silent.
-SIGN_ID="-"; SIGN_DESC="ad-hoc (unstable — run scripts/make-signing-cert.sh)"
-if security find-identity -p codesigning 2>/dev/null | grep -q "$APP_NAME Local Signing"; then
-  SIGN_ID="$APP_NAME Local Signing"; SIGN_DESC="$APP_NAME Local Signing (stable)"
-fi
 echo "▶ Signing — $SIGN_DESC …"
 codesign --force --sign "$SIGN_ID" --identifier "$BUNDLE_ID" \
   --timestamp=none "$APP_STAGE" 2>/dev/null
