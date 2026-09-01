@@ -53,6 +53,20 @@ If the app quits, the machine sleeps, or the power goes, the audio recorded up t
 that moment survives, and Transcripts offers to resume the take when it starts
 again.
 
+If Transcripts restarts while a recording is running — you quit it, it crashed,
+or it was updated — it **picks the same recording back up** rather than ending
+it. The piece it had already captured is set aside, recording starts again
+within a second or two, and when you finally stop, every piece is reassembled
+into one recording on a single timeline. The only trace is a couple of seconds
+of silence where the app was away.
+
+The menu says so while it is happening ("Resumed after relaunch"), so a restart
+is never something you have to take on faith.
+
+This holds for as long as the gap is short — about ten minutes. A marker left
+behind by a crash days ago is not resumed, because starting to record out of
+nowhere is worse than filing what was captured.
+
 ---
 
 ## Phone calls

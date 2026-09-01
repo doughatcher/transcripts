@@ -17,6 +17,11 @@ build: project
       CODE_SIGNING_ALLOWED=NO | tail -5
 
 # Open in Xcode (for device runs, signing, archives).
+# Rebuild and relaunch, carrying any live recording forward. Safe mid-session:
+# the running app stops gracefully and the new one resumes the same meeting.
+reload:
+    scripts/make-app.sh
+
 open: project
     open Transcripts.xcodeproj
 

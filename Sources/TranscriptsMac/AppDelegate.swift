@@ -5,6 +5,8 @@ import AppKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBar: StatusBarController?
+    /// Retained for the lifetime of the app — a cancelled source stops firing.
+    private var sigtermSource: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Doc-screenshot mode: render Settings tabs to PNGs and quit before any
@@ -23,6 +25,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DiarizeCheck.runAndExit(path: path)
             return
         }
+        // Icon contact sheet: render every menu-bar icon and quit. See IconCheck.
+        if let path = IconCheck.requestedPath {
+            IconCheck.runAndExit(path: path)
+            return
+        }
         // Summarizer smoke test: load the MLX model and quit. See MLXCheck.
         if MLXCheck.isRequested {
             MLXCheck.runAndExit()
@@ -30,7 +37,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         NSApp.setActivationPolicy(.accessory)
         statusBar = StatusBarController(controller: .shared)
+        installTerminationHandler()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    /// Quitting with a recording live carries it forward instead of abandoning
+    /// it, so relaunching resumes the meeting. See `prepareForRelaunch`.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        AppController.shared.prepareForRelaunch {
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+
+    /// The same path for `SIGTERM`, which is what a rebuild script sends.
+    ///
+    /// AppKit does not route signals through `applicationShouldTerminate`, so
+    /// without this a `pkill` would skip every bit of the graceful path. The
+    /// default disposition is suppressed so only this handler runs.
+    private func installTerminationHandler() {
+        signal(SIGTERM, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        source.setEventHandler {
+            MainActor.assumeIsolated {
+                AppController.shared.prepareForRelaunch { exit(0) }
+            }
+        }
+        source.resume()
+        sigtermSource = source
+    }
 }

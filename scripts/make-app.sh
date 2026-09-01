@@ -34,20 +34,14 @@ CONFIG="${CONFIG:-release}"
 XC_CONFIG="Release"; [[ "$CONFIG" == "debug" ]] && XC_CONFIG="Debug"
 DERIVED="$ROOT/.build/xcode"
 
-# Never kill a Transcripts that is mid-recording: the in-flight AAC has no
-# header yet, so the audio is unrecoverable. FORCE=1 overrides deliberately.
-HISTORY="$HOME/Library/Application Support/$APP_NAME/history.json"
-if [[ "${FORCE:-0}" != "1" && "${NO_INSTALL:-0}" != "1" && -f "$HISTORY" ]] && pgrep -xq "$APP_NAME"; then
-  if python3 -c '
-import json, sys
-d = json.load(open(sys.argv[1]))
-sys.exit(0 if any(r.get("status") in ("recording", "processing") for r in d) else 1)
-' "$HISTORY" 2>/dev/null; then
-    echo "✗ $APP_NAME is recording or processing right now — not killing it." >&2
-    echo "  Re-run after it finishes (or FORCE=1 to override)." >&2
-    exit 4
-  fi
-fi
+# Rebuilding during a live recording is expected — a session can run for hours
+# and waiting it out is not a dev loop. Two things make it safe, and both live in
+# the app rather than here: captures are LPCM-in-CAF (readable at any truncation
+# point), and SIGTERM is handled, so the app carries the recording forward and
+# the next launch resumes the meeting instead of filing half of it.
+#
+# This used to refuse outright, from the days when the live file was AAC and a
+# kill lost it. That is no longer true; see Recorder.start and RelaunchState.
 
 # xcodebuild, not `swift build`: SwiftPM's command-line build system has no
 # Metal rule, so it silently skips mlx-swift's shaders and the app ships with no
@@ -105,14 +99,42 @@ if [[ -n "${NO_INSTALL:-}" ]]; then
   exit 0
 fi
 
-pkill -x "$APP_NAME" 2>/dev/null || true
-sleep 0.3
+# Graceful stop: SIGTERM, then wait for the app to actually go. It carries any
+# live recording forward on the way out, which is what makes the relaunch pick
+# the meeting back up. SIGKILL only if it will not leave.
+if pgrep -xq "$APP_NAME"; then
+  RECORDING=""
+  HISTORY="$HOME/Library/Application Support/$APP_NAME/history.json"
+  if [[ -f "$HISTORY" ]] && python3 -c '
+import json, sys
+sys.exit(0 if any(r.get("status") == "recording" for r in json.load(open(sys.argv[1]))) else 1)
+' "$HISTORY" 2>/dev/null; then RECORDING=" (recording — carrying it forward)"; fi
+  echo "▶ Stopping the running $APP_NAME$RECORDING …"
+  pkill -x "$APP_NAME" 2>/dev/null || true
+  for _ in $(seq 1 60); do
+    pgrep -xq "$APP_NAME" || break
+    sleep 0.25
+  done
+  if pgrep -xq "$APP_NAME"; then
+    echo "  ! did not exit in 15s — forcing" >&2
+    pkill -9 -x "$APP_NAME" 2>/dev/null || true
+    sleep 0.5
+  fi
+fi
 mkdir -p "$INSTALL_DIR"
 rm -rf "$INSTALL_DIR/$APP_NAME.app"
 cp -R "$APP_STAGE" "$INSTALL_DIR/$APP_NAME.app"
 echo "✓ Installed to $INSTALL_DIR/$APP_NAME.app"
 
 if [[ -z "${NO_LAUNCH:-}" ]]; then
-  open "$INSTALL_DIR/$APP_NAME.app"
+  # LaunchServices can still be holding the old bundle a moment after it is
+  # replaced and answers -600 (procNotFound). Retrying costs nothing; failing
+  # here leaves a carried-forward recording with no app to resume it, which is
+  # the one outcome this whole path exists to avoid.
+  for attempt in 1 2 3 4 5; do
+    if open "$INSTALL_DIR/$APP_NAME.app" 2>/dev/null; then break; fi
+    [[ $attempt -eq 5 ]] && { echo "✗ could not launch $APP_NAME — run: open '$INSTALL_DIR/$APP_NAME.app'" >&2; exit 1; }
+    sleep 1
+  done
   echo "✓ $APP_NAME is running — look for the Transcripts mark in the menu bar."
 fi
