@@ -52,6 +52,7 @@ GUIDE_SECTIONS = [
     ("Recording", [
         ("recording", "Recording"),
         ("live", "The live transcript"),
+        ("overlay", "The overlay"),
         ("transcripts", "Your transcripts"),
         ("handoff", "iPhone, iPad and Mac"),
     ]),

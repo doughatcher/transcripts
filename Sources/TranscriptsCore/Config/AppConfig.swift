@@ -31,9 +31,14 @@ public struct PipelineConfig: Codable, Equatable, Sendable {
 
 /// Menu-bar icon style.
 public enum MenuBarIconStyle: String, Codable, Sendable, CaseIterable {
+    /// Tape-transport symbols: a square when stopped, a hollow record light when
+    /// armed, a filled red disc while rolling. The default, because the states
+    /// are the thing you actually read off a menu bar at a glance, and a deck's
+    /// vocabulary for them is one everybody already knows.
+    case transport
     /// The app icon's motif — a line of text over a waveform — drawn as a glyph.
-    /// The default: it reads as *Transcripts*, where a bare waveform or mic
-    /// could be any of half a dozen audio utilities.
+    /// Says *Transcripts* where a bare waveform or mic could be any of half a
+    /// dozen audio utilities, which is why it stays on offer.
     case mark
     case waveform
     case microphone
@@ -64,6 +69,32 @@ public struct OllamaConfig: Codable, Equatable, Sendable {
     public init(url: String = "http://localhost:11434", model: String = "gemma4:12b") {
         self.url = url
         self.model = model
+    }
+}
+
+/// The during-the-call overlay: a small floating panel showing key facts and
+/// answers to questions raised, sourced from the call itself and the user's
+/// notes.
+///
+/// Off by default, deliberately. It puts a new window over the user's meetings
+/// and runs a language model while a call is recording — both are things to be
+/// chosen, not discovered mid-call.
+public struct OverlayConfig: Codable, Equatable, Sendable {
+    public var enabled: Bool
+    /// Also search the notes under the knowledge root for answers, not just what
+    /// was said earlier in this call.
+    public var searchNotes: Bool
+    /// Where the user last dragged the panel, in screen coordinates. Nil = the
+    /// default spot under the menu bar.
+    public var originX: Double?
+    public var originY: Double?
+
+    public init(enabled: Bool = false, searchNotes: Bool = true,
+                originX: Double? = nil, originY: Double? = nil) {
+        self.enabled = enabled
+        self.searchNotes = searchNotes
+        self.originX = originX
+        self.originY = originY
     }
 }
 
@@ -192,6 +223,19 @@ public struct AppConfig: Codable, Equatable, Sendable {
     /// Bundle IDs that arm auto-record. Empty = arm for any app.
     public var autoRecordAppAllowlist: [String]
     public var pipeline: PipelineConfig
+    /// The microphone carries a room, not just you — an in-person meeting, a
+    /// game night, an interview across a table. Splits the mic track by voice
+    /// instead of taking the whole thing as the operator.
+    public var micRecordsARoom: Bool
+    /// How readily two similar voices are treated as different people in a room
+    /// recording (0.5–0.9; lower finds more speakers). 0 = the default, 0.7.
+    ///
+    /// Deliberately a sensitivity rather than a speaker count. A count is what
+    /// anyone would reach for — "there are five of us" — but the diarizer has no
+    /// setting that takes one: its `numClusters` field is read only by its own
+    /// command-line tool, never by the library. Offering a count would be a
+    /// control that quietly does nothing.
+    public var roomVoiceSensitivity: Double
     /// Voice profiles (#6): remember confirmed voices locally so future
     /// recordings name known speakers automatically. Individual voices are only
     /// stored after an explicit per-person confirm (except the operator's own).
@@ -210,6 +254,7 @@ public struct AppConfig: Codable, Equatable, Sendable {
     public var ollama: OllamaConfig
     public var whisper: WhisperConfig
     public var destinations: DestinationsConfig
+    public var overlay: OverlayConfig
     /// Optional "open with" command for a recording's document. `{path}` is replaced
     /// with the raw document path (e.g. `open -a "MarkText" "{path}"`); `{path_encoded}`
     /// with a URL-encoded path for URIs (e.g. `open "obsidian://open?path={path_encoded}"`).
@@ -234,6 +279,8 @@ public struct AppConfig: Codable, Equatable, Sendable {
         promptedLaunchAtLogin: Bool = false,
         autoRecordAppAllowlist: [String] = [],
         pipeline: PipelineConfig,
+        micRecordsARoom: Bool = false,
+        roomVoiceSensitivity: Double = 0,
         rememberVoices: Bool = false,
         homeOrganization: String = "",
         nameMatchConfidence: Double = 0.65,
@@ -242,6 +289,7 @@ public struct AppConfig: Codable, Equatable, Sendable {
         ollama: OllamaConfig = .init(),
         whisper: WhisperConfig = .init(),
         destinations: DestinationsConfig = .init(),
+        overlay: OverlayConfig = .init(),
         openCommand: String? = nil
     ) {
         self.autoRecordOnMicActivation = autoRecordOnMicActivation
@@ -260,6 +308,8 @@ public struct AppConfig: Codable, Equatable, Sendable {
         self.promptedLaunchAtLogin = promptedLaunchAtLogin
         self.autoRecordAppAllowlist = autoRecordAppAllowlist
         self.pipeline = pipeline
+        self.micRecordsARoom = micRecordsARoom
+        self.roomVoiceSensitivity = roomVoiceSensitivity
         self.rememberVoices = rememberVoices
         self.homeOrganization = homeOrganization
         self.nameMatchConfidence = nameMatchConfidence
@@ -268,6 +318,7 @@ public struct AppConfig: Codable, Equatable, Sendable {
         self.ollama = ollama
         self.whisper = whisper
         self.destinations = destinations
+        self.overlay = overlay
         self.openCommand = openCommand
     }
 
@@ -293,6 +344,8 @@ public struct AppConfig: Codable, Equatable, Sendable {
         promptedLaunchAtLogin = v(.promptedLaunchAtLogin, false)
         autoRecordAppAllowlist = v(.autoRecordAppAllowlist, [])
         pipeline = v(.pipeline, Self.defaultPipeline)
+        micRecordsARoom = v(.micRecordsARoom, false)
+        roomVoiceSensitivity = v(.roomVoiceSensitivity, 0)
         rememberVoices = v(.rememberVoices, false)
         homeOrganization = v(.homeOrganization, "")
         nameMatchConfidence = v(.nameMatchConfidence, 0.65)
@@ -301,17 +354,25 @@ public struct AppConfig: Codable, Equatable, Sendable {
         ollama = v(.ollama, .init())
         whisper = v(.whisper, .init())
         destinations = v(.destinations, .init())
+        overlay = v(.overlay, .init())
         openCommand = try? c.decode(String.self, forKey: .openCommand)
     }
 
     /// The menu-bar icon a fresh install starts on.
+    ///
+    /// Transport symbols rather than the brand mark. The menu bar's job here is
+    /// to answer "is it recording?" from the corner of an eye, and a square
+    /// versus a red disc answers that from across a desk in a way that a
+    /// dimmed-versus-inked version of the same glyph never quite did. The mark
+    /// is still a click away for anyone who would rather see the app than its
+    /// state.
     ///
     /// The ancestor of this code sniffed the Mac's MDM enrollment to decide
     /// whether to show an agency's mark by default. That is gone: guessing whose
     /// laptop this is in order to brand it is exactly the sort of thing an app
     /// on a stranger's machine should not do, and every style here is one click
     /// apart in Settings anyway.
-    public static var defaultMenuBarIcon: MenuBarIconStyle { .mark }
+    public static var defaultMenuBarIcon: MenuBarIconStyle { .transport }
 
     /// Recording-indicator color for a fresh install. Both presets stay one click
     /// apart in Settings.

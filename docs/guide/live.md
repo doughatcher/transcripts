@@ -46,6 +46,12 @@ speak. That draft rides along with the recording and is deliberately marked as a
 draft: the Mac re-transcribes from the audio, which it can do better with the
 whole file than a phone can sentence by sentence, and replaces it in place.
 
+## Reading it without leaving the call
+
+The same turns feed [the overlay](/guide/overlay/) — a small panel that floats
+over your meeting with key facts on it, and answers to questions raised, drawn
+from the call and from your notes.
+
 ---
 
-Next: [Your transcripts](/guide/transcripts/)
+Next: [The overlay](/guide/overlay/)
