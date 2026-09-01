@@ -56,8 +56,10 @@ import Foundation
     /// enrollment to decide whether to show an agency's mark by default; that is
     /// gone, and the defaults must not quietly grow a house style again.
     @Test func defaultsAreNeutral() {
-        // The mark is the app's own, not a house style borrowed from anyone.
-        #expect(AppConfig.defaultMenuBarIcon == .mark)
+        // Transport symbols: a square, a record light, a disc. Nobody's branding
+        // — which is the property this test exists to hold. The Transcripts mark
+        // remains available, it is just not imposed.
+        #expect(AppConfig.defaultMenuBarIcon == .transport)
         #expect(AppConfig.defaultRecordingColorHex == HexColor.recordingRed)
     }
 

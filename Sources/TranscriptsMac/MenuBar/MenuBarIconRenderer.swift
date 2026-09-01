@@ -28,6 +28,12 @@ enum MenuBarIconRenderer {
 
     private static func render(style: MenuBarIconStyle, state: IconState, tint: NSColor) -> NSImage {
         switch style {
+        case .transport:
+            switch state {
+            case .idle: return transport(.stopped, color: nil, tint: tint)
+            case .armed: return transport(.armed, color: nil, tint: tint)
+            case .recording: return transport(.rolling(level: 0), color: tint, tint: tint)
+            }
         case .microphone:
             switch state {
             case .idle: return symbol("mic", color: nil)
@@ -50,6 +56,102 @@ enum MenuBarIconRenderer {
             case .recording: return mark(color: tint)
             }
         }
+    }
+
+    /// What a tape deck's transport tells you, drawn at menu-bar size.
+    enum Transport {
+        /// Not recording and not going to: the stop square.
+        case stopped
+        /// Auto-record is on and watching. A deck's record-standby — the record
+        /// light present but unlit — which is exactly this state and reads as
+        /// "ready" rather than "off".
+        case armed
+        /// Rolling. `level` (0…1) inflates a translucent ring around the disc,
+        /// so the icon shows audio arriving and not merely that a timer runs.
+        case rolling(level: CGFloat)
+    }
+
+    /// `color` nil renders a template (adapts to light and dark menu bars);
+    /// otherwise it is drawn in ink and the recording tint is used for the disc.
+    ///
+    /// Hollow-ring standby beat the alternatives at the size that matters. A
+    /// ring with a dot inside has the dot close the ring at 18 points, and a
+    /// dashed ring — the best "waiting" metaphor of the three — turns to mush.
+    private static func transport(_ transport: Transport, color: NSColor?, tint: NSColor) -> NSImage {
+        let ink = (color ?? .black).usingColorSpace(.sRGB) ?? .black
+        let img = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
+            let c = NSPoint(x: 9, y: 9)
+            func circle(_ r: CGFloat) -> NSBezierPath {
+                NSBezierPath(ovalIn: NSRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2))
+            }
+            switch transport {
+            case .stopped:
+                ink.setFill()
+                let side: CGFloat = 9.5
+                NSBezierPath(roundedRect: NSRect(x: c.x - side / 2, y: c.y - side / 2,
+                                                 width: side, height: side),
+                             xRadius: 1.6, yRadius: 1.6).fill()
+            case .armed:
+                ink.setStroke()
+                let ring = circle(4.6)
+                ring.lineWidth = 1.7
+                ring.stroke()
+            case .rolling(let level):
+                let l = max(0, min(1, level))
+                // Three layers, loudest last. Brightness carries the signal and
+                // the rings second it: a disc that only changes colour says
+                // "recording", one that throws a ripple outward as the room gets
+                // loud says "someone is talking" from the corner of an eye.
+                //
+                // The whole thing has to live inside 18 points, and the disc
+                // takes up most of them — so the ripple gets the ~3 points
+                // outside it, and the radii below are set to reach 8.5 at full
+                // level and no further. Anything past 9 is clipped by the canvas
+                // and reads as a flat edge, not a ring.
+                let base = (tint.usingColorSpace(.sRGB) ?? tint)
+                let lift = l * 0.9
+                let hot = NSColor(srgbRed: base.redComponent + (1 - base.redComponent) * lift,
+                                  green: base.greenComponent + (1 - base.greenComponent) * lift,
+                                  blue: base.blueComponent + (1 - base.blueComponent) * lift,
+                                  alpha: 1)
+                // Outermost: a thin ring that pushes away from the disc. Nearly
+                // invisible in a quiet room, which is the point — silence should
+                // look like a plain disc, not a permanent halo.
+                tint.withAlphaComponent(0.10 + 0.55 * l).setStroke()
+                let ripple = circle(7.0 + 1.5 * l)
+                ripple.lineWidth = 1.2
+                ripple.stroke()
+                // A soft fill bridging disc and ring so the gap between them
+                // does not read as a separate floating outline.
+                tint.withAlphaComponent(0.16 + 0.26 * l).setFill()
+                circle(6.4 + 1.0 * l).fill()
+                // The disc itself keeps a fixed size: it is the shape being
+                // read, and a target that changes size is harder to read than
+                // one that changes colour. The rings do the moving.
+                hot.setFill()
+                circle(5.6).fill()
+            }
+            return true
+        }
+        // A rolling disc is always the recording colour — never a template, or
+        // the menu bar would repaint the one thing that must stay red.
+        if case .rolling = transport { img.isTemplate = false } else { img.isTemplate = (color == nil) }
+        return img
+    }
+
+    /// The transport style's recording pulse: the disc flashes toward white and
+    /// its halo swells as the room gets louder.
+    ///
+    /// Sixteen buckets rather than eight. The disc is the whole icon here, so
+    /// the steps between levels are much more visible than they were on a
+    /// waveform's bars, and eight of them read as a stutter.
+    static func transportPulse(level: Float, tint: NSColor = .recordingDefault) -> NSImage {
+        let bucket = max(0, min(15, Int((level).squareRoot() * 16)))  // sqrt: lively at low levels
+        let key = "transport-pulse-\(tint.hexKey)-\(bucket)"
+        if let cached = cache[key] { return cached }
+        let img = transport(.rolling(level: CGFloat(bucket) / 15.0), color: tint, tint: tint)
+        cache[key] = img
+        return img
     }
 
     /// The app icon's motif — a line of text over a waveform — redrawn as a
