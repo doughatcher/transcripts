@@ -63,7 +63,16 @@ DERIVED="$ROOT/.build/xcode"
 # is absent, build unsigned and let the signing step downstream be the one
 # that decides the identity.
 SIGN_ID="-"; SIGN_DESC="ad-hoc (unstable — run scripts/make-signing-cert.sh)"
-XCSIGN=(CODE_SIGNING_ALLOWED=NO)
+# CODE_SIGNING_ALLOWED=NO alone is not enough. It stops the signing, but
+# xcodebuild still runs GatherProvisioningInputs first, and that phase reads
+# the keychain. On a release runner — where a Developer ID identity has just
+# been imported and the search list rewritten — that read wedges: the build
+# emits its package-resolution output and then nothing, for as long as you let
+# it (observed twice at ~40 min). With an empty keychain the same phase fails
+# in seconds, which is why unsigned dry runs never showed it. Clearing the
+# identity settings as well gives the phase nothing to resolve.
+XCSIGN=(CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+        CODE_SIGN_IDENTITY= CODE_SIGN_ENTITLEMENTS= DEVELOPMENT_TEAM=)
 if security find-identity -p codesigning 2>/dev/null | grep -q "$APP_NAME Local Signing"; then
   SIGN_ID="$APP_NAME Local Signing"; SIGN_DESC="$APP_NAME Local Signing (stable)"
   XCSIGN=()
