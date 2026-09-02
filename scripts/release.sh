@@ -66,7 +66,11 @@ for name, body in zip(parts[1::2], parts[2::2]):
     else:
         body = re.sub(r'MARKETING_VERSION: "[^"]*"', f'MARKETING_VERSION: "{ios_version}"', body)
         body = re.sub(r'CURRENT_PROJECT_VERSION: "[^"]*"', f'CURRENT_PROJECT_VERSION: "{ios_build}"', body)
-    out.append(f"  {name}:\n")
+    # No newline here: the split leaves each body starting with the one that
+    # followed its header, so adding another put a blank line under every
+    # target on every stamp — ten lines of drift per release once CI stamped
+    # twice, committed to main under "Stamp <version>".
+    out.append(f"  {name}:")
     out.append(body)
 open("project.yml", "w").write("".join(out))
 PY
