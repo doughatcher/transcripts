@@ -25,6 +25,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DiarizeCheck.runAndExit(path: path)
             return
         }
+        // Live-attribution replay: run a file through the live path and quit.
+        // See LiveDiarizeCheck.
+        if let path = LiveDiarizeCheck.requestedPath {
+            LiveDiarizeCheck.runAndExit(path: path)
+            return
+        }
         // Icon contact sheet: render every menu-bar icon and quit. See IconCheck.
         if let path = IconCheck.requestedPath {
             IconCheck.runAndExit(path: path)

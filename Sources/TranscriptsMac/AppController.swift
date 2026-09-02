@@ -140,6 +140,9 @@ final class AppController: ObservableObject {
     private var liveTranscript: LiveTranscript?
     private var liveMicTranscriber: Any?
     private var liveSystemTranscriber: Any?
+    /// Names the voice behind each mic turn while a room is recording. nil on
+    /// a call, where the two tracks are better evidence than any clustering.
+    private var liveDiarizer: LiveDiarizer?
     /// The overlay's engine and panel. `Any`-typed for the same reason the
     /// transcribers are: the overlay only has turns to work with on macOS 26.
     private var overlayEngine: Any?
@@ -575,9 +578,29 @@ final class AppController: ObservableObject {
         live.begin(title: title, startedAt: startedAt, windowTitles: windowTitles)
         liveTranscript = live
 
-        let mic = LiveTrackTranscriber { [weak self] seg in
+        // A room's microphone carries several people; a call's carries one.
+        // Only the room gets a live diarizer, and its models load in the
+        // background — until they are ready every turn is "Me", which is what
+        // the live transcript always said.
+        var diarizer: LiveDiarizer? = nil
+        if config.micRecordsARoom {
+            let d = LiveDiarizer(
+                clusteringThreshold: config.roomVoiceSensitivity > 0 ? Float(config.roomVoiceSensitivity) : nil,
+                matchThreshold: Float(config.nameMatchConfidence),
+                rememberVoices: config.rememberVoices)
+            diarizer = d
+            liveDiarizer = d
+            Task.detached { _ = await d.start() }
+        }
+
+        let mic = LiveTrackTranscriber { [weak self, weak diarizer] seg in
             Task { @MainActor in
-                self?.appendLiveTurn(speaker: "Me", start: seg.start, text: seg.text)
+                // Waited for rather than patched in afterwards: an embedding of
+                // a few seconds of audio resolves in well under the partial
+                // flush interval, and a transcript whose labels change under
+                // the reader is worse than one that arrives a beat later.
+                let speaker = await diarizer?.label(start: seg.start, end: seg.end) ?? "Me"
+                self?.appendLiveTurn(speaker: speaker, start: seg.start, text: seg.text)
             }
         } onPartial: { [weak self] text in
             Task { @MainActor in self?.showLivePartial(speaker: "Me", text: text) }
@@ -586,10 +609,17 @@ final class AppController: ObservableObject {
         startOverlay()
         Task { @MainActor in
             if await mic.start() {
-                rec.onBuffer = { [weak mic] buffer in mic?.feed(buffer) }
-                Log.write("live: mic track streaming to live.md")
+                // One tap, two consumers, same buffers in the same order — the
+                // diarizer's ring and the transcriber's timeline stay aligned
+                // only because they start on the same buffer.
+                rec.onBuffer = { [weak mic, weak diarizer] buffer in
+                    mic?.feed(buffer)
+                    diarizer?.feed(buffer)
+                }
+                Log.write("live: mic track streaming to live.md\(diarizer != nil ? " (room: naming voices live)" : "")")
             } else {
                 self.liveMicTranscriber = nil
+                self.liveDiarizer = nil
             }
         }
     }
@@ -769,6 +799,7 @@ final class AppController: ObservableObject {
         let live = liveTranscript
         liveMicTranscriber = nil
         liveSystemTranscriber = nil
+        liveDiarizer = nil
         liveTranscript = nil
         guard mic != nil || sys != nil || live != nil else { return }
         Task { @MainActor in
