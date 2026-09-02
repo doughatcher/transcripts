@@ -149,6 +149,27 @@ jobs:
           git -C "$RUNNER_TEMP/tap" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           echo "TAP_DIR=$RUNNER_TEMP/tap" >> "$GITHUB_ENV"
 
+      # Three theories from log-reading were wrong. This takes a stack sample of
+      # the build while it is wedged, which says what it is actually blocked on
+      # rather than what it last managed to print. Detached, writing to a file,
+      # because a background job's output dies with the step that started it.
+      - name: Stall watchdog
+        run: |
+          nohup bash -c '
+            sleep 400
+            {
+              echo "=== processes ==="
+              ps -Ao pid,etime,command | grep "[x]codebuild" || echo "no xcodebuild running"
+              for p in $(pgrep -f "[x]codebuild"); do
+                echo "=== sample $p ==="
+                sample "$p" 5 -mayDie 2>&1 | head -120
+              done
+              echo "=== keychains ==="
+              security list-keychains -d user
+            } > "$RUNNER_TEMP/watchdog.txt" 2>&1
+          ' >/dev/null 2>&1 &
+          echo "watchdog armed (samples at T+400s)"
+
       - name: Run release.sh
         env:
           NOTARIZE: ${{ steps.mode.outputs.notarize }}
@@ -168,6 +189,14 @@ jobs:
 
       # Survives a cancel or a timeout, which is exactly when it is wanted: the
       # streamed step log is lost if the job never ends on its own.
+      - name: Keep the watchdog sample
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: watchdog-${{ inputs.version }}
+          path: ${{ runner.temp }}/watchdog.txt
+          if-no-files-found: warn
+
       - name: Keep the build log
         if: always()
         uses: actions/upload-artifact@v4
