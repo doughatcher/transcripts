@@ -185,11 +185,11 @@ public enum SpeakerTurns {
     /// of one voice, or of a video played into the room, is the pathological
     /// case: it becomes one paragraph the length of the meeting.
     ///
-    /// `maxCharacters` is a soft ceiling: checked before appending, so a turn
-    /// finishes just under it rather than splitting mid-segment. A short
-    /// exchange still coalesces exactly as it always did — a speaker who talks
-    /// for ninety seconds is still one turn — this only stops the unbounded
-    /// case.
+    /// `maxCharacters` is checked before appending, so a turn finishes just
+    /// under it rather than splitting mid-segment; a single segment longer than
+    /// the cap is kept whole. Anything under the cap coalesces exactly as it
+    /// always did. Above it — roughly a minute of continuous speech — the turn
+    /// breaks into paragraphs, which is the point.
     ///
     /// Deliberately not a pause threshold. A segment here carries a start and no
     /// end, so a long silence and one long segment are indistinguishable, and a

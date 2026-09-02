@@ -228,7 +228,9 @@ public struct AppConfig: Codable, Equatable, Sendable {
     /// instead of taking the whole thing as the operator.
     public var micRecordsARoom: Bool
     /// How readily two similar voices are treated as different people in a room
-    /// recording (0.5–0.9; lower finds more speakers). 0 = the default, 0.7.
+    /// recording (0.5–0.9; lower finds more speakers). 0 = the room default,
+    /// 0.75 (`FluidAudioDiarizer.roomClusteringThreshold`) — not the library's
+    /// 0.7, which is what this used to claim.
     ///
     /// Deliberately a sensitivity rather than a speaker count. A count is what
     /// anyone would reach for — "there are five of us" — but the diarizer has no
