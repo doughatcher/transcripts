@@ -583,7 +583,10 @@ final class AppController: ObservableObject {
         // background — until they are ready every turn is "Me", which is what
         // the live transcript always said.
         var diarizer: LiveDiarizer? = nil
-        if config.micRecordsARoom {
+        // The same gate the batch pass uses (`nativeStages(roomMode:)`): a
+        // detected call's other side arrives on its own track, and clustering
+        // the mic then would only split one person into several.
+        if config.micRecordsARoom, !recordingIsCall {
             let d = LiveDiarizer(
                 clusteringThreshold: config.roomVoiceSensitivity > 0 ? Float(config.roomVoiceSensitivity) : nil,
                 matchThreshold: Float(config.nameMatchConfidence),

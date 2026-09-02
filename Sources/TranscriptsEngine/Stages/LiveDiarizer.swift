@@ -28,8 +28,44 @@ import TranscriptsCore
 /// later; and nothing here is ever revised. The batch pass remains the record.
 public final class LiveDiarizer: @unchecked Sendable {
     public static let sampleRate = 16_000
+    /// The two settings below were chosen by sweeping `LiveDiarizeCheck` over
+    /// three recordings against the batch diarizer's count on the same file at
+    /// the same sensitivity (a four-voice dinner scene, a two-hander with two
+    /// similar voices, a three-voice courtroom):
+    ///
+    ///     setting              dinner  two-hander  courtroom     (batch: 4 / 2 / 3)
+    ///     as first written        9        6           2
+    ///     join ×1.10              6        4           2
+    ///     min-new 2.0 s           5        4           3
+    ///     both                    4        4           3
+    ///     merge ×1.15             9        4           —
+    ///
+    /// "Both" matches batch on two of three and halves the miss on the third,
+    /// and never under-splits — the one error a later pass cannot undo. Merge
+    /// did nothing on its own and is left at 1.0.
+    ///
     /// Below this a turn can join a voice but not start one. See `resolve`.
-    static let minNewVoiceSeconds: Float = 1.5
+    static let minNewVoiceSeconds: Float = env("TRANSCRIPTS_LIVE_MINNEW") ?? 2.0
+    /// A turn shorter than `shortTurnSeconds` whose nearest voice is within
+    /// `assignThreshold × joinFactor` joins that voice rather than opening a new
+    /// one. Every phantom voice on record opened between 0.73 and 0.79 against
+    /// an assign threshold of 0.72, on a turn under two seconds — a near miss on
+    /// thin evidence. A long turn is trusted to be what it looks like.
+    static let shortTurnSeconds: Float = env("TRANSCRIPTS_LIVE_SHORT") ?? 3.0
+    static let joinFactor: Float = env("TRANSCRIPTS_LIVE_JOIN") ?? 1.10
+    /// Established voices (heard more than once) whose centres sit within
+    /// `assignThreshold × mergeFactor` are folded together every few turns.
+    /// Measured inert at 1.0 and at 1.15 — a voice's first embedding is its
+    /// noisiest and pulls its centre away from its later self, further than
+    /// this reaches. Kept, because the mechanism is right even where the
+    /// number is not yet.
+    static let mergeFactor: Float = env("TRANSCRIPTS_LIVE_MERGE") ?? 1.0
+
+    /// Harness overrides only. The app never sets these; the replay harness
+    /// sweeps them so a setting is chosen against recordings, not by feel.
+    private static func env(_ key: String) -> Float? {
+        Float(ProcessInfo.processInfo.environment[key] ?? "")
+    }
 
     private let queue = DispatchQueue(label: "ltd.hatcher.transcripts.livediarize")
     private let converter = AudioConverter(sampleRate: Double(LiveDiarizer.sampleRate))
@@ -200,8 +236,13 @@ public final class LiveDiarizer: @unchecked Sendable {
         if duration < Self.minNewVoiceSeconds, nearest.distance > assignThreshold {
             return refuse("short-new", String(format: "%.1fs, nearest %.3f", duration, nearest.distance))
         }
+        // A short turn is held to a looser bar for *joining* the nearest voice
+        // than for opening one: the same near miss that opens a phantom on
+        // 1.7 s of padded audio is, on a long turn, a real second person.
+        var joinAt = assignThreshold
+        if duration < Self.shortTurnSeconds { joinAt = assignThreshold * Self.joinFactor }
         guard let speaker = diarizer.speakerManager.assignSpeaker(
-            embedding, speechDuration: duration, speakerThreshold: assignThreshold)
+            embedding, speechDuration: duration, speakerThreshold: joinAt)
         else { return refuse("assign", "\(String(format: "%.1f", duration))s, \(embedding.count) dims → nil") }
         decisions += 1
         if decisions <= 24 {
@@ -214,7 +255,11 @@ public final class LiveDiarizer: @unchecked Sendable {
         // Earlier turns keep the name they were shown with; from here on the
         // voice has one.
         if decisions % 8 == 0 {
-            for pair in diarizer.speakerManager.findMergeablePairs(speakerThreshold: assignThreshold) {
+            let established = Set(diarizer.speakerManager.getSpeakerList()
+                .filter { $0.updateCount >= 2 && !$0.isPermanent }.map(\.id))
+            for pair in diarizer.speakerManager.findMergeablePairs(
+                speakerThreshold: assignThreshold * Self.mergeFactor)
+            where established.contains(pair.speakerToMerge) && established.contains(pair.destination) {
                 diarizer.speakerManager.mergeSpeaker(pair.speakerToMerge, into: pair.destination)
                 if let kept = labels[pair.destination] {
                     Log.write("livediarize: merged \(labels[pair.speakerToMerge] ?? pair.speakerToMerge) into \(kept)")
