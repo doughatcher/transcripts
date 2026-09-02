@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.1.0-beta.4
+
+**Mac**
+
+- Voices in a room are named while the recording is still going. With **the
+  microphone records a room** on, each turn in the live transcript gets a
+  speaker — Speaker 1, Speaker 2, or a remembered name — instead of everything
+  being "Me" until the finished document arrived. It is a live guess and not
+  the record: a short interjection may take the label of whoever was already
+  talking, two similar voices may come out as more speakers than there are,
+  and nothing is revised once written. The finished document is unchanged and
+  remains the version to trust. On a call nothing changes at all — the other
+  side still arrives on its own track, which is better evidence than any
+  clustering.
+- A long stretch from one speaker breaks into paragraphs instead of growing
+  into a single block. Each paragraph carries the time it began, so clicking a
+  timestamp lands on the words you are reading rather than at the top of a
+  ten-minute run.
+- The transport icon is drawn at the size of its neighbours. It was about
+  two-thirds the size of the other menu-bar icons, which read as "small"
+  without being something you could name.
+
+## 1.1.0-beta.3
+
+**Mac**
+
+- The microphone works in the downloaded build. beta.2's notarized signature
+  did not carry the audio-input entitlement, and under the hardened runtime
+  that refuses the microphone outright — no permission prompt, no error, no
+  audio. Builds made on the developer's own machine never showed it, which is
+  how it shipped. If beta.2 recorded nothing for you, this is why.
+- Releases are now built, signed and notarized on GitHub rather than on a
+  laptop. Nothing visible changes; it is what stops the fault above from going
+  out the same way twice.
+
 ## 1.1.0-beta.2
 
 **Mac**
