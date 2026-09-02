@@ -84,10 +84,21 @@ jobs:
       # password that exists only for this run, and it disappears with the
       # runner. set-key-partition-list is what stops codesign blocking on a UI
       # prompt that no one is there to answer.
-      - name: Import signing certificate
+      # Two certificates, not one. The distribution certificate signs the
+      # export; the archive step, under automatic signing, wants an Apple
+      # Development identity as well — and on a fresh runner that has none,
+      # `-allowProvisioningUpdates` quietly mints one through the API key.
+      # Its private key dies with the runner, so every run left a dead
+      # certificate on the account: eleven "Created via API" by 2026-09-02,
+      # at which point Apple's cap was reached and the archive failed with
+      # "choose a certificate to revoke". A stored development certificate
+      # is found and reused instead, and the account stops accumulating them.
+      - name: Import signing certificates
         env:
           CERT_P12: ${{ secrets.DIST_CERT_P12 }}
           CERT_PASSWORD: ${{ secrets.DIST_CERT_PASSWORD }}
+          DEV_CERT_P12: ${{ secrets.DEV_CERT_P12 }}
+          DEV_CERT_PASSWORD: ${{ secrets.DEV_CERT_PASSWORD }}
         run: |
           KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
           KEYCHAIN_PASSWORD="$(uuidgen)"
@@ -99,6 +110,12 @@ jobs:
           security import "$RUNNER_TEMP/dist.p12" -k "$KEYCHAIN" \
             -P "$CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
           rm "$RUNNER_TEMP/dist.p12"
+          if [ -n "$DEV_CERT_P12" ]; then
+            echo "$DEV_CERT_P12" | base64 --decode > "$RUNNER_TEMP/dev.p12"
+            security import "$RUNNER_TEMP/dev.p12" -k "$KEYCHAIN" \
+              -P "$DEV_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+            rm "$RUNNER_TEMP/dev.p12"
+          fi
 
           security set-key-partition-list -S apple-tool:,apple:,codesign: \
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
@@ -154,6 +171,17 @@ jobs:
           print(f"number={max(seen) + 1 if seen else 1}")
           PY
           echo "▶ build ${{ steps.build.outputs.number }}"
+
+      # Refuse rather than mint. Without a development identity in the
+      # keychain the archive would create one through the API — the exact
+      # behaviour that filled the account. Add DEV_CERT_P12 (base64 of the
+      # "Apple Development" .p12) and DEV_CERT_PASSWORD to fix, not this guard.
+      - name: Refuse to mint a development certificate
+        run: |
+          if ! security find-identity -v -p codesigning | grep -q "Apple Development"; then
+            echo "::error::No Apple Development identity in the keychain. Archiving now would mint a throwaway certificate via the API (how the account reached its cap). Set the DEV_CERT_P12 / DEV_CERT_PASSWORD secrets."
+            exit 1
+          fi
 
       - name: Archive
         run: |
