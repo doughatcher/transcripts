@@ -97,6 +97,12 @@ jobs:
           echo "publish=$PUBLISH"   >> "$GITHUB_OUTPUT"
           echo "▶ NOTARIZE=$NOTARIZE PUBLISH=$PUBLISH"
 
+      # Deliberately ahead of the keychain import: xcodebuild deadlocks in
+      # package loading once the Developer ID keychain leads the search list.
+      # See PHASE in scripts/release.sh for what was observed and how often.
+      - name: Build (before any keychain exists)
+        run: PHASE=build scripts/release.sh "${{ inputs.version }}"
+
       # A dedicated keychain, unlocked with a password that exists only for
       # this run — the same pattern testflight.yml uses. The notary profile is
       # stored into the same keychain and release.sh is pointed at it via
@@ -170,8 +176,9 @@ jobs:
           ' >/dev/null 2>&1 &
           echo "watchdog armed (samples at T+400s)"
 
-      - name: Run release.sh
+      - name: Sign, notarize and publish
         env:
+          PHASE: sign
           NOTARIZE: ${{ steps.mode.outputs.notarize }}
           PUBLISH: ${{ steps.mode.outputs.publish }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

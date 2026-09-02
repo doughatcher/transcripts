@@ -72,32 +72,7 @@ fi
 echo "▶ Building $APP_NAME ($XC_CONFIG) …"
 mkdir -p "$ROOT/.build"
 BUILD_LOG="$ROOT/.build/xcodebuild.log"
-SPM_DIR="$ROOT/.build/spm"
-
-# Resolve packages as their own invocation, then build with resolution off.
-#
-# A build left to resolve its own packages can park forever in
-# `waitForRemoteSourcePackagesToFinishLoading` — a KVO condition that, when it
-# does not fire, has no effective timeout. A stack sample of a release runner
-# stuck at 16 minutes showed exactly that: every package already fetched and
-# checked out, the main thread asleep on a mach port waiting for a condition
-# that never came. It is a hang, not slow work, and it survives being waited on.
-#
-# Resolving first means the build opens an already-populated clone directory
-# and has nothing remote left to wait for.
-echo "  · resolving packages"
-xcodebuild -resolvePackageDependencies \
-  -project "$ROOT/Transcripts.xcodeproj" \
-  -scheme "$SCHEME" \
-  -clonedSourcePackagesDirPath "$SPM_DIR" \
-  -derivedDataPath "$DERIVED" >> "$BUILD_LOG" 2>&1 \
-  || { echo "✗ package resolution failed — tail of .build/xcodebuild.log:" >&2
-       tail -30 "$BUILD_LOG" >&2; exit 1; }
-
 XCARGS=(build
-  -disableAutomaticPackageResolution
-  -onlyUsePackageVersionsFromResolvedFile
-  -clonedSourcePackagesDirPath "$SPM_DIR"
   ${XCSIGN[@]+"${XCSIGN[@]}"}
   -project "$ROOT/Transcripts.xcodeproj"
   -scheme "$SCHEME"

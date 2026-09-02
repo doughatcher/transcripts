@@ -73,10 +73,36 @@ PY
 xcodegen generate >/dev/null
 
 # --- 2. Build + bundle -------------------------------------------------------
-echo "▶ Building"
-NO_INSTALL=1 NO_LAUNCH=1 scripts/make-app.sh >/dev/null
+# PHASE exists because of one hard-won fact: on a release runner, xcodebuild
+# deadlocks if the Developer ID keychain has already been imported. It parks in
+# waitForRemoteSourcePackagesToFinishLoading — a KVO condition with no working
+# timeout — with every package already checked out, and stays there (observed
+# four times, 16 to 40 minutes, until killed). Every build without that keychain
+# in the search list has succeeded; every build with it has hung. Why Xcode's
+# package loading depends on the keychain search list is not understood here.
+#
+# It does not have to be. The build does not need the certificate — only the
+# signing does — so the runner builds first and imports second:
+#
+#   PHASE=build  stamp, generate, build, stage, stop.   (no keychain yet)
+#   PHASE=sign   reuse the staged app, sign, notarize, publish.
+#
+# Unset, PHASE=all and the script behaves exactly as it always has, which is
+# what a laptop wants: one command, no keychain surgery, no deadlock.
+PHASE="${PHASE:-all}"
 APP="$ROOT/.build/$APP_NAME.app"
-[[ -d "$APP" ]] || { echo "✗ no app bundle at $APP" >&2; exit 1; }
+if [[ "$PHASE" == "sign" ]]; then
+  [[ -d "$APP" ]] || { echo "✗ PHASE=sign but nothing staged at $APP" >&2; exit 1; }
+  echo "▶ Reusing the staged build"
+else
+  echo "▶ Building"
+  NO_INSTALL=1 NO_LAUNCH=1 scripts/make-app.sh >/dev/null
+  [[ -d "$APP" ]] || { echo "✗ no app bundle at $APP" >&2; exit 1; }
+fi
+if [[ "$PHASE" == "build" ]]; then
+  echo "✓ Built and staged $VERSION at $APP"
+  exit 0
+fi
 
 # --- 3. Developer ID sign + notarize ----------------------------------------
 # Without this the download is a Gatekeeper wall for everyone who is not us.
