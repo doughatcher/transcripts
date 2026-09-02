@@ -77,6 +77,13 @@ enum MenuBarIconRenderer {
     /// Hollow-ring standby beat the alternatives at the size that matters. A
     /// ring with a dot inside has the dot close the ring at 18 points, and a
     /// dashed ring — the best "waiting" metaphor of the three — turns to mush.
+    ///
+    /// The shapes are sized to ~14 points across, not the ~11 they started at.
+    /// The other styles here render at `pointSize: 15` (and the mark's text line
+    /// spans 15), as does everything else in a menu bar — so a transport drawn
+    /// to 11 read as a small icon sitting among normal ones, which is a thing
+    /// the eye notices even when it cannot say why. The ripple's ceiling is
+    /// unchanged: it still reaches 8.5 at full level and no further.
     private static func transport(_ transport: Transport, color: NSColor?, tint: NSColor) -> NSImage {
         let ink = (color ?? .black).usingColorSpace(.sRGB) ?? .black
         let img = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
@@ -87,14 +94,14 @@ enum MenuBarIconRenderer {
             switch transport {
             case .stopped:
                 ink.setFill()
-                let side: CGFloat = 9.5
+                let side: CGFloat = 11.5
                 NSBezierPath(roundedRect: NSRect(x: c.x - side / 2, y: c.y - side / 2,
                                                  width: side, height: side),
-                             xRadius: 1.6, yRadius: 1.6).fill()
+                             xRadius: 2.0, yRadius: 2.0).fill()
             case .armed:
                 ink.setStroke()
-                let ring = circle(4.6)
-                ring.lineWidth = 1.7
+                let ring = circle(6.1)
+                ring.lineWidth = 2.0
                 ring.stroke()
             case .rolling(let level):
                 let l = max(0, min(1, level))
@@ -118,18 +125,18 @@ enum MenuBarIconRenderer {
                 // invisible in a quiet room, which is the point — silence should
                 // look like a plain disc, not a permanent halo.
                 tint.withAlphaComponent(0.10 + 0.55 * l).setStroke()
-                let ripple = circle(7.0 + 1.5 * l)
+                let ripple = circle(7.3 + 1.2 * l)
                 ripple.lineWidth = 1.2
                 ripple.stroke()
                 // A soft fill bridging disc and ring so the gap between them
                 // does not read as a separate floating outline.
                 tint.withAlphaComponent(0.16 + 0.26 * l).setFill()
-                circle(6.4 + 1.0 * l).fill()
+                circle(6.8 + 0.9 * l).fill()
                 // The disc itself keeps a fixed size: it is the shape being
                 // read, and a target that changes size is harder to read than
                 // one that changes colour. The rings do the moving.
                 hot.setFill()
-                circle(5.6).fill()
+                circle(6.1).fill()
             }
             return true
         }
