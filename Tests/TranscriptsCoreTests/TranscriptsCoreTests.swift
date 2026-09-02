@@ -350,6 +350,26 @@ import Foundation
             == "**Me:** [0:12] First. Still me. Done.")
     }
 
+    @Test func aLongMonologueBreaksIntoParagraphsInsteadOfOneWall() {
+        // Live has only two labels — "Me" and "Others" — so everything one track
+        // hears is consecutive-same-speaker. Unbounded, the live file showed
+        // readable turns for a few seconds and then collapsed into a single
+        // growing run-on; playing a film into the room was the worst case.
+        let segs = (0..<12).map {
+            AttributedSegment(speaker: "Me", start: Double($0) * 5,
+                              text: String(repeating: "word ", count: 20).trimmingCharacters(in: .whitespaces))
+        }
+        let turns = SpeakerTurns.turns(segs)
+        #expect(turns.count > 1)
+        #expect(turns.allSatisfy { $0.text.count <= 600 })
+        // Each paragraph carries the stamp of when it began, so click-to-seek
+        // lands on the text being read rather than the top of the block.
+        #expect(turns[0].start == 0)
+        #expect(turns[1].start > turns[0].start)
+        // Still one speaker — splitting a turn must never invent one.
+        #expect(SpeakerTurns.speakers(turns) == ["Me"])
+    }
+
     @Test func stampAndReadStampRoundTrip() {
         #expect(SpeakerTurns.stamp(0) == "[0:00]")
         #expect(SpeakerTurns.stamp(64) == "[1:04]")

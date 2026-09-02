@@ -175,17 +175,43 @@ public enum SpeakerTurns {
     /// Interleaves labeled segments from any number of tracks (already shifted onto
     /// one timeline) into ordered turns, coalescing consecutive same-speaker
     /// segments into a single turn.
-    public static func turns(_ segments: [AttributedSegment]) -> [SpeakerTurn] {
+    ///
+    /// Coalescing is bounded, and the bounds are the difference between a
+    /// transcript and a wall. Unbounded, one speaker's segments merge forever:
+    /// the live file shows readable `**Me:**` paragraphs for a few seconds and
+    /// then visibly collapses into a single growing run-on, because live has
+    /// only ever two labels — "Me" for the mic and "Others" for system audio —
+    /// so *everything* one track hears is consecutive-same-speaker. A recording
+    /// of one voice, or of a video played into the room, is the pathological
+    /// case: it becomes one paragraph the length of the meeting.
+    ///
+    /// `maxCharacters` is a soft ceiling: checked before appending, so a turn
+    /// finishes just under it rather than splitting mid-segment. A short
+    /// exchange still coalesces exactly as it always did — a speaker who talks
+    /// for ninety seconds is still one turn — this only stops the unbounded
+    /// case.
+    ///
+    /// Deliberately not a pause threshold. A segment here carries a start and no
+    /// end, so a long silence and one long segment are indistinguishable, and a
+    /// gap rule would split hardest on engines that chunk speech coarsely — the
+    /// opposite of what it was reaching for.
+    ///
+    /// A split turn keeps its own start, so every paragraph carries the stamp of
+    /// when *it* began — which is what makes click-to-seek land where the text
+    /// on screen actually is, rather than at the top of a ten-minute block.
+    public static func turns(_ segments: [AttributedSegment],
+                             maxCharacters: Int = 600) -> [SpeakerTurn] {
         let ordered = segments
             .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .sorted { $0.start < $1.start }
         var out: [SpeakerTurn] = []
         for seg in ordered {
             let text = seg.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            // Coalescing keeps the first segment's start: a speaker who talks for
-            // ninety seconds is one turn, and the useful place to jump to is
-            // where they started.
-            if let last = out.last, last.speaker == seg.speaker {
+            let continues = out.last.map { last in
+                last.speaker == seg.speaker
+                    && last.text.count + 1 + text.count <= maxCharacters
+            } ?? false
+            if continues, let last = out.last {
                 out[out.count - 1] = SpeakerTurn(speaker: last.speaker,
                                           start: last.start,
                                           text: last.text + " " + text)
