@@ -63,16 +63,7 @@ DERIVED="$ROOT/.build/xcode"
 # is absent, build unsigned and let the signing step downstream be the one
 # that decides the identity.
 SIGN_ID="-"; SIGN_DESC="ad-hoc (unstable — run scripts/make-signing-cert.sh)"
-# CODE_SIGNING_ALLOWED=NO alone is not enough. It stops the signing, but
-# xcodebuild still runs GatherProvisioningInputs first, and that phase reads
-# the keychain. On a release runner — where a Developer ID identity has just
-# been imported and the search list rewritten — that read wedges: the build
-# emits its package-resolution output and then nothing, for as long as you let
-# it (observed twice at ~40 min). With an empty keychain the same phase fails
-# in seconds, which is why unsigned dry runs never showed it. Clearing the
-# identity settings as well gives the phase nothing to resolve.
-XCSIGN=(CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
-        CODE_SIGN_IDENTITY= CODE_SIGN_ENTITLEMENTS= DEVELOPMENT_TEAM=)
+XCSIGN=(CODE_SIGNING_ALLOWED=NO)
 if security find-identity -p codesigning 2>/dev/null | grep -q "$APP_NAME Local Signing"; then
   SIGN_ID="$APP_NAME Local Signing"; SIGN_DESC="$APP_NAME Local Signing (stable)"
   XCSIGN=()
@@ -81,7 +72,32 @@ fi
 echo "▶ Building $APP_NAME ($XC_CONFIG) …"
 mkdir -p "$ROOT/.build"
 BUILD_LOG="$ROOT/.build/xcodebuild.log"
+SPM_DIR="$ROOT/.build/spm"
+
+# Resolve packages as their own invocation, then build with resolution off.
+#
+# A build left to resolve its own packages can park forever in
+# `waitForRemoteSourcePackagesToFinishLoading` — a KVO condition that, when it
+# does not fire, has no effective timeout. A stack sample of a release runner
+# stuck at 16 minutes showed exactly that: every package already fetched and
+# checked out, the main thread asleep on a mach port waiting for a condition
+# that never came. It is a hang, not slow work, and it survives being waited on.
+#
+# Resolving first means the build opens an already-populated clone directory
+# and has nothing remote left to wait for.
+echo "  · resolving packages"
+xcodebuild -resolvePackageDependencies \
+  -project "$ROOT/Transcripts.xcodeproj" \
+  -scheme "$SCHEME" \
+  -clonedSourcePackagesDirPath "$SPM_DIR" \
+  -derivedDataPath "$DERIVED" >> "$BUILD_LOG" 2>&1 \
+  || { echo "✗ package resolution failed — tail of .build/xcodebuild.log:" >&2
+       tail -30 "$BUILD_LOG" >&2; exit 1; }
+
 XCARGS=(build
+  -disableAutomaticPackageResolution
+  -onlyUsePackageVersionsFromResolvedFile
+  -clonedSourcePackagesDirPath "$SPM_DIR"
   ${XCSIGN[@]+"${XCSIGN[@]}"}
   -project "$ROOT/Transcripts.xcodeproj"
   -scheme "$SCHEME"
