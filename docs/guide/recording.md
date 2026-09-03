@@ -6,6 +6,8 @@
 **Stop & process**. That is the whole interaction. Use it for a voice note, a
 thought you don't want to lose, or a conversation in the room.
 
+![The menu while recording, with the timer, Stop & process and Open live transcript](/guide/images/menu-recording.webp)
+
 ## Recording calls
 
 Leave **Auto** on and Transcripts watches for calls. When you join a Teams, Zoom,

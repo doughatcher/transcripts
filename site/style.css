@@ -109,9 +109,38 @@ main { padding: 0 1.5rem; }
 .claim h3 { margin: 0 0 .4rem; font-size: 1.05rem; letter-spacing: -.01em; }
 .claim p { margin: 0; color: var(--muted); font-size: .95rem; }
 
-.shots { max-width: 62rem; margin: 4rem auto; display: grid; gap: 1.25rem;
-         grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); }
-.shots img { width: 100%; border: 1px solid var(--line); border-radius: 12px; }
+/* The walkthrough. Four screens in the order a first recording happens, each
+   with one sentence saying what you are looking at — because the landing page
+   used to show three Settings panes, which is the least informative thing an
+   app can show someone who has never used it. Tall menu shots and wide desktop
+   shots share one column so the eye reads down, not across. */
+.how { max-width: 62rem; margin: 4rem auto; padding: 0 1rem; }
+.how h2 { text-align: center; font-size: 1.6rem; letter-spacing: -.02em; margin: 0 0 2rem; }
+.how figure {
+  margin: 0 auto 3rem; display: grid; gap: 1.25rem; align-items: center;
+  grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+}
+.how figure.wide { grid-template-columns: minmax(0, 1fr); max-width: 62rem; }
+.how img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 12px; }
+.how figcaption { color: var(--muted); font-size: 1rem; line-height: 1.5; max-width: 34rem; }
+.how figcaption strong { color: var(--fg); }
+.how figure.wide figcaption { margin: 0 auto; text-align: center; }
+@media (max-width: 40rem) {
+  .how figure { grid-template-columns: minmax(0, 1fr); }
+  .how figure:not(.wide) img { max-width: 20rem; margin: 0 auto; }
+  .how figcaption { text-align: center; margin: 0 auto; }
+}
+
+/* Collapsed under the download: most visitors own their Mac, and the ones who
+   don't need three sentences, not a page. */
+details.mdm {
+  max-width: 34rem; margin: 1.25rem auto 0; text-align: left;
+  border: 1px solid var(--line); border-radius: 10px; padding: .6rem .9rem;
+  color: var(--muted); font-size: .9rem;
+}
+details.mdm summary { cursor: pointer; color: var(--fg); font-weight: 600; font-size: .92rem; }
+details.mdm p { margin: .6rem 0 0; }
+details.mdm strong { color: var(--fg); }
 
 .note {
   max-width: var(--max); margin: 3rem auto; padding: 1.1rem 1.25rem;

@@ -22,6 +22,8 @@ Hover it and it opens into three lanes:
 - **Last question** — what was just asked, with the answer underneath if one
   exists, and where it came from.
 
+![The overlay open, with Last conclusion, Facts & figures and Last question — the answer citing which note it came from](/guide/images/overlay.webp)
+
 Each lane holds only its most recent useful item. That is deliberate: mid-call
 you are not catching up on history, you are asking one specific thing, and a
 scrolling log of everything is the wrong shape for that.

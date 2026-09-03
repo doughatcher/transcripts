@@ -22,6 +22,18 @@
      or <code>brew install --cask hatcher-ltd/tap/transcripts</code></p>
   <p class="brew">The phone and iPad app runs through TestFlight for now.
      It is not on the App Store yet.</p>
+  <details class="mdm">
+    <summary>Advice for MDM-managed Macs</summary>
+    <p>On a work Mac with no admin rights, put <strong>Transcripts.app</strong>
+    in <code>~/Applications</code> instead of <code>/Applications</code> — make
+    the folder if it isn&rsquo;t there — and open it. It is notarized, so
+    Gatekeeper lets it run without a password. Grant the microphone when asked.
+    Screen Recording, which captures the other side of a call, may be locked by
+    your MDM; without it, calls record your microphone only.</p>
+    <p>Download from this page rather than GitHub — corporate proxies often
+    block GitHub release downloads, and this host is not one.
+    <a href="/guide/install/#managed-macs">Full steps, and what to tell IT</a>.</p>
+  </details>
 </section>
 
 <section class="claims">
@@ -79,10 +91,33 @@
   </div>
 </section>
 
-<section class="shots">
-  <img src="/guide/images/settings-general.png" alt="The General settings pane" loading="lazy">
-  <img src="/guide/images/settings-voices.png" alt="The Voices settings pane, showing recognised speakers" loading="lazy">
-  <img src="/guide/images/settings-pipeline.png" alt="The Pipeline settings pane" loading="lazy">
+<section class="how" aria-labelledby="how-h">
+  <h2 id="how-h">How it works</h2>
+  <figure>
+    <img src="/guide/images/menu-recording.webp" alt="The Transcripts menu while recording: a red timer, Stop &amp; process, Open live transcript, and the list of recent recordings" loading="lazy" width="430" height="812">
+    <figcaption><strong>It lives in the menu bar.</strong> Leave Auto on and it
+    notices when a call starts. Or press Start recording for anything else —
+    a voice note, a conversation in the room.</figcaption>
+  </figure>
+  <figure class="wide">
+    <img src="/guide/images/live-edge.webp" alt="A desktop during a recording, with a small glass pill near the top showing the last words spoken" loading="lazy" width="1800" height="1170">
+    <figcaption><strong>Words appear as they are said.</strong> A small pill shows
+    the last thing spoken, and the whole conversation is written to a plain
+    file you — or an assistant — can read before anyone hangs up.</figcaption>
+  </figure>
+  <figure class="wide">
+    <img src="/guide/images/overlay.webp" alt="The overlay panel open over the desktop, showing the last conclusion, facts and figures, and the last question with its source" loading="lazy" width="1800" height="1170">
+    <figcaption><strong>The overlay answers the question that was just asked</strong>
+    — from earlier in the call, or from your notes — and says which. It will not
+    answer from anywhere else.</figcaption>
+  </figure>
+  <figure class="wide">
+    <img src="/guide/images/document-transcript.webp" alt="The Recordings window showing a finished transcript with timestamps and named speakers" loading="lazy" width="1600" height="1272">
+    <figcaption><strong>Afterwards, a document.</strong> A summary, the action
+    items, and the transcript with each speaker named — as Markdown in a folder
+    you chose, with the audio beside it. Click a timestamp to hear that
+    moment.</figcaption>
+  </figure>
 </section>
 
 <section class="note">

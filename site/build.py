@@ -73,6 +73,11 @@ GUIDE_PAGES = [pair for _, pages in GUIDE_SECTIONS for pair in pages]
 # --- A very small Markdown subset -------------------------------------------
 # Enough for the guide: headings, lists, code, links, emphasis, images, rules.
 # Anything fancier is a signal the guide is drifting toward prose it shouldn't be.
+#
+# Two things it deliberately lacks, because both have bitten: ordered lists
+# ("1. …" renders as a paragraph — use "- " and let the prose carry the order)
+# and fenced code inside a list item (the fence collapses the list). Put the
+# fence after the list.
 
 def md(text: str) -> str:
     out, lines = [], text.split("\n")
