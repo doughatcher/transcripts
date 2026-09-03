@@ -1,6 +1,7 @@
 import Foundation
 import CoreAudio
 import CoreMedia
+import TranscriptsEngine   // Log
 
 /// Reads the system audio mix through a Core Audio **process tap**
 /// (macOS 14.2+): a tap over every process except our own, wrapped in a
