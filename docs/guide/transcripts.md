@@ -10,6 +10,8 @@ wall of text.
 Everything is searchable, and every recording can be reopened, replayed and
 re-read.
 
+![The Recordings window: a recording's title, description, audio player, and summary with key points and action items](/guide/images/document-summary.webp)
+
 ## What gets written to disk
 
 For each recording, in the folder you chose:
@@ -48,6 +50,8 @@ Turn on speaker attribution and it separates the other side into individual
 voices, then names them two ways: from the transcript itself when someone is
 addressed by name, and by matching voiceprints against people you have confirmed
 before.
+
+![A transcript with timestamps and speakers named — Ernie, Joe, Me — and unnamed ones as Speaker 1, Speaker 4](/guide/images/document-transcript.webp)
 
 This is best-effort and will occasionally get it wrong. So it is correctable:
 Settings ▸ Voices lets you reassign a speaker, which updates both the voiceprint

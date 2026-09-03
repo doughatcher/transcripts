@@ -4,6 +4,8 @@ Most recorders hand you something to read afterwards. Transcripts also writes
 the conversation down **as it happens**, to an ordinary file you can point
 anything at — including an AI assistant, mid-meeting.
 
+![During a recording, a small pill near the top of the screen shows the last words spoken](/guide/images/live-edge.webp)
+
 ## Where it is
 
 While recording, three files are kept in step, rewritten every time someone
