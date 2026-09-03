@@ -111,6 +111,6 @@ how it is operated — there is no server to operate. If any of it ever stops
 being true, it will stop being true here first.
 
 Transcripts is open source under the MIT licence. If you would rather check
-that than take our word for it, the source is at https://github.com/hatcher-ltd/transcripts — and the iOS app
+that than take our word for it, the source is at https://github.com/doughatcher/transcripts — and the iOS app
 contains no networking code, which is verifiable in the source and in the
 shipped binary alike.

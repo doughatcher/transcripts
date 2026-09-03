@@ -15,7 +15,7 @@
 #                               (Keychain Access → My Certificates → export)
 #   DEVELOPER_ID_CERT_PASSWORD  its password
 #   CLOUDFLARE_API_TOKEN        Pages deploy token for `wrangler pages deploy`
-#   TAP_PUSH_TOKEN              PAT with contents:write on hatcher-ltd/homebrew-tap
+#   TAP_PUSH_TOKEN              PAT with contents:write on doughatcher/homebrew-tap
 #
 # Degradation is deliberate and loud: with no DEVELOPER_ID_CERT_P12 the run
 # builds an UNSIGNED dry-run artifact (NOTARIZE=0 PUBLISH=0) so the pipeline
@@ -150,7 +150,7 @@ jobs:
             echo "::warning::No TAP_PUSH_TOKEN — the cask will not be updated this run."
             exit 0
           fi
-          git clone -q "https://x-access-token:${TAP_PUSH_TOKEN}@github.com/hatcher-ltd/homebrew-tap" "$RUNNER_TEMP/tap"
+          git clone -q "https://x-access-token:${TAP_PUSH_TOKEN}@github.com/doughatcher/homebrew-tap" "$RUNNER_TEMP/tap"
           git -C "$RUNNER_TEMP/tap" config user.name "github-actions[bot]"
           git -C "$RUNNER_TEMP/tap" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           echo "TAP_DIR=$RUNNER_TEMP/tap" >> "$GITHUB_ENV"

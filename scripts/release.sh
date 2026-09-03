@@ -322,7 +322,7 @@ if [[ "${PUBLISH:-1}" == "1" && "$NOTARIZE" == "1" ]]; then
       echo "  ✓ tap updated to $VERSION"
     fi
   else
-    echo "  ! no tap checkout at $TAP — skipping (clone hatcher-ltd/homebrew-tap there)"
+    echo "  ! no tap checkout at $TAP — skipping (clone doughatcher/homebrew-tap there)"
   fi
 
   # The three consumers must agree. Verified against what is actually served,
@@ -382,7 +382,7 @@ if [[ "${PUBLISH:-1}" == "1" && "$NOTARIZE" == "1" ]]; then
   cat <<DONE
 
 ✓ Published $VERSION → $BASE_URL
-  brew install --cask hatcher-ltd/tap/transcripts
+  brew install --cask doughatcher/tap/transcripts
 DONE
 else
   cat <<DONE

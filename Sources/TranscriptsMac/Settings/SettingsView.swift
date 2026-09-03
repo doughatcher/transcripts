@@ -789,11 +789,11 @@ struct AboutTab: View {
     /// An app whose whole claim is that nothing leaves the device should let you
     /// go and check that for yourself. It sits outside the row of links below
     /// because a fifth Label does not fit in a 580pt window.
-    private static let sourceURL = URL(string: "https://github.com/hatcher-ltd/transcripts")!
+    private static let sourceURL = URL(string: "https://github.com/doughatcher/transcripts")!
     /// Reports still land in the support repository rather than alongside the
     /// code: that is where the existing threads and the people subscribed to
     /// them already are, and splitting them costs more than the tidiness gains.
-    private static let issuesURL = URL(string: "https://github.com/hatcher-ltd/transcripts-support/issues")!
+    private static let issuesURL = URL(string: "https://github.com/doughatcher/transcripts-support/issues")!
 
     private static let author = "Doug Hatcher"
 

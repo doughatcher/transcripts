@@ -118,5 +118,5 @@ testflight:
     gh workflow run testflight.yml -f version="$VERSION"
     sleep 8
     RUN="$(gh run list --workflow=testflight.yml --limit 1 --json databaseId -q '.[0].databaseId')"
-    echo "▶ https://github.com/hatcher-ltd/transcripts/actions/runs/$RUN"
+    echo "▶ https://github.com/doughatcher/transcripts/actions/runs/$RUN"
     gh run watch "$RUN" --exit-status

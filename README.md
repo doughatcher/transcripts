@@ -9,7 +9,7 @@
   device.<br>
   <a href="https://transcripts.hatcher.ltd">transcripts.hatcher.ltd</a> ·
   <a href="https://transcripts.hatcher.ltd/guide/">User guide</a> ·
-  <a href="https://github.com/hatcher-ltd/transcripts-support/issues">Issues</a>
+  <a href="https://github.com/doughatcher/transcripts-support/issues">Issues</a>
 </p>
 
 ---
@@ -86,7 +86,7 @@ without a Developer ID certificate unless `NOTARIZE=0` is explicit.
 
 Then `npx wrangler pages deploy site/public --project-name=transcripts`, and copy
 `dist/transcripts.rb` into
-[hatcher-ltd/homebrew-tap](https://github.com/hatcher-ltd/homebrew-tap).
+[doughatcher/homebrew-tap](https://github.com/doughatcher/homebrew-tap).
 
 ## Privacy
 

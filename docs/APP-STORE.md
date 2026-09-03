@@ -63,7 +63,7 @@ Paste into App Store Connect ▸ App Review Information ▸ Notes.
 > record. Guidance about consent laws is provided in the App Store description
 > and in our privacy policy.
 >
-> The app is open source under the MIT licence: https://github.com/hatcher-ltd/transcripts
+> The app is open source under the MIT licence: https://github.com/doughatcher/transcripts
 
 ---
 
