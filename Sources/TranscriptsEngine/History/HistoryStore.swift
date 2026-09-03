@@ -67,6 +67,17 @@ public struct RecordingRecord: Codable, Identifiable, Equatable {
 public final class HistoryStore {
     /// `~/Library/Application Support/Transcripts`
     public static let dir: URL = {
+        // An explicit override rather than relying on $HOME: Foundation resolves
+        // the Application Support directory from the process owner, not the
+        // environment, so relocating HOME leaves this pointing at the real
+        // history. The screenshot harness needs a second copy of the app to read
+        // a generated history without seeing anyone's actual recordings.
+        if let override = ProcessInfo.processInfo.environment["TRANSCRIPTS_SUPPORT_DIR"],
+           !override.isEmpty {
+            let base = URL(fileURLWithPath: (override as NSString).expandingTildeInPath)
+            try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+            return base
+        }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
             .appendingPathComponent("Transcripts", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)

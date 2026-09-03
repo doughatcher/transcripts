@@ -45,6 +45,30 @@ final class StatusBarController: NSObject {
         controller.onOpenSettings = { [weak self] in self?.openSettings() }
 
         startIconTimer()
+        openForScreenshots()
+    }
+
+    /// Opens a window on launch when asked to by the environment, so the
+    /// screenshot harness can photograph the Recordings and Settings windows
+    /// without driving the status item through the Accessibility API.
+    ///
+    /// The iOS target has had `--seed-select-take` for the same reason. This is
+    /// the Mac half: a menu-bar app starts with no windows at all, so there is
+    /// otherwise nothing on screen to capture.
+    ///
+    ///   TRANSCRIPTS_SHOW=recordings   the library window
+    ///   TRANSCRIPTS_SHOW=settings     the settings window
+    private func openForScreenshots() {
+        guard let what = ProcessInfo.processInfo.environment["TRANSCRIPTS_SHOW"]?
+            .lowercased(), !what.isEmpty else { return }
+        // After the first library scan, or the window opens onto an empty list.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            switch what {
+            case "recordings", "library": self?.showRecordings(select: nil)
+            case "settings": self?.openSettings()
+            default: break
+            }
+        }
     }
 
     // MARK: - Live icon
