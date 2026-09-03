@@ -783,8 +783,8 @@ struct SettingsView: View {
 struct AboutTab: View {
     @EnvironmentObject private var controller: AppController
 
-    private static let siteURL = URL(string: "https://transcripts.hatcher.ltd")!
-    private static let guideURL = URL(string: "https://transcripts.hatcher.ltd/guide")!
+    private static let siteURL = URL(string: "https://transcripts.doughatcher.com")!
+    private static let guideURL = URL(string: "https://transcripts.doughatcher.com/guide")!
     private static let supportURL = URL(string: "mailto:support@hatcher.ltd?subject=Transcripts")!
     /// An app whose whole claim is that nothing leaves the device should let you
     /// go and check that for yourself. It sits outside the row of links below

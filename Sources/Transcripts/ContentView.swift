@@ -745,7 +745,7 @@ private struct PrivacySheet: View {
                     .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
 
                     Link("Read the full privacy policy",
-                         destination: URL(string: "https://transcripts.hatcher.ltd/privacy")!)
+                         destination: URL(string: "https://transcripts.doughatcher.com/privacy")!)
                         .font(.callout)
 
                     Text("Everything above describes how the app is built, not a promise about how it is operated — there is no server to operate.")

@@ -22,7 +22,7 @@ import TranscriptsCore
 enum Updater {
     /// Where the manifests live. Baked into every shipped build, so an installed
     /// copy checks *this* host forever — it is not a URL to move casually.
-    static let baseURL = "https://transcripts.hatcher.ltd"
+    static let baseURL = "https://transcripts.doughatcher.com"
 
     /// Stable and pre-release channels are separate files. A stable release
     /// writes both, so someone riding the beta train still gets a finished

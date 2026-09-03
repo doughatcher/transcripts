@@ -27,7 +27,7 @@ BUNDLE_ID="ltd.hatcher.transcripts"
 SITE="$ROOT/site/public"
 ZIP_NAME="$APP_NAME-$VERSION.zip"
 NOTARIZE="${NOTARIZE:-1}"
-BASE_URL="${BASE_URL:-https://transcripts.hatcher.ltd}"
+BASE_URL="${BASE_URL:-https://transcripts.doughatcher.com}"
 
 if [[ -z "${DEVELOPER_DIR:-}" ]]; then
   for x in "$HOME/Downloads/Xcode-beta.app" /Applications/Xcode-beta.app /Applications/Xcode.app; do
