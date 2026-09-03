@@ -71,7 +71,11 @@ final class SystemAudioCapturer: NSObject, SCStreamOutput, SCStreamDelegate, @un
         // exists. ScreenCaptureKit then starts silently, and moving a working
         // setup onto a new permission dialog would be a regression wearing a
         // fix's clothes.
-        if #available(macOS 14.2, *), !CGPreflightScreenCaptureAccess() {
+        // TRANSCRIPTS_FORCE_TAP exercises the tap on a machine that already holds
+        // the Screen Recording grant — otherwise the preflight below sends every
+        // such machine down the old path and the tap ships untested.
+        let forceTap = ProcessInfo.processInfo.environment["TRANSCRIPTS_FORCE_TAP"] != nil
+        if #available(macOS 14.2, *), forceTap || !CGPreflightScreenCaptureAccess() {
             if startViaTap(into: url) { return true }
             Log.write("sysaudio: tap engine unavailable — trying ScreenCaptureKit")
         }
