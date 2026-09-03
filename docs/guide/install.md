@@ -59,7 +59,7 @@ ordinary user cannot grant. The steps differ only in where it goes.
 With Homebrew, the same thing in one line:
 
 ```
-brew install --cask hatcher-ltd/tap/transcripts --appdir=~/Applications
+brew install --cask doughatcher/tap/transcripts --appdir=~/Applications
 ```
 
 If IT is willing to pre-approve it fleet-wide, what they need for a PPPC
