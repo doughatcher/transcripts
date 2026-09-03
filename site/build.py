@@ -294,8 +294,7 @@ def page(title: str, body: str, *, nav: str = "", cls: str = "") -> str:
 <footer>
   <p>Transcripts is made by <a href="https://hatcher.ltd">Doug Hatcher</a>.
      <a href="/guide/privacy/">Privacy</a> ·
-     <a href="https://github.com/doughatcher/transcripts-support/issues">Report an issue</a> ·
-     <a href="mailto:support@hatcher.ltd">Support</a></p>
+     <a href="https://github.com/doughatcher/transcripts-support/issues">Report an issue</a></p>
 </footer>
 </body>
 </html>

@@ -70,8 +70,6 @@ information there is — the templates ask for the version and your OS for that
 reason. Please don't paste transcript contents; nothing about diagnosing a bug
 needs them.
 
-For anything you would rather not post publicly, email
-[support@hatcher.ltd](mailto:support@hatcher.ltd).
 
 ---
 

@@ -785,7 +785,6 @@ struct AboutTab: View {
 
     private static let siteURL = URL(string: "https://transcripts.doughatcher.com")!
     private static let guideURL = URL(string: "https://transcripts.doughatcher.com/guide")!
-    private static let supportURL = URL(string: "mailto:support@hatcher.ltd?subject=Transcripts")!
     /// An app whose whole claim is that nothing leaves the device should let you
     /// go and check that for yourself. It sits outside the row of links below
     /// because a fifth Label does not fit in a 580pt window.
@@ -869,9 +868,6 @@ struct AboutTab: View {
                             }
                             Link(destination: Self.issuesURL) {
                                 Label("Report an issue", systemImage: "ladybug")
-                            }
-                            Link(destination: Self.supportURL) {
-                                Label("Support", systemImage: "envelope")
                             }
                         }
                         .padding(.top, 2)
