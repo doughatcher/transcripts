@@ -1008,6 +1008,31 @@ final class AppController: ObservableObject {
             return
         }
 
+        // That property only catches a mute set *on the device*. Teams, Slack and
+        // the Control Center mic toggle mute at the stream level instead: every
+        // input on the machine returns digital zero at once and no device property
+        // reports it. Verified 2026-09-03 — a Brio read `mute=unmuted vol=0.84`
+        // and still delivered exact zeros for three consecutive calls while its
+        // owner sat muted, and the recovery below walked the input list down to an
+        // iPhone looking for signal that no device on the machine was being given.
+        //
+        // The far side being audible is what separates this from a dead device: it
+        // means a call is genuinely live, and on a live call a silent mic is
+        // overwhelmingly a muted one. Switching cannot beat a stream-level mute, so
+        // say so and keep the recording whole rather than fragmenting it chasing a
+        // device that would read zero too.
+        if AudioLevel.isDigitallyDead(peak: rec.samplePeak()),
+           let audible = systemCapturer?.lastAudible(),
+           Date().timeIntervalSince(audible) < 60 {
+            Log.write("deadmic: '\(dead.name)' reads digital zero while the call is audible — muted, not dead; standing down")
+            DeadAirPanel.shared.show(
+                title: "Not hearing your mic",
+                body: "If you're muted, that's expected — the other side of the call is still being recorded, and your own side resumes the moment you unmute. If you're not muted, '\(dead.name)' isn't picking anything up, so pick a different input.",
+                secondary: ("Mic Settings…", { [weak self] in self?.openSettings() }),
+                autoDismissAfter: 15)
+            return
+        }
+
         // We already switched once and the replacement is quiet too. Do NOT read
         // that as a system mute: a noise-gated mic (the MX Brio does this) sits at
         // digital zero until someone actually speaks into it, so on 2026-07-21 a
@@ -2603,7 +2628,7 @@ final class AppController: ObservableObject {
 
     /// All selectable microphone inputs (rescanned each call — hot-plug friendly).
     func availableInputs() -> [AudioInputDevice] {
-        let devices = AudioInputDevices.all()
+        let devices = AudioInputDevices.selectable()
         cacheFavoriteInputNames(from: devices)
         return devices
     }
