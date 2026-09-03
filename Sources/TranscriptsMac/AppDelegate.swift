@@ -41,6 +41,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MLXCheck.runAndExit()
             return
         }
+        // Before anything takes hold: a copy opened from Downloads should become
+        // an installed copy, because permissions are granted to a path and a
+        // recording is worth more than the folder it was launched from. Runs
+        // ahead of the status item so a user who accepts never sees this
+        // process finish starting — it relaunches from the new location.
+        FirstRunInstaller.offerIfNeeded()
+
         NSApp.setActivationPolicy(.accessory)
         statusBar = StatusBarController(controller: .shared)
         installTerminationHandler()
