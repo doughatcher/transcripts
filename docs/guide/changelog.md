@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.1.0-beta.8
+
+**Mac**
+
+- Transcripts installs itself. Open it from wherever it landed — Downloads,
+  the Desktop, a folder someone sent you — and it offers to move into
+  `~/Applications`, your own Applications folder, and reopen from there. No
+  administrator, and nothing to know about where Mac apps are supposed to
+  live. That was three pieces of Mac lore standing between a colleague and a
+  working app, and it is the step people actually got stuck on. Say no and it
+  will not ask again.
+- The site links to the source, and says what a managed Mac actually needs.
+  The advice to avoid GitHub is gone — corporate proxies were the reason, and
+  the release downloads get through now, so both routes are offered. The
+  Screen Recording advice is gone too: since beta.7 it is not used, and it was
+  the one permission a managed Mac tends to lock behind an admin password.
+
 ## 1.1.0-beta.7
 
 **Mac**

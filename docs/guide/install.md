@@ -41,20 +41,27 @@ read-only `/Applications`, and a proxy in front of GitHub. Transcripts installs
 anyway, because it is signed and notarized by Apple and asks for nothing an
 ordinary user cannot grant. The steps differ only in where it goes.
 
-- **Download from this site**, not from GitHub. Corporate proxies routinely
-  block GitHub release downloads; `transcripts.doughatcher.com` is a plain
-  Cloudflare host and gets through.
-- **Put it in `~/Applications`**, not `/Applications`. Make the folder if it is
-  not there. macOS treats it exactly like the system one — Spotlight, Launchpad
-  and login items all see it. (Homebrew can do the same; see below.)
-- **Open it.** Gatekeeper checks the notarization ticket and lets it run. No
+- **Download from wherever your network allows.** This site is a plain
+  Cloudflare host; [GitHub releases](https://github.com/doughatcher/transcripts/releases)
+  carry the identical build if the proxy prefers that one. Take the newest
+  pre-release there, not the release marked "Latest".
+- **Just open it.** Transcripts offers to move itself into `~/Applications` —
+  your own Applications folder, which needs no administrator — and reopens from
+  there. macOS treats that folder exactly like the system one: Spotlight,
+  Launchpad and login items all see it. (Homebrew installs to the same place;
+  see below. To do it by hand, drag the app there yourself.)
+- **Gatekeeper lets it run.** It checks the notarization ticket. No
   right-click-Open, no admin password.
 - **Grant the microphone** when macOS asks. That is a normal per-user consent
   and is never locked by MDM.
-- **Screen Recording is optional.** It is how macOS captures the other side of a
-  call, and on a managed Mac that switch in Privacy & Security may be locked.
-  Without it Transcripts records your microphone only — which on a laptop in a
-  meeting room still catches everyone — and says so in the menu.
+- **The other side of a call needs one more permission,** and it is an ordinary
+  Allow dialog: Transcripts reads the system audio mix directly, which macOS
+  grants per-user like the microphone. Decline it and calls record your
+  microphone only — which on a laptop in a meeting room still catches everyone —
+  and the menu says so.
+- **You do not need Screen Recording.** It was the old way of capturing call
+  audio and it is the one switch a managed Mac tends to lock behind an admin
+  password. If something offers it to you, you can decline.
 
 With Homebrew, the same thing in one line:
 

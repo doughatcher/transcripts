@@ -17,6 +17,7 @@
   <div class="badges" id="download">
     <a class="btn" href="/{{ZIP}}">Download for Mac</a>
     <a class="btn secondary" href="https://testflight.apple.com/join/S4gy9315">Test on iPhone &amp; iPad</a>
+    <a class="btn secondary" href="https://github.com/doughatcher/transcripts">Source on GitHub</a>
   </div>
   <p class="brew">Transcripts {{VERSION}} · macOS 14 or later · 9 MB<br>
      or <code>brew install --cask doughatcher/tap/transcripts</code></p>
@@ -24,14 +25,19 @@
      It is not on the App Store yet.</p>
   <details class="mdm">
     <summary>Advice for MDM-managed Macs</summary>
-    <p>On a work Mac with no admin rights, put <strong>Transcripts.app</strong>
-    in <code>~/Applications</code> instead of <code>/Applications</code> — make
-    the folder if it isn&rsquo;t there — and open it. It is notarized, so
-    Gatekeeper lets it run without a password. Grant the microphone when asked.
-    Screen Recording, which captures the other side of a call, may be locked by
-    your MDM; without it, calls record your microphone only.</p>
-    <p>Download from this page rather than GitHub — corporate proxies often
-    block GitHub release downloads, and this host is not one.
+    <p>On a work Mac with no admin rights, open <strong>Transcripts.app</strong>
+    and it offers to move itself into <code>~/Applications</code> — your own
+    Applications folder, which needs no administrator — and reopens from there.
+    It is notarized, so Gatekeeper lets it run without a password. Grant the
+    microphone when asked.</p>
+    <p>Recording the other side of a call asks for one more permission, and
+    that is an ordinary Allow dialog too: no administrator, no trip through
+    System Settings. Decline it and calls still record your microphone. If your
+    Mac offers you <em>Screen Recording</em> and it wants an admin password,
+    you can ignore it — that was the old way and is no longer needed.</p>
+    <p>If this host is blocked on your network, the same build is on
+    <a href="https://github.com/doughatcher/transcripts/releases">GitHub
+    releases</a> — take the newest pre-release.
     <a href="/guide/install/#managed-macs">Full steps, and what to tell IT</a>.</p>
   </details>
 </section>
