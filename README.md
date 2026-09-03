@@ -7,8 +7,8 @@
 <p align="center">
   Voice notes and meeting transcripts, recorded and transcribed on your own
   device.<br>
-  <a href="https://transcripts.hatcher.ltd">transcripts.hatcher.ltd</a> ·
-  <a href="https://transcripts.hatcher.ltd/guide/">User guide</a> ·
+  <a href="https://transcripts.doughatcher.com">transcripts.doughatcher.com</a> ·
+  <a href="https://transcripts.doughatcher.com/guide/">User guide</a> ·
   <a href="https://github.com/hatcher-ltd/transcripts-support/issues">Issues</a>
 </p>
 

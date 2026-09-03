@@ -119,8 +119,15 @@ Paste into App Store Connect ▸ App Review Information ▸ Notes.
 *(98 chars. Do not repeat words already in the name or subtitle — Apple indexes
 those separately.)*
 
-**Support URL:** `https://transcripts.hatcher.ltd`
-**Privacy Policy URL:** `https://transcripts.hatcher.ltd/privacy` (source:
+> **Do not edit these two fields in App Store Connect while a version sits in
+> `WAITING_FOR_REVIEW`.** Editing metadata on a queued submission can bounce it
+> out of the queue and restart the clock. 1.0.6 was submitted 2026-08-30 and is
+> still waiting; change these only once it is approved. The old host keeps
+> serving, so there is nothing urgent to fix.
+
+**Support URL:** `https://transcripts.doughatcher.com` *(was `transcripts.hatcher.ltd`
+— both hostnames must serve, see below)*
+**Privacy Policy URL:** `https://transcripts.doughatcher.com/privacy` (source:
 `docs/guide/privacy.md`, published at `/guide/privacy/`; `/privacy` is a 301 to
 it, set in `site/build.py`). Both must return 200 **before** you submit —
 Apple fetches this URL at review and again for as long as the app is listed.
