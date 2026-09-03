@@ -557,6 +557,7 @@ final class AppController: ObservableObject {
     /// the other participants, not just your side.
     private func maybeStartSystemAudio(scratchDir: URL) {
         guard config.captureSystemAudio, MeetingDetector.isMeetingAppRunning else { return }
+        guard explainSystemAudioPermissionIfNeeded() else { return }
         let capturer = SystemAudioCapturer()
         systemCapturer = capturer
         let sysURL = scratchDir.appendingPathComponent("system.caf")
@@ -565,6 +566,30 @@ final class AppController: ObservableObject {
             if !ok { self.systemCapturer = nil; return }
             if #available(macOS 26, *) { self.attachLiveSystemTranscriber(to: capturer) }
         }
+    }
+
+    /// One-time context shown before the system-audio permission dialog can
+    /// appear, so the OS prompt never lands cold: the user hears first that saying
+    /// no costs only the remote side of calls, not the recording. Skipped entirely
+    /// when the Screen Recording grant already exists (nothing will be asked) and
+    /// after the first showing (context given; later recordings go straight to the
+    /// OS dialog). Returns false when the user chose mic-only for this recording.
+    private func explainSystemAudioPermissionIfNeeded() -> Bool {
+        if CGPreflightScreenCaptureAccess() { return true }
+        let explainedKey = "systemAudioPermissionExplained"
+        if UserDefaults.standard.bool(forKey: explainedKey) { return true }
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Capture the other side of calls?"
+        alert.informativeText = """
+        To include what other participants say, macOS will ask permission to record this Mac's audio — a normal Allow/Don't Allow dialog. No administrator access is needed.
+
+        This is optional. Without it, recordings still capture your microphone (you, and the room); only the remote side of calls is left out.
+        """
+        alert.addButton(withTitle: "Continue")
+        alert.addButton(withTitle: "Mic-Only for Now")
+        UserDefaults.standard.set(true, forKey: explainedKey)
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     // MARK: - Live transcript (streaming, macOS 26)
@@ -980,6 +1005,31 @@ final class AppController: ObservableObject {
         // switching mics under it just records zeros from somewhere else.
         if AudioInputDevices.isInputMuted(dead) == true {
             Log.write("deadmic: '\(dead.name)' reports muted — normal posture, standing down")
+            return
+        }
+
+        // That property only catches a mute set *on the device*. Teams, Slack and
+        // the Control Center mic toggle mute at the stream level instead: every
+        // input on the machine returns digital zero at once and no device property
+        // reports it. Verified 2026-09-03 — a Brio read `mute=unmuted vol=0.84`
+        // and still delivered exact zeros for three consecutive calls while its
+        // owner sat muted, and the recovery below walked the input list down to an
+        // iPhone looking for signal that no device on the machine was being given.
+        //
+        // The far side being audible is what separates this from a dead device: it
+        // means a call is genuinely live, and on a live call a silent mic is
+        // overwhelmingly a muted one. Switching cannot beat a stream-level mute, so
+        // say so and keep the recording whole rather than fragmenting it chasing a
+        // device that would read zero too.
+        if AudioLevel.isDigitallyDead(peak: rec.samplePeak()),
+           let audible = systemCapturer?.lastAudible(),
+           Date().timeIntervalSince(audible) < 60 {
+            Log.write("deadmic: '\(dead.name)' reads digital zero while the call is audible — muted, not dead; standing down")
+            DeadAirPanel.shared.show(
+                title: "Not hearing your mic",
+                body: "If you're muted, that's expected — the other side of the call is still being recorded, and your own side resumes the moment you unmute. If you're not muted, '\(dead.name)' isn't picking anything up, so pick a different input.",
+                secondary: ("Mic Settings…", { [weak self] in self?.openSettings() }),
+                autoDismissAfter: 15)
             return
         }
 
@@ -2578,7 +2628,7 @@ final class AppController: ObservableObject {
 
     /// All selectable microphone inputs (rescanned each call — hot-plug friendly).
     func availableInputs() -> [AudioInputDevice] {
-        let devices = AudioInputDevices.all()
+        let devices = AudioInputDevices.selectable()
         cacheFavoriteInputNames(from: devices)
         return devices
     }

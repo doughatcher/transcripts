@@ -297,6 +297,10 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSMicrophoneUsageDescription: Transcripts records meetings and voice notes from your microphone.
         NSSpeechRecognitionUsageDescription: Transcripts transcribes your recordings on this device to create readable transcripts.
+        # Shown by the system-audio permission dialog (Core Audio process tap —
+        # see SystemAudioTap.swift). Optional by design: declining leaves
+        # recordings microphone-only.
+        NSAudioCaptureUsageDescription: Transcripts records this Mac's audio during calls, so the other participants' side is included. Recordings work without it — they are just microphone-only.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ltd.hatcher.transcripts
