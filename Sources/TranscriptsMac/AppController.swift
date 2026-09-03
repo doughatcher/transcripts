@@ -557,6 +557,7 @@ final class AppController: ObservableObject {
     /// the other participants, not just your side.
     private func maybeStartSystemAudio(scratchDir: URL) {
         guard config.captureSystemAudio, MeetingDetector.isMeetingAppRunning else { return }
+        guard explainSystemAudioPermissionIfNeeded() else { return }
         let capturer = SystemAudioCapturer()
         systemCapturer = capturer
         let sysURL = scratchDir.appendingPathComponent("system.caf")
@@ -565,6 +566,30 @@ final class AppController: ObservableObject {
             if !ok { self.systemCapturer = nil; return }
             if #available(macOS 26, *) { self.attachLiveSystemTranscriber(to: capturer) }
         }
+    }
+
+    /// One-time context shown before the system-audio permission dialog can
+    /// appear, so the OS prompt never lands cold: the user hears first that saying
+    /// no costs only the remote side of calls, not the recording. Skipped entirely
+    /// when the Screen Recording grant already exists (nothing will be asked) and
+    /// after the first showing (context given; later recordings go straight to the
+    /// OS dialog). Returns false when the user chose mic-only for this recording.
+    private func explainSystemAudioPermissionIfNeeded() -> Bool {
+        if CGPreflightScreenCaptureAccess() { return true }
+        let explainedKey = "systemAudioPermissionExplained"
+        if UserDefaults.standard.bool(forKey: explainedKey) { return true }
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Capture the other side of calls?"
+        alert.informativeText = """
+        To include what other participants say, macOS will ask permission to record this Mac's audio — a normal Allow/Don't Allow dialog. No administrator access is needed.
+
+        This is optional. Without it, recordings still capture your microphone (you, and the room); only the remote side of calls is left out.
+        """
+        alert.addButton(withTitle: "Continue")
+        alert.addButton(withTitle: "Mic-Only for Now")
+        UserDefaults.standard.set(true, forKey: explainedKey)
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     // MARK: - Live transcript (streaming, macOS 26)

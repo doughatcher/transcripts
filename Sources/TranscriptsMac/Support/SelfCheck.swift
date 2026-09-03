@@ -6,7 +6,7 @@ import TranscriptsCore
 /// Records ~2s from the microphone a real recording would use (same config,
 /// same resolution rules) and verifies the engine started, the file was written,
 /// and whether real signal arrived; then starts/stops system-audio capture to
-/// verify the ScreenCaptureKit path. Prints a PASS/FAIL report and exits.
+/// verify that path (Core Audio tap on 14.2+, ScreenCaptureKit as fallback). Prints a PASS/FAIL report and exits.
 ///
 /// Run against the installed app so it inherits the TCC grants (mic / Screen
 /// Recording are tied to the bundle identity):
@@ -21,7 +21,7 @@ import TranscriptsCore
 ///
 /// Exit codes: 0 = both flows verified · 1 = mic flow broken (device/engine/file)
 /// · 2 = mic flow ran but captured silence (dead/muted mic — check the room)
-/// · 3 = mic OK, system-audio capture unavailable (Screen Recording not granted?)
+/// · 3 = mic OK, system-audio capture unavailable (permission not granted?)
 @MainActor
 enum SelfCheck {
     static var isRequested: Bool {
