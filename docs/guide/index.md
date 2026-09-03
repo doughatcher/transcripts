@@ -70,7 +70,6 @@ information there is — the templates ask for the version and your OS for that
 reason. Please don't paste transcript contents; nothing about diagnosing a bug
 needs them.
 
-
 ---
 
 Next: [Installing](/guide/install/)
