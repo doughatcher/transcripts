@@ -252,6 +252,22 @@ if [[ "$VERSION" == *-* ]]; then
     if [[ -n "$PREV" && "$PREV" != *-* ]]; then
       mv "$SITE/.appcast-prev.json" "$SITE/appcast.json"
       echo "  ✓ appcast.json (preserved stable $PREV)"
+      # ...and the artifact it points at. build.py wipes site/public before
+      # rendering, so the stable zip is deleted by every pre-release deploy
+      # while the manifest advertising it survives — which is how the stable
+      # channel came to offer a download that 404s. The bytes live on as the
+      # GitHub release asset, so fetch them back rather than requiring a stable
+      # rebuild to repair a beta's collateral damage.
+      PREV_ZIP="$APP_NAME-$PREV.zip"
+      if [[ ! -f "$SITE/$PREV_ZIP" ]]; then
+        if gh release download "v$PREV" --pattern "$PREV_ZIP" \
+             --dir "$SITE" 2>/dev/null; then
+          echo "  ✓ $PREV_ZIP (restored from the v$PREV release)"
+        else
+          echo "  ! $PREV_ZIP could not be restored — the stable channel will" >&2
+          echo "    advertise a download that is not there." >&2
+        fi
+      fi
     else
       rm -f "$SITE/.appcast-prev.json"
       echo "  · no stable release published — stable channel left empty"
