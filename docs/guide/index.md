@@ -59,7 +59,7 @@ See [iPhone, iPad and Mac](/guide/handoff/) for how the handoff works.
 ## If something goes wrong
 
 Bugs and feature requests go to the [public issue
-tracker](https://github.com/hatcher-ltd/transcripts-support/issues). It is worth
+tracker](https://github.com/doughatcher/transcripts-support/issues). It is worth
 filing there rather than emailing: you can see what is already known, and
 whether someone else has hit the same thing.
 

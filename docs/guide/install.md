@@ -3,7 +3,7 @@
 ## Homebrew
 
 ```
-brew install --cask hatcher-ltd/tap/transcripts
+brew install --cask doughatcher/tap/transcripts
 ```
 
 That taps the repository and installs Transcripts into `/Applications`. To
