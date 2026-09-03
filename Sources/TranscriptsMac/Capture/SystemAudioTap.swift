@@ -84,7 +84,7 @@ final class SystemAudioTap {
 
         let aggregate: [String: Any] = [
             kAudioAggregateDeviceNameKey as String: "Transcripts system-audio tap",
-            kAudioAggregateDeviceUIDKey as String: UUID().uuidString,
+            kAudioAggregateDeviceUIDKey as String: AudioInputDevices.systemAudioTapUIDPrefix + UUID().uuidString,
             kAudioAggregateDeviceIsPrivateKey as String: true,
             kAudioAggregateDeviceTapAutoStartKey as String: true,
             kAudioAggregateDeviceTapListKey as String: [

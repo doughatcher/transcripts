@@ -19,11 +19,22 @@ struct AudioInputDevice: Identifiable, Hashable {
 enum AudioInputDevices {
 
     /// All devices that have at least one input channel.
+    /// UID prefix of the aggregate `SystemAudioTap` builds to carry the system
+    /// mix. It is an input device by construction, so without excluding it here
+    /// it becomes a candidate *microphone* — and the dead-mic recovery, hunting
+    /// for a device with signal when the real mic goes silent, picks the one
+    /// device guaranteed to have some: our own tap. That fed a call's far side
+    /// back in as the user's own voice and restarted capture in a loop.
+    /// `kAudioAggregateDeviceIsPrivateKey` does not help: private hides the
+    /// aggregate from *other* processes, never from the one that created it.
+    static let systemAudioTapUIDPrefix = "ltd.hatcher.transcripts.systemaudio."
+
     static func all() -> [AudioInputDevice] {
         deviceIDs().compactMap { id in
             guard inputChannelCount(id) > 0 else { return nil }
             guard let uid = stringProperty(id, kAudioDevicePropertyDeviceUID),
                   let name = stringProperty(id, kAudioObjectPropertyName) else { return nil }
+            guard !uid.hasPrefix(systemAudioTapUIDPrefix) else { return nil }
             return AudioInputDevice(uid: uid, name: name, deviceID: id)
         }
     }
