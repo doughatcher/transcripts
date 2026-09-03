@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.1.0-beta.7
+
+**Mac**
+
+- The other side of a call no longer needs Screen Recording. Transcripts reads
+  the system mix through a Core Audio tap now, and macOS grants that with an
+  ordinary Allow dialog — no administrator, no trip through System Settings.
+  That pane was the wall on managed laptops: Screen Recording has no inline
+  prompt, so approving it needs an admin password many people cannot supply. A
+  Mac that already granted Screen Recording keeps using it, so a setup that
+  works today is left alone. The permission remains optional either way —
+  decline it and recordings are microphone-only, which on a call means your
+  side of it.
+- Being muted no longer looks like a broken microphone. Muting in Teams, Slack
+  or Control Center silences every input on the machine at once, and that was
+  being read as a dead device: Transcripts would switch microphones under you
+  — in one case as far as an iPhone — chasing signal that no device on the Mac
+  was being given, and fragmenting the recording each time it tried. It now
+  recognises the difference and says so instead. Your own side resumes the
+  moment you unmute.
+- macOS's internal audio aggregates are out of the microphone list.
+  `CADefaultDeviceAggregate` appears whenever a call app turns on echo
+  cancellation, and it was being offered as something to record from, named
+  after an implementation detail. Aggregates you made yourself are still
+  listed.
+
 ## 1.1.0-beta.4
 
 **Mac**
