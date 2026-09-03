@@ -292,7 +292,7 @@ def page(title: str, body: str, *, nav: str = "", cls: str = "") -> str:
 </header>
 <main>{nav}{open_body}{body}{close_body}</main>
 <footer>
-  <p>Transcripts is made by <a href="https://hatcher.ltd">Doug Hatcher</a>.
+  <p>Transcripts is made by <a href="https://doughatcher.com">Doug Hatcher</a>.
      <a href="/guide/privacy/">Privacy</a> ·
      <a href="https://github.com/doughatcher/transcripts-support/issues">Report an issue</a></p>
 </footer>
