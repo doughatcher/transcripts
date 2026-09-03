@@ -197,20 +197,49 @@ final class RecorderModel: ObservableObject {
         }
     }
 
+    /// Which workspace `library` and `archived` currently hold rows from.
+    ///
+    /// Not for the cache's sake so much as the switcher's: until this was
+    /// tracked, changing workspace left the old folder's transcripts on screen
+    /// under the new folder's name for as long as the scan took.
+    private var libraryWorkspace: UUID?
+
     /// Rescans the shared folder. Cheap enough to run whenever the app comes
     /// forward — the Mac may have filed things while the phone was asleep.
     func refreshLibrary() {
-        guard let root = destination.root, let bookmark = destination.active?.bookmark else {
+        guard let root = destination.root, let workspace = destination.active else {
             library = []
+            archived = []
+            libraryWorkspace = nil
             return
         }
+        // First look at this workspace this launch: draw the last scan's rows
+        // now, rather than an empty sidebar for as long as a cold File Provider
+        // takes to answer. Whatever the walk finds replaces them below, so this
+        // only changes *when* the list appears, never what it ends up saying.
+        if libraryWorkspace != workspace.id {
+            libraryWorkspace = workspace.id
+            let cached = LibraryCache.load(workspace: workspace.id, root: root)
+            library = cached?.live ?? []
+            archived = cached?.archived ?? []
+        }
+        let bookmark = workspace.bookmark
+        let id = workspace.id
         Task.detached(priority: .utility) {
             // One scope for both walks: opening it twice to read two folders in
             // the same tree is work for nothing.
             let (live, filed) = Destination.withScope(bookmark: bookmark) {
                 (SharedLibrary.scan(root: root), SharedLibrary.scanArchived(root: root))
             }
-            await MainActor.run { self.library = live; self.archived = filed }
+            LibraryCache.save(live: live, archived: filed, workspace: id, root: root)
+            await MainActor.run {
+                // The workspace may have been switched while this walk ran;
+                // landing its rows now would put one folder's transcripts under
+                // another folder's name.
+                guard self.libraryWorkspace == id else { return }
+                self.library = live
+                self.archived = filed
+            }
         }
     }
 

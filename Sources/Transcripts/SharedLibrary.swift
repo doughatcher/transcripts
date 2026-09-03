@@ -106,8 +106,12 @@ enum SharedLibrary {
         let fm = FileManager.default
         let skip: Set<String> = [DeviceInbox.folderName, DeviceInbox.processedFolderName,
                                  Self.archiveFolderName]
+        // The downloading status is prefetched with the walk so the check below
+        // is a lookup rather than a second trip to the File Provider per file.
         guard let walker = fm.enumerator(at: root,
-                                         includingPropertiesForKeys: [.isDirectoryKey],
+                                         includingPropertiesForKeys: [
+                                            .isDirectoryKey,
+                                            .ubiquitousItemDownloadingStatusKey],
                                          options: [.skipsHiddenFiles]) else { return [] }
 
         var found: [TranscriptEntry] = []
@@ -117,6 +121,20 @@ enum SharedLibrary {
                 continue
             }
             guard url.pathExtension.lowercased() == "md" else { continue }
+            // A transcript iCloud hasn't pulled down yet, recognised before we
+            // try to open it. Opening one is not free and not fast: the read
+            // below blocks while the File Provider decides what to do about a
+            // placeholder, and a few hundred of those in a row is most of the
+            // five to ten seconds this walk used to take on a cold launch. Ask
+            // for the file and move on — the next scan finds it materialised.
+            // Only `.notDownloaded` is skipped. `.downloaded` means the bytes
+            // are here and merely older than the cloud's copy, which reads
+            // perfectly well and is worth listing.
+            if (try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]))?
+                .ubiquitousItemDownloadingStatus == .notDownloaded {
+                try? fm.startDownloadingUbiquitousItem(at: url)
+                continue
+            }
             // Only read the head: frontmatter is the first few hundred bytes
             // and the body can be enormous. A `FileHandle` actually honours
             // that — `String(contentsOf:)` was paging whole meetings into
