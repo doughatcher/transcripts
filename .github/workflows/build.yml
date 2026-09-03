@@ -1,0 +1,55 @@
+# Compile the iOS app on every branch and pull request.
+#
+# The only thing that built the app before a release was the TestFlight
+# workflow, and that one signs, archives and uploads — far too much machinery to
+# ask "does this compile?", and impossible to run from a machine that is not a
+# Mac. This is the cheap half: xcodegen, a simulator build with signing off, and
+# the Core suite. It needs no secrets, so it also runs on forks.
+#
+# main is deliberately included. A release dispatch builds whatever main holds
+# at that moment, and finding out then that it does not compile is finding out
+# in the worst place.
+
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # Its own group, not the release or testflight ones — a superseded branch push
+  # should be cancelled, and neither of those may ever be.
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode
+        run: xcodebuild -version
+
+      - name: Unit tests
+        run: swift test
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: xcodegen generate
+
+      # The simulator destination is what makes this signing-free: a device
+      # build wants a provisioning profile and with it the whole certificate
+      # dance the TestFlight workflow exists to do.
+      - name: Build for the simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Transcripts.xcodeproj \
+            -scheme Transcripts \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO
