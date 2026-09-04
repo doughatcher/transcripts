@@ -433,7 +433,211 @@ private struct FailingModel: ChatModel {
         await engine.runPassNow()
         #expect(digest().lastQuestion?.source == .unsourced)
     }
+
+    /// Replies chosen from the newest line of the window, not from a call
+    /// counter. `ingest` schedules passes of its own, so a scripted stub
+    /// desynchronises; keying on content makes every pass — scheduled or
+    /// explicit — answer for the state it actually sees.
+    fileprivate func reader(_ route: @escaping @Sendable (String) -> String) -> StubModel {
+        StubModel { _, user in route(user.split(separator: "\n").last.map(String.init) ?? "") }
+    }
+
+    static let weatherThenPricing: @Sendable (String) -> String = { line in
+        if line.contains("Snow") {
+            return #"{"topic": "Weather", "conclusion": "", "facts": ["Snow expected on Tuesday"]}"#
+        }
+        if line.contains("14 September") {
+            return #"{"topic": "Renewal pricing", "conclusion": "", "facts": ["Renewal decision due 14 September"]}"#
+        }
+        return #"{"topic": "Renewal pricing", "conclusion": "", "facts": ["Finance capped renewal at forty thousand"]}"#
+    }
+
+    /// Small talk at the top of the call, then the subject everyone joined for.
+    /// The middle turn is read twice on purpose: a new topic has to survive two
+    /// passes before it commits, which is the tangent guard doing its job.
+    func weatherCall() async -> @Sendable () -> OverlayDigest {
+        let (engine, digest) = engine(model: reader(Self.weatherThenPricing),
+                                      options: .init(factInterval: 0))
+        await engine.ingest(speaker: "Others", start: 10,
+                            text: "Snow expected on Tuesday, they said, right through the weekend.")
+        await engine.runPassNow()
+        await engine.ingest(speaker: "Others", start: 60,
+                            text: "On renewal pricing, finance capped renewal at forty thousand.")
+        await engine.runPassNow()
+        await engine.runPassNow()
+        await engine.ingest(speaker: "Others", start: 120,
+                            text: "So the renewal decision due 14 September, agreed.")
+        await engine.runPassNow()
+        return digest
+    }
+
+    /// The whole point of the feature. Ten minutes into the real conversation
+    /// the lanes must not still be showing the weather from the opening.
+    @Test func theOpeningSmallTalkLeavesTheLanesWhenTheTopicChanges() async {
+        let digest = await weatherCall()
+        let d = digest()
+        #expect(d.currentTopic?.title == "Renewal pricing")
+        #expect(!d.facts.map(\.headline).contains("Snow expected on Tuesday"))
+        #expect(d.facts.map(\.headline).contains("Renewal decision due 14 September"))
+    }
+
+    /// And it is filed, not discarded — the weather is one page back.
+    @Test func theEarlierTopicIsStillReachable() async {
+        let d = await weatherCall()()
+        #expect(d.topics.count == 2)
+        #expect(d.topics[0].title == "Weather")
+        #expect(d.topics[0].facts.map(\.headline).contains("Snow expected on Tuesday"))
+        #expect(d.topics[1].isCurrent)
+        #expect(d.currentTopicIndex == 1)
+    }
+
+    /// The boundary is committed where the new topic *started*, not where it was
+    /// confirmed a pass later, so the cards from that gap move with it.
+    @Test func theCardsFromTheConfirmingGapMoveWithTheBoundary() async {
+        let d = await weatherCall()()
+        #expect(d.topics[1].startedAt == 60)
+        #expect(d.topics[1].facts.map(\.headline).contains("Finance capped renewal at forty thousand"))
+    }
+
+    /// Repeating a figure inside one topic is noise. Raising it again after the
+    /// subject changed is the speaker saying it bears on this too, and hiding
+    /// that would hide the point of the restatement.
+    @Test func aFactRepeatsWhenItIsRaisedUnderANewTopic() async {
+        let fact = "Finance capped renewal at forty thousand"
+        let route: @Sendable (String) -> String = { line in
+            let topic = line.contains("hiring") ? "Hiring plan" : "Renewal pricing"
+            return #"{"topic": "\#(topic)", "conclusion": "", "facts": ["\#(fact)"]}"#
+        }
+        let (engine, _) = engine(model: reader(route), options: .init(factInterval: 0))
+
+        await engine.ingest(speaker: "Others", start: 10,
+                            text: "Finance capped renewal at forty thousand for the year.")
+        await engine.runPassNow()
+        await engine.runPassNow()
+        await engine.ingest(speaker: "Others", start: 60,
+                            text: "On the hiring plan, finance capped renewal at forty thousand there too.")
+        await engine.runPassNow()
+        await engine.runPassNow()
+        await engine.runPassNow()
+
+        let facts = await engine.snapshot().filter { $0.kind == .fact }
+        #expect(facts.count == 2)                       // once per topic, not once per pass
+        #expect(facts.allSatisfy { $0.headline == fact })
+    }
+
+    /// A model that never names a topic must not break the panel: one unnamed
+    /// segment, lanes behaving exactly as they did before topics existed.
+    @Test func aReplyWithNoTopicLeavesOneOpeningSegment() async {
+        let model = StubModel(always: #"{"conclusion": "", "facts": ["Priya owns the runbook"]}"#)
+        let (engine, digest) = engine(model: model, options: .init(factInterval: 0))
+        await engine.ingest(speaker: "Others", start: 10, text: "Priya owns the runbook for this.")
+        await engine.runPassNow()
+
+        let d = digest()
+        #expect(d.topics.count == 1)
+        #expect(d.topics[0].title == "Opening")
+        #expect(d.facts.map(\.headline) == ["Priya owns the runbook"])
+    }
 }
+
+/// The segmenter decides where one subject ends and the next begins, with no
+/// model involved — it is handed a name per pass and nothing else.
+@Suite struct TopicSegmenterTests {
+    func opened(_ titles: [(String, Double)]) -> TopicSegmenter {
+        var s = TopicSegmenter()
+        s.begin(at: 0)
+        for (t, at) in titles { s.observe(title: t, at: at) }
+        return s
+    }
+
+    /// A call starts before anyone knows what it is about, so the first name
+    /// names the opening segment rather than splitting a second one off it.
+    @Test func namesTheOpeningSegmentInsteadOfSplitting() {
+        let s = opened([("Weather", 5)])
+        #expect(s.segments.count == 1)
+        #expect(s.current?.title == "Weather")
+    }
+
+    @Test func opensANewTopicOnceTheNameSticks() {
+        let s = opened([("Weather", 5), ("Renewal pricing", 20), ("Renewal pricing", 35)])
+        #expect(s.segments.count == 2)
+        #expect(s.current?.title == "Renewal pricing")
+    }
+
+    @Test func holdsASingleSightingBack() {
+        let s = opened([("Weather", 5), ("Renewal pricing", 20)])
+        #expect(s.segments.count == 1)
+    }
+
+    @Test func forgetsACandidateThatDoesNotRecur() {
+        let s = opened([("Weather", 5), ("Parking validation", 20), ("Weather", 35)])
+        #expect(s.segments.count == 1)
+        #expect(s.current?.title == "Weather")
+    }
+
+    /// Confirming costs a pass of latency. Committing at the first sighting
+    /// hands it back, so the cards from that gap file under the new topic.
+    @Test func theBoundaryLandsWhereTheNewTopicStarted() {
+        let s = opened([("Weather", 5), ("Renewal pricing", 20), ("Renewal pricing", 35)])
+        #expect(s.current?.startedAt == 20)
+        #expect(s.segments[0].endedAt == 20)
+    }
+
+    /// The same subject named at two levels of detail is one subject.
+    @Test func treatsARewordingAsTheSameTopic() {
+        let s = opened([("Pricing", 5), ("Q3 pricing for enterprise", 20), ("Q3 pricing for enterprise", 35)])
+        #expect(s.segments.count == 1)
+    }
+
+    /// Meetings circle back. "Pricing" twice in the pager is worse than not
+    /// paging at all.
+    @Test func reopensARecentTopicRatherThanListingItTwice() {
+        let s = opened([("Weather", 5), ("Renewal pricing", 20), ("Renewal pricing", 35),
+                        ("Weather", 50), ("Weather", 65)])
+        #expect(s.segments.count == 2)
+        #expect(s.current?.title == "Weather")
+        #expect(s.current?.endedAt == nil)       // reopened, so cards land in it again
+    }
+
+    /// Without stripping filler words every "Discussion of X" title matches
+    /// every other and the whole call collapses into one topic.
+    @Test func doesNotMergeUnrelatedTitlesThatShareFillerWords() {
+        #expect(TopicSegmenter.similarity("Discussion of the budget",
+                                          "Discussion of the timeline") < TopicSegmenter.mergeThreshold)
+    }
+
+    @Test func matchesATitleAgainstItsLongerForm() {
+        #expect(TopicSegmenter.similarity("Pricing",
+                                          "Q3 pricing for enterprise") >= TopicSegmenter.mergeThreshold)
+    }
+
+    /// Cards are filed by when they were said, which is what lets a boundary
+    /// land earlier than the pass that confirmed it.
+    @Test func filesATimestampIntoTheRightSegment() {
+        let s = opened([("Weather", 5), ("Renewal pricing", 20), ("Renewal pricing", 35)])
+        #expect(s.segment(containing: 10)?.title == "Weather")
+        #expect(s.segment(containing: 30)?.title == "Renewal pricing")
+    }
+
+    /// Returning to a topic must not swallow the one in between. A single range
+    /// per topic cannot express that, which is why a topic holds spans.
+    @Test func aReopenedTopicDoesNotSwallowTheOneInBetween() {
+        let s = opened([("Weather", 5), ("Renewal pricing", 20), ("Renewal pricing", 35),
+                        ("Weather", 50), ("Weather", 65)])
+        #expect(s.segment(containing: 10)?.title == "Weather")
+        #expect(s.segment(containing: 30)?.title == "Renewal pricing")
+        #expect(s.segment(containing: 60)?.title == "Weather")
+        #expect(s.current?.spans.count == 2)
+    }
+
+    /// An empty name is a model that had nothing to say, not a boundary.
+    @Test func ignoresAnEmptyTitle() {
+        let s = opened([("Weather", 5), ("", 20), ("", 35)])
+        #expect(s.segments.count == 1)
+        #expect(s.current?.title == "Weather")
+    }
+}
+
 
 /// Restarting the app during a long recording must not cost you the recording.
 /// These pin the decision that stands between an evening being picked back up

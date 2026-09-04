@@ -13,14 +13,15 @@ said**, straight from the transcript. No summarizing stands between the room and
 that line, so it keeps up with the conversation — it is how you tell at a glance
 that the thing is listening, and roughly where everyone is.
 
-Hover it and it opens into three lanes:
+Hover it and it opens. At the top is **the topic being discussed**, and under
+that, three lanes covering that topic:
 
-- **Last conclusion** — where the discussion landed. The one to look at when you
-  have lost the thread.
+- **Where it landed** — the conclusion this topic reached. The one to look at
+  when you have lost the thread.
 - **Facts & figures** — numbers, dates, names, owners, deadlines, as they were
   stated. The three most recent.
-- **Last question** — what was just asked, with the answer underneath if one
-  exists, and where it came from.
+- **Last question** — what was asked, with the answer underneath if one exists,
+  and where it came from.
 
 ![The overlay open, with Last conclusion, Facts & figures and Last question — the answer citing which note it came from](/guide/images/overlay.webp)
 
@@ -30,6 +31,37 @@ scrolling log of everything is the wrong shape for that.
 
 Drag the pill anywhere you like; it stays there. Click the ✕ to hide it for the
 rest of the call, and bring it back from the menu.
+
+## Topics
+
+A meeting is not one conversation. It opens with the weather, gets to the thing
+everyone joined for, doubles back, and ends somewhere else again. An overlay
+that pooled all of that into one list would still be showing you the weather an
+hour later, because nothing in a flat list ever stops being recent enough to
+drop.
+
+So the overlay follows the subject. When the conversation moves on, the lanes
+move with it and show the topic that is **on the floor** now. The stretch you
+just left is not thrown away — it is a page back. Use the arrows either side of
+the topic name to go through the ones before it; the counter underneath says
+where you are, and marks the live one.
+
+Two things it deliberately does not do:
+
+- **It does not split on a tangent.** A subject has to hold for two readings
+  before it counts as a new topic. Someone answering a side question and coming
+  straight back does not carve the meeting into fragments.
+- **It does not list the same subject twice.** Come back to pricing after
+  twenty minutes on something else and you return to the pricing page rather
+  than starting a second one.
+
+Paging back pins you there. New topics can open while you read; you stay put
+until you page forward to the live one again.
+
+Because the lanes are per topic, a figure someone raises again under a new
+subject shows up again — it is repeated because it now bears on something else,
+and that is worth seeing. Repeating it inside the same topic is not, and is
+filtered out.
 
 ## Where answers come from
 
@@ -75,9 +107,11 @@ passage it was drawn from is thrown away before you ever see it.
   phrasing an answer. In that mode the conclusion and facts lanes stay empty,
   because there is nothing to read the conversation with. Settings shows which
   backend is in use, and the log says so at the start of every recording.
-- **Nothing has landed yet.** "Nothing settled yet" and "No numbers or names
-  yet" mean exactly that. Ten minutes of easy conversation with no decisions and
-  no figures in it will leave both lanes empty, and that is the honest answer.
+- **Nothing has landed yet.** "Nothing settled in this topic" and "No numbers
+  or names in this topic" mean exactly that. Ten minutes of easy conversation
+  with no decisions and no figures in it will leave both lanes empty, and that
+  is the honest answer. Check the pages either side before concluding the
+  overlay missed something — it may be filed under the topic it was said in.
 - **Your notes are somewhere else.** Only Markdown files under your transcripts
   folder are searched.
 
