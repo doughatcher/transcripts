@@ -53,7 +53,15 @@ final class AppController: ObservableObject {
     /// Full history for the Recordings browser window.
     @Published private(set) var allRecents: [RecentItem] = []
     /// Selection driving the Recordings window's detail pane.
-    @Published var selectedRecordID: UUID?
+    /// Multi-selection, because merging needs more than one row selected. The
+    /// detail pane still shows exactly one recording, so it reads
+    /// `selectedRecordID` — which is just "the selection, when it is a single".
+    @Published var selectedRecordIDs: Set<UUID> = []
+
+    var selectedRecordID: UUID? {
+        get { selectedRecordIDs.count == 1 ? selectedRecordIDs.first : nil }
+        set { selectedRecordIDs = newValue.map { [$0] } ?? [] }
+    }
     /// Live 0…1 mic input level, updated ~14×/sec while recording. Drives the EQ.
     @Published private(set) var inputLevel: Float = 0
     /// Short rolling history of input levels for the multi-bar EQ (oldest → newest).
@@ -1205,6 +1213,135 @@ final class AppController: ObservableObject {
         let recording = Recording(audioURL: noteURL, startedAt: Date(), endedAt: Date(), title: title, isNote: true)
         // Notes carry their text as the transcript directly.
         runPipeline(for: recording, recordID: recordID, seedTranscript: noteURL)
+    }
+
+    // MARK: - Merging recordings
+
+    /// Confirms a merge, showing what will be joined and anything that suggests
+    /// these are not one meeting. Merging is irreversible enough to be worth a
+    /// sentence: the pieces stop existing as separate notes.
+    func promptMerge(_ ids: [UUID]) {
+        let plan = mergePlan(for: ids)
+        let alert = NSAlert()
+
+        guard plan.isAllowed else {
+            alert.messageText = "These can't be merged"
+            alert.informativeText = plan.blockers.map(\.message).joined(separator: "\n")
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+            return
+        }
+
+        let clock = DateFormatter()
+        clock.dateFormat = "EEE h:mm a"
+        var body = plan.ordered
+            .map { "• \($0.title) — \(clock.string(from: $0.startedAt))" }
+            .joined(separator: "\n")
+        body += "\n\nThey will become one recording spanning \(Int(plan.span / 60)) minutes, "
+            + "re-transcribed and re-filed as a single note. The originals move to the Trash."
+        if !plan.cautions.isEmpty {
+            body += "\n\n" + plan.cautions.map { "⚠︎ \($0.message)" }.joined(separator: "\n")
+            alert.alertStyle = .warning
+        }
+
+        alert.messageText = "Merge \(plan.ordered.count) recordings into one?"
+        alert.informativeText = body
+        alert.addButton(withTitle: "Merge")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        mergeRecordings(ids)
+    }
+
+    /// Reads the disk rather than trusting the history: a path in a record is
+    /// not proof the audio is still there, and a merge that discovers that
+    /// halfway through has already retired the originals.
+    func mergePlan(for ids: [UUID]) -> MergePlan.Outcome {
+        let fm = FileManager.default
+        let pieces = ids.compactMap { id -> MergePlan.Piece? in
+            guard let r = history.record(id) else { return nil }
+            let audio = r.audioPath.flatMap { fm.fileExists(atPath: $0) ? $0 : nil }
+            return MergePlan.Piece(
+                id: r.id, title: r.title, startedAt: r.recordedAt, endedAt: r.endedAt,
+                audioPath: audio,
+                isBusy: r.status == .recording || r.status == .processing)
+        }
+        return MergePlan.plan(pieces)
+    }
+
+    /// Joins several recordings into one and re-runs the pipeline over the result.
+    ///
+    /// This is the general repair for a meeting that ended up in pieces, whatever
+    /// split it: a stop pressed by mistake, a crash, a mic recovery that could not
+    /// stitch itself. Doing it after the fact rather than guessing at stop time is
+    /// deliberate — see `MergePlan` for why the two mistakes are not symmetric.
+    ///
+    /// The pieces are laid on one timeline at their real wall-clock offsets, so a
+    /// gap between them stays a gap and everything after it keeps its timing.
+    func mergeRecordings(_ ids: [UUID]) {
+        let plan = mergePlan(for: ids)
+        guard plan.isAllowed else {
+            lastError = plan.blockers.first?.message
+            return
+        }
+        let pieces = plan.ordered
+        let base = pieces[0].startedAt
+        let source = history.record(pieces[0].id)
+        // The merged note continues the meeting that started first; it is not a
+        // new thing that happened at merge time. Inheriting the identity keeps
+        // its filename stamp, its routing and its call grouping intact.
+        let title = source?.title ?? "Merged recording"
+        let recordID = UUID()
+        let dir = HistoryStore.capturesDir.appendingPathComponent(recordID.uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        history.upsert(RecordingRecord(
+            id: recordID, title: title, recordedAt: base, endedAt: pieces.last?.finishedAt,
+            activeApp: source?.activeApp, isCall: source?.isCall ?? false,
+            status: .processing, captureDir: dir.path, audioPath: nil,
+            documentPath: nil, destination: nil, errorText: nil,
+            callKey: source?.callKey, namedFromWindow: source?.namedFromWindow,
+            renamedByUser: source?.renamedByUser))
+        refreshRecents()
+
+        Task { @MainActor in
+            // Assembly runs before the pipeline and on a long meeting is not
+            // quick, so it gets its own visible stage rather than looking hung.
+            // runPipeline adopts this same job and clears it at the end.
+            self.beginProcessingJob(id: recordID, title: title)
+            self.noteProcessingStage(recordID, "Joining audio")
+
+            let placements = pieces.compactMap { piece -> AudioMixer.Placement? in
+                guard let path = piece.audioPath else { return nil }
+                return AudioMixer.Placement(url: URL(fileURLWithPath: path),
+                                            at: piece.startedAt.timeIntervalSince(base))
+            }
+            let minutes = Int(plan.span / 60)
+            Log.write("merge: joining \(pieces.count) recordings spanning \(minutes)m into one")
+
+            guard let merged = await AudioMixer.assemble(
+                placements, into: dir.appendingPathComponent("merged.m4a"),
+                log: { Log.write($0) }) else {
+                // Nothing has been retired yet, so the originals are untouched and
+                // the user can simply try again.
+                Log.write("merge: assembly FAILED — originals left alone")
+                self.lastError = "Could not join those recordings."
+                self.updateRecord(recordID) { $0.status = .failed; $0.errorText = "merge: assembly failed" }
+                self.endProcessingJob(recordID)
+                self.refreshRecents()
+                return
+            }
+
+            // Retire the originals only now that their audio is safely inside the
+            // merge. `delete` trashes rather than erases and keeps the capture
+            // backups, so a merge the user regrets is recoverable from the Trash.
+            for piece in pieces { self.delete(piece.id, includeBackup: false) }
+
+            self.updateRecord(recordID) { $0.audioPath = merged.path }
+            self.refreshRecents()
+            let recording = Recording(audioURL: merged, startedAt: base,
+                                      endedAt: pieces.last?.finishedAt, title: title)
+            self.runPipeline(for: recording, recordID: recordID)
+        }
     }
 
     // MARK: - Pipeline

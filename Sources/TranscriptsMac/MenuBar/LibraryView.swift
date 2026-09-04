@@ -10,7 +10,7 @@ struct LibraryView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $controller.selectedRecordID) {
+            List(selection: $controller.selectedRecordIDs) {
                 ForEach(controller.groupedByDay(controller.allRecents)) { group in
                     Section(group.label) {
                         ForEach(group.calls) { call in
@@ -39,6 +39,17 @@ struct LibraryView: View {
         }
         .onAppear { NSApp.activate(ignoringOtherApps: true) }
         .toolbar {
+            // Only once more than one row is picked: a Merge button next to a
+            // single selection is an invitation to wonder what it would do.
+            if controller.selectedRecordIDs.count >= 2 {
+                Button {
+                    controller.promptMerge(Array(controller.selectedRecordIDs))
+                } label: {
+                    Label("Merge \(controller.selectedRecordIDs.count)…",
+                          systemImage: "arrow.triangle.merge")
+                }
+                .help("Join these recordings into one note, on a single timeline")
+            }
             if let id = controller.selectedRecordID,
                let item = controller.allRecents.first(where: { $0.id == id }), item.path != nil {
                 Button {

@@ -227,30 +227,9 @@ public struct TopicSegmenter: Sendable {
 
     // MARK: - Title comparison
 
-    /// Words that say nothing about the subject. Without this, "Discussion of
-    /// the budget" and "Discussion of the timeline" share three of four tokens
-    /// and every topic in the call collapses into one.
-    static let stopwords: Set<String> = [
-        "the", "a", "an", "and", "or", "of", "for", "on", "in", "to", "with",
-        "about", "regarding", "re", "our", "their", "its", "this", "that",
-        "discussion", "discussing", "topic", "conversation", "talk", "talking",
-        "meeting", "call", "update", "updates", "general", "misc", "other",
-    ]
+    /// Shared with the merge tool: "are these two names the same subject?" is
+    /// one question, asked in two places. See `TitleSimilarity`.
+    static func similarity(_ a: String, _ b: String) -> Double { TitleSimilarity.score(a, b) }
 
-    /// Overlap against the shorter title, so a subset title counts as the same
-    /// subject rather than a new one.
-    static func similarity(_ a: String, _ b: String) -> Double {
-        let ta = terms(a), tb = terms(b)
-        guard !ta.isEmpty, !tb.isEmpty else { return 0 }
-        let shared = ta.intersection(tb).count
-        return Double(shared) / Double(min(ta.count, tb.count))
-    }
-
-    static func terms(_ s: String) -> Set<String> {
-        let all = QuestionDetector.normalized(s).split(separator: " ").map(String.init)
-        let meaningful = all.filter { !stopwords.contains($0) && $0.count > 1 }
-        // A title that is nothing but stopwords still has to compare as
-        // something, or every such title matches every other.
-        return Set(meaningful.isEmpty ? all : meaningful)
-    }
+    static func terms(_ s: String) -> Set<String> { TitleSimilarity.terms(s) }
 }

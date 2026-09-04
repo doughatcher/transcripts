@@ -75,6 +75,33 @@ one call rather than as two unrelated recordings, so stopping in the middle
 costs you the seconds it takes to press record again, not the rest of the
 conversation.
 
+## Joining recordings back together
+
+Sometimes a meeting ends up as more than one recording: you stopped by mistake,
+the app restarted at a bad moment, or you paused and picked back up.
+
+Select them in the Recordings window — click one, then Command-click the others
+— and choose **Merge**. They are laid on a single timeline at the times they
+were actually recorded, so a gap between them stays a gap and everything after
+it keeps its timing. The result is re-transcribed and re-filed as one note, and
+the originals move to the Trash.
+
+Merging is always something you ask for, never something the app decides. It
+cannot tell "I stopped my own recording by mistake" from "that call ended and
+the next one started", and those look identical from the outside. Guessing wrong
+in the second direction would write one meeting's words into another's folder,
+which is much worse than leaving you two notes to join by hand.
+
+So before it goes ahead it tells you what it noticed:
+
+- the pieces do not look like the same meeting
+- there is a long gap between two of them
+- they were recorded on different days
+
+None of those stop you. You were in the room and the app was not. They are there
+so the one case that matters — two different calls, selected by accident — is
+hard to walk into without seeing it.
+
 ## Pausing, and what happens if things go wrong
 
 Audio is written to disk continuously, not held in memory and saved at the end.
