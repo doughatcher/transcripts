@@ -18,6 +18,21 @@ struct MenuBarView: View {
 
             sessionBanner
             recordControls
+            processingStatus
+
+            // The quiet reassurance that stops a working recording from being
+            // killed mid-call. Stated rather than implied: the meter shows the
+            // loudest of both sides, so a muted mic still looks alive, and the
+            // one question a user actually has is whether their own voice is
+            // being captured.
+            if controller.isRecording, controller.micSilentWhileCallAudible {
+                Label("Your mic is silent. If you're muted that's expected — the other "
+                      + "side is still recording, and you resume the moment you unmute.",
+                      systemImage: "mic.slash")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             // Proof the call is transcribing itself: opens the live, speaker-
             // labeled transcript in the configured viewer while recording runs.
@@ -322,17 +337,22 @@ struct MenuBarView: View {
         }
     }
 
+    /// Start and Stop are the primary control, and one of them is *always*
+    /// available.
+    ///
+    /// Processing used to occupy this slot, which meant that for as long as the
+    /// last meeting took to transcribe there was no way to record the next one.
+    /// That is precisely backwards: the moment you most need to start again is
+    /// straight after stopping by mistake, while the call carries on without you.
+    /// Processing runs on its own task and does not own the recorder, so there
+    /// was never a reason to block on it.
     private var recordControls: some View {
         HStack(spacing: 8) {
-            switch controller.state {
-            case .recording:
+            if case .recording = controller.state {
                 Button { controller.stopRecordingAndProcess() } label: {
                     Label("Stop & process", systemImage: "stop.circle").frame(maxWidth: .infinity)
                 }
-            case .processing:
-                HStack { ProgressView().controlSize(.small); Text("Processing…") }
-                    .frame(maxWidth: .infinity)
-            default:
+            } else {
                 Button { controller.startRecording() } label: {
                     Label("Start recording", systemImage: "record.circle").frame(maxWidth: .infinity)
                 }
@@ -341,6 +361,40 @@ struct MenuBarView: View {
                 Label("New note", systemImage: "square.and.pencil").frame(maxWidth: .infinity)
             }
         }
+    }
+
+    /// What the pipeline is doing, named and timed.
+    ///
+    /// "Processing…" against a spinner is indistinguishable from a hang, and the
+    /// stages are not quick: transcribe alone is allowed most of an hour on a
+    /// long recording. Naming the stage and counting the minutes is the
+    /// difference between waiting and giving up on something that was working.
+    @ViewBuilder
+    private var processingStatus: some View {
+        if !controller.processingJobs.isEmpty {
+            // Self-driving clock: this has to advance while nothing else is
+            // happening, and `tick` only advances during a recording.
+            TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(controller.processingJobs) { job in
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.small)
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(job.title).font(.caption).lineLimit(1)
+                                Text("\(job.stage) · \(Self.mmss(ctx.date.timeIntervalSince(job.startedAt)))")
+                                    .font(.caption2).foregroundStyle(.secondary).monospacedDigit()
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    static func mmss(_ seconds: TimeInterval) -> String {
+        let s = max(0, Int(seconds))
+        return String(format: "%d:%02d", s / 60, s % 60)
     }
 
     private var noteEditor: some View {

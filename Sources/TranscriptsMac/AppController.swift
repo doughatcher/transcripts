@@ -20,6 +20,34 @@ final class AppController: ObservableObject {
     }
 
     @Published private(set) var state: State = .idle
+
+    /// A pipeline run still in flight.
+    ///
+    /// Tracked alongside `state` rather than inside it, because processing and
+    /// recording have to be able to be true at the same time. Folding them into
+    /// one enum is what made stopping the wrong meeting cost you the rest of it:
+    /// the menu had no Start control while `state` was `.processing`, so a call
+    /// that carried on after a mistaken stop could not be picked back up until
+    /// the previous one finished transcribing.
+    struct ProcessingJob: Identifiable, Equatable {
+        let id: UUID
+        var title: String
+        /// The stage now running, already phrased for display.
+        var stage: String
+        var startedAt: Date
+    }
+    /// Pipelines currently running, oldest first. Usually empty or one.
+    @Published private(set) var processingJobs: [ProcessingJob] = []
+
+    /// The mic has gone quiet while the far side is still audible — you are
+    /// almost certainly muted, and the call is being recorded regardless.
+    ///
+    /// The panel that says this auto-dismisses after fifteen seconds. Someone
+    /// fiddling with their headphones misses it entirely and is left watching a
+    /// flat meter with no way to tell a muted mic from a broken app — which is
+    /// how a working recording gets stopped in the middle of a live call.
+    @Published private(set) var micSilentWhileCallAudible = false
+
     /// Capped list for the menu (see config.recentsLimit).
     @Published private(set) var recents: [RecentItem] = []
     /// Full history for the Recordings browser window.
@@ -316,6 +344,7 @@ final class AppController: ObservableObject {
             deadInputUIDs.removeAll(); pendingRecoveryDevice = nil; carriedFragments.removeAll()
         }
         deadAirSnoozeUntil = nil
+        micSilentWhileCallAudible = false
         lastLiveTurnAt = nil
         liveStallWarned = false
         Task { @MainActor in
@@ -424,6 +453,7 @@ final class AppController: ObservableObject {
     func stopRecordingAndProcess(carryForward: Bool = false) {
         guard let rec = recorder else { return }
         stopLevelTimer()
+        micSilentWhileCallAudible = false
         DeadAirPanel.shared.dismiss()
         recordingIsCall = false
         let capturer = systemCapturer
@@ -897,6 +927,12 @@ final class AppController: ObservableObject {
                     self.tick &+= 1
                     self.checkDeadAir(since: since, lastMicActivity: lastMicActivityAt)
                     self.checkLiveFlow(since: since)
+                    // Standing answer to "is this thing working?", kept on screen
+                    // for as long as it is true rather than for fifteen seconds.
+                    let micQuiet = Date().timeIntervalSince(lastMicActivityAt ?? since)
+                    let farSideLive = self.systemCapturer?.lastAudible()
+                        .map { Date().timeIntervalSince($0) < 60 } ?? false
+                    self.micSilentWhileCallAudible = micQuiet >= Self.deadMicSeconds && farSideLive
                     // Window titles improve mid-call (join screen → the real
                     // meeting window) — re-sample every ~15s and upgrade.
                     if self.tick % 15 == 0 { self.refreshMeetingContext() }
@@ -1184,11 +1220,22 @@ final class AppController: ObservableObject {
         let isCall = recordID.flatMap { id in history.records.first { $0.id == id }?.isCall } ?? false
         let stages = nativeStages(for: cfg, roomMode: cfg.micRecordsARoom && !isCall)
         let runner: CommandRunner = ProcessCommandRunner()
+        // Identifies the job in `processingJobs`. Notes have no record id, so they
+        // get one of their own rather than being left untracked and invisible.
+        let jobID = recordID ?? UUID()
+        let jobTitle = recordID.flatMap { id in history.records.first { $0.id == id }?.title }
+            ?? recording.title ?? "Recording"
         let engine = PipelineEngine(config: cfg, runner: runner, nativeStages: stages) { msg in
             Log.write("pipeline: \(msg)")
+        } onStage: { [weak self] stage in
+            Task { @MainActor in self?.noteProcessingStage(jobID, stage.label) }
         }
 
         Task { @MainActor in
+            self.beginProcessingJob(id: jobID, title: jobTitle)
+            // Every exit from here — success, timeout retry, failure — must clear
+            // the job, or the menu shows work that finished hours ago.
+            defer { self.endProcessingJob(jobID) }
             do {
                 // The chosen backend should actually be there when the pipeline
                 // arrives at summarize/classify — launch Ollama if it's the pick.
@@ -1256,6 +1303,23 @@ final class AppController: ObservableObject {
             self.refreshRecents()
             self.applyArmState()
         }
+    }
+
+    // MARK: - Processing jobs
+
+    private func beginProcessingJob(id: UUID, title: String) {
+        guard !processingJobs.contains(where: { $0.id == id }) else { return }
+        processingJobs.append(ProcessingJob(id: id, title: title,
+                                            stage: "Starting", startedAt: Date()))
+    }
+
+    private func noteProcessingStage(_ id: UUID, _ stage: String) {
+        guard let i = processingJobs.firstIndex(where: { $0.id == id }) else { return }
+        processingJobs[i].stage = stage
+    }
+
+    private func endProcessingJob(_ id: UUID) {
+        processingJobs.removeAll { $0.id == id }
     }
 
     /// After a successful pipeline run the bulky crash-safe CAF originals have

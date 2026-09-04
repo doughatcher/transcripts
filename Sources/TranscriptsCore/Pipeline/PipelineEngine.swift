@@ -12,18 +12,23 @@ public final class PipelineEngine {
     private let runner: CommandRunner
     private let nativeStages: [StageID: PipelineStage]
     private let log: @Sendable (String) -> Void
+    /// Fires as each stage begins, so a UI can say which one is running rather
+    /// than showing an unattributed spinner for the length of a transcribe.
+    private let onStage: @Sendable (StageID) -> Void
     private let fileManager = FileManager.default
 
     public init(
         config: AppConfig,
         runner: CommandRunner,
         nativeStages: [PipelineStage],
-        log: @escaping @Sendable (String) -> Void = { _ in }
+        log: @escaping @Sendable (String) -> Void = { _ in },
+        onStage: @escaping @Sendable (StageID) -> Void = { _ in }
     ) {
         self.config = config
         self.runner = runner
         self.nativeStages = Dictionary(uniqueKeysWithValues: nativeStages.map { ($0.id, $0) })
         self.log = log
+        self.onStage = onStage
     }
 
     /// How long any one stage may run before the pipeline gives up on it.
@@ -76,6 +81,7 @@ public final class PipelineEngine {
     }
 
     private func runStage(_ stageConfig: StageConfig, into ctx: inout PipelineContext) async throws {
+        if case .disabled = stageConfig.provider {} else { onStage(stageConfig.id) }
         switch stageConfig.provider {
         case .disabled:
             log("stage \(stageConfig.id.rawValue): disabled, skipping")
