@@ -1903,3 +1903,100 @@ import Foundation
         #expect(!isFresh(startedAt: Date().addingTimeInterval(-3600), lastSeen: nil))
     }
 }
+
+
+/// Joining recordings back into one is always the user's explicit act. These
+/// pin the part that protects them from the expensive mistake: merging two
+/// different meetings, which for anyone filing by client writes one client's
+/// words into another's folder.
+@Suite struct MergePlanTests {
+    func at(_ minutes: Double) -> Date { Date(timeIntervalSince1970: 0).addingTimeInterval(minutes * 60) }
+
+    func piece(_ title: String, from: Double, to: Double,
+               audio: String? = "/tmp/a.m4a", busy: Bool = false) -> MergePlan.Piece {
+        MergePlan.Piece(id: UUID(), title: title, startedAt: at(from), endedAt: at(to),
+                        audioPath: audio, isBusy: busy)
+    }
+
+    @Test func oneRecordingIsNotAMerge() {
+        let out = MergePlan.plan([piece("Renewal pricing", from: 0, to: 10)])
+        #expect(!out.isAllowed)
+        #expect(out.blockers.contains(.needsTwo))
+    }
+
+    @Test func twoHalvesOfOneMeetingMergeWithoutComplaint() {
+        let out = MergePlan.plan([
+            piece("Renewal pricing", from: 0, to: 20),
+            piece("Renewal pricing", from: 22, to: 40),
+        ])
+        #expect(out.isAllowed)
+        #expect(out.cautions.isEmpty)
+    }
+
+    /// The pieces are laid on a timeline, so order is not the caller's problem.
+    @Test func ordersChronologicallyWhateverTheSelectionOrder() {
+        let out = MergePlan.plan([
+            piece("Renewal pricing", from: 22, to: 40),
+            piece("Renewal pricing", from: 0, to: 20),
+        ])
+        #expect(out.ordered.map(\.startedAt) == [at(0), at(22)])
+        #expect(out.span == 40 * 60)
+    }
+
+    /// Its audio is not final yet, so there is nothing stable to assemble.
+    @Test func refusesARecordingStillInFlight() {
+        let out = MergePlan.plan([
+            piece("Renewal pricing", from: 0, to: 20),
+            piece("Renewal pricing", from: 22, to: 40, busy: true),
+        ])
+        #expect(!out.isAllowed)
+        #expect(out.blockers.contains(.stillRunning("Renewal pricing")))
+    }
+
+    @Test func refusesARecordingWhoseAudioIsGone() {
+        let out = MergePlan.plan([
+            piece("Renewal pricing", from: 0, to: 20),
+            piece("Sprint retro", from: 22, to: 40, audio: nil),
+        ])
+        #expect(!out.isAllowed)
+        #expect(out.blockers.contains(.noAudio("Sprint retro")))
+    }
+
+    /// The expensive mistake, made visible before it is committed to.
+    @Test func warnsWhenThePiecesAreNotTheSameSubject() {
+        let out = MergePlan.plan([
+            piece("Renewal pricing", from: 0, to: 20),
+            piece("Sprint retro", from: 22, to: 40),
+        ])
+        #expect(out.isAllowed)          // the user was in the room; we only warn
+        #expect(out.cautions.contains(where: {
+            if case .differentSubjects = $0 { return true }; return false
+        }))
+    }
+
+    /// A name given at two levels of detail is one subject, not two.
+    @Test func doesNotWarnWhenTheSecondTitleIsALongerFormOfTheFirst() {
+        let out = MergePlan.plan([
+            piece("Pricing", from: 0, to: 20),
+            piece("Q3 pricing for enterprise", from: 22, to: 40),
+        ])
+        #expect(out.cautions.isEmpty)
+    }
+
+    /// Back-to-back calls are the case this whole feature has to survive.
+    @Test func warnsOnAGapWideEnoughToBeADifferentCall() {
+        let out = MergePlan.plan([
+            piece("Renewal pricing", from: 0, to: 20),
+            piece("Renewal pricing", from: 80, to: 100),
+        ])
+        #expect(out.cautions.contains(.longGap(minutes: 60)))
+    }
+
+    @Test func warnsWhenThePiecesAreFromDifferentDays() {
+        let out = MergePlan.plan([
+            piece("Renewal pricing", from: 0, to: 20),
+            piece("Renewal pricing", from: 60 * 30, to: 60 * 31),
+        ])
+        #expect(out.cautions.contains(.spansDays))
+    }
+}
