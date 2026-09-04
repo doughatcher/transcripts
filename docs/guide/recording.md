@@ -48,6 +48,33 @@ to be recording, it tells you rather than handing you a silent file an hour
 later. Settings ▸ General lets you nominate preferred microphones in order, so a
 good one is chosen when it is present.
 
+**A silent microphone is usually a muted one**, and the two look identical on a
+meter. When your input goes quiet while the other side of the call is still
+audible, the menu says so plainly and keeps saying it for as long as it is true:
+
+> Your mic is silent. If you're muted that's expected — the other side is still
+> recording, and you resume the moment you unmute.
+
+That distinction matters because the meter shows the *louder* of the two sides.
+A muted microphone on a live call still looks alive, and the one question worth
+answering — whether your own voice is being captured — is the one a meter cannot
+answer. Nothing is lost while you are muted: the other participants are recorded
+throughout, and your side returns the instant you unmute.
+
+## If you stop by mistake
+
+Start recording again. You do not have to wait for anything.
+
+The previous recording keeps processing in the background, and the menu shows
+which stage it is on and how long it has been going, so a long transcribe is
+visibly working rather than apparently stuck. Meanwhile the Start button is
+available the whole time.
+
+If the meeting is still the same meeting, the two pieces are listed together as
+one call rather than as two unrelated recordings, so stopping in the middle
+costs you the seconds it takes to press record again, not the rest of the
+conversation.
+
 ## Pausing, and what happens if things go wrong
 
 Audio is written to disk continuously, not held in memory and saved at the end.

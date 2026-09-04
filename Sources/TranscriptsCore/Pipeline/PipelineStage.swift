@@ -8,6 +8,20 @@ public enum StageID: String, Codable, CaseIterable, Sendable {
     case summarize
     case classify
     case persist
+
+    /// What to call this on screen while it runs. "Processing…" on its own is
+    /// indistinguishable from "stuck": transcribe alone can legitimately run for
+    /// most of an hour on a long recording, and a user with no idea which stage
+    /// they are in has no way to tell patience from a hang.
+    public var label: String {
+        switch self {
+        case .encode: return "Encoding audio"
+        case .transcribe: return "Transcribing"
+        case .summarize: return "Summarizing"
+        case .classify: return "Filing"
+        case .persist: return "Saving"
+        }
+    }
 }
 
 /// A unit of work in the pipeline. Native stages conform directly; external

@@ -1490,6 +1490,48 @@ import Foundation
         #expect(id == .persist)
     }
 
+    // MARK: - Naming the stage that is running
+
+    /// Collects stage callbacks from whatever context they fire on.
+    final class StageLog: @unchecked Sendable {
+        private let lock = NSLock()
+        private var seen: [StageID] = []
+        func record(_ id: StageID) { lock.lock(); seen.append(id); lock.unlock() }
+        var stages: [StageID] { lock.lock(); defer { lock.unlock() }; return seen }
+    }
+
+    /// The menu names the stage it is on. Without this the only signal a long
+    /// transcribe gives is a spinner, which reads exactly like a hang — and a
+    /// recording that looks hung is one a user stops trusting mid-call.
+    @Test func reportsEachStageAsItStarts() async throws {
+        var cfg = AppConfig.default
+        cfg.pipeline.mode = .bakedIn
+        cfg.pipeline.stages = [
+            StageConfig(id: .encode, provider: .externalCommand(ExternalCommand(executable: "/bin/echo"))),
+            StageConfig(id: .transcribe, provider: .externalCommand(ExternalCommand(executable: "/bin/echo"))),
+            StageConfig(id: .summarize, provider: .disabled),
+            StageConfig(id: .classify, provider: .externalCommand(ExternalCommand(executable: "/bin/echo"))),
+            StageConfig(id: .persist, provider: .disabled),
+        ]
+        let seen = StageLog()
+        let engine = PipelineEngine(config: cfg, runner: FakeRunner(stdout: "{}"),
+                                    nativeStages: [], log: { _ in },
+                                    onStage: { seen.record($0) })
+
+        _ = try await engine.process(makeRecording())
+
+        // In order, and a disabled stage is not announced: it never runs, and
+        // showing it would put a stage on screen that does nothing.
+        #expect(seen.stages == [.encode, .transcribe, .classify])
+    }
+
+    /// Every stage has to be nameable, or the panel falls back to a blank.
+    @Test func everyStageHasALabel() {
+        for stage in StageID.allCases {
+            #expect(!stage.label.isEmpty)
+        }
+    }
+
     // MARK: - A stage that hangs must not hang the pipeline
 
     /// A native stage that never returns — the shape of the 2026-07-22 incident,
