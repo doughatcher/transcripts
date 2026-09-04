@@ -52,12 +52,10 @@ public actor OverlayEngine {
     private var turns: [AttributedSegment] = []
     private var pendingQuestions: [(text: String, at: Double)] = []
     private var cards: [OverlayCard] = []
-    /// Normalized text of every fact already shown — the model restates the same
-    /// point across overlapping windows, and a HUD that repeats itself is noise.
-    private var seenFacts: Set<String> = []
-    /// Normalized text of the conclusion currently showing, so a restatement of
-    /// the same landing point doesn't push a duplicate into the lane.
-    private var lastConclusionKey: String?
+    /// Where the topic boundaries are. The lanes are scoped to the segment on
+    /// the floor, which is what keeps the opening small talk out of a serious
+    /// stretch of the call. See `TopicSegmenter`.
+    private var segmenter = TopicSegmenter()
     private var passRunning = false
     private var lastFactPass: Date?
     /// Injected so tests don't sleep. Production passes `Date.init`.
@@ -86,6 +84,9 @@ public actor OverlayEngine {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         turns.append(AttributedSegment(speaker: speaker, start: start, text: trimmed))
+        // Cards can be appended before any read pass has named a topic, so the
+        // opening segment is opened by the first turn and named later.
+        segmenter.begin(at: start)
         callIndex.add(Passage(text: trimmed, source: .thisCall(at: start)))
         if let q = QuestionDetector.question(in: trimmed) {
             pendingQuestions.append((text: q, at: start))
@@ -119,13 +120,56 @@ public actor OverlayEngine {
 
     public func snapshot() -> [OverlayCard] { cards }
 
-    /// The lanes, each holding its most recent useful item.
+    /// The lanes, each holding its most recent useful item — scoped to the
+    /// topic on the floor, with every topic the call has been on alongside them
+    /// so the panel can page back without another round trip to the actor.
     public func digest() -> OverlayDigest {
-        OverlayDigest(
+        let segments = segmenter.segments
+        guard !segments.isEmpty else {
+            // No turn has landed yet (or a test is driving passes directly).
+            // Nothing to segment by, so the lanes span the whole call.
+            return OverlayDigest(
+                lastSpoken: turns.last?.text ?? "",
+                conclusion: cards.last { $0.kind == .conclusion },
+                facts: cards.filter { $0.kind == .fact }.suffix(Self.factLaneDepth).reversed(),
+                lastQuestion: cards.last { $0.kind == .question })
+        }
+
+        // Cards are filed by when they were said, not by which segment was open
+        // when they were appended. A boundary commits at the moment the new
+        // topic *started*, which is earlier than the pass that confirmed it, and
+        // filing by timestamp means the cards from that gap move with it.
+        // One pass, so a long call does not re-scan every card per topic — and
+        // so filing goes through the segmenter's own lookup, which knows a topic
+        // can be discontinuous and that anything said before the first turn
+        // belongs to the opening segment.
+        var byTopic: [UUID: [OverlayCard]] = [:]
+        for card in cards {
+            guard let seg = segmenter.segment(containing: card.at) else { continue }
+            byTopic[seg.id, default: []].append(card)
+        }
+
+        let topics = segments.map { seg -> TopicDigest in
+            let mine = byTopic[seg.id] ?? []
+            return TopicDigest(
+                id: seg.id,
+                title: seg.displayTitle,
+                startedAt: seg.startedAt,
+                endedAt: seg.endedAt,
+                conclusion: mine.last { $0.kind == .conclusion },
+                facts: Array(mine.filter { $0.kind == .fact }.suffix(Self.factLaneDepth).reversed()),
+                lastQuestion: mine.last { $0.kind == .question },
+                isCurrent: seg.id == segmenter.currentID)
+        }
+        let index = topics.firstIndex(where: \.isCurrent) ?? topics.count - 1
+        let current = topics[index]
+        return OverlayDigest(
             lastSpoken: turns.last?.text ?? "",
-            conclusion: cards.last { $0.kind == .conclusion },
-            facts: cards.filter { $0.kind == .fact }.suffix(Self.factLaneDepth).reversed(),
-            lastQuestion: cards.last { $0.kind == .question })
+            conclusion: current.conclusion,
+            facts: current.facts,
+            lastQuestion: current.lastQuestion,
+            topics: topics,
+            currentTopicIndex: index)
     }
 
     /// Facts shown at once. More than a few and the lane stops being glanceable.
@@ -163,11 +207,23 @@ public actor OverlayEngine {
             lastFactPass = now()
             let at = turns.last?.start ?? 0
             let read = await readWindow()
-            if let conclusion = read.conclusion {
+
+            // Topic first: a boundary committed here decides which segment this
+            // pass's own cards are filed under, and therefore what they are
+            // deduped against.
+            if let topic = read.topic {
+                segmenter.observe(title: topic, at: at)
+            }
+
+            // A conclusion that restates the one already showing is not news.
+            if let conclusion = read.conclusion,
+               QuestionDetector.normalized(conclusion).count > 8,
+               !restatesConclusion(conclusion, at: at) {
                 append(OverlayCard(kind: .conclusion, headline: conclusion,
                                    source: .thisCall(at: at), at: at))
             }
-            for fact in read.facts {
+            for fact in read.facts where QuestionDetector.normalized(fact).count > 8 {
+                guard !alreadyShown(fact, at: at) else { continue }
                 append(OverlayCard(kind: .fact, headline: fact, source: .thisCall(at: at), at: at))
             }
         }
@@ -271,62 +327,88 @@ public actor OverlayEngine {
     /// where the discussion landed, and the figures worth keeping. One call
     /// rather than two — on-device generation is the budget here, and the two
     /// answers come from the same excerpt anyway.
-    private func readWindow() async -> (conclusion: String?, facts: [String]) {
+    private func readWindow() async -> (topic: String?, conclusion: String?, facts: [String]) {
         let window = turns.suffix(options.factWindowTurns)
             .map { "\($0.speaker): \($0.text)" }
             .joined(separator: "\n")
         guard let reply = try? await model.chat(system: Self.readSystemPrompt, user: window,
                                                 jsonFormat: true, maxTokens: 300),
-              let parsed = Self.parseRead(reply) else { return (nil, []) }
+              let parsed = Self.parseRead(reply) else { return (nil, nil, []) }
 
         // Same rule as an answer: if the excerpt doesn't support it, it doesn't
-        // go on screen.
-        var conclusion: String?
-        if let c = parsed.conclusion, Self.isGrounded(answer: c, in: window) {
-            let key = QuestionDetector.normalized(c)
-            // A conclusion that restates the one already showing is not news.
-            if key.count > 8, key != lastConclusionKey {
-                lastConclusionKey = key
-                conclusion = c
-            }
-        }
-
-        var fresh: [String] = []
-        for fact in parsed.facts {
-            let key = QuestionDetector.normalized(fact)
-            guard key.count > 8, !seenFacts.contains(key) else { continue }
-            guard Self.isGrounded(answer: fact, in: window) else { continue }
-            seenFacts.insert(key)
-            fresh.append(fact)
-        }
-        return (conclusion, fresh)
+        // go on screen. The topic is exempt — it names the excerpt rather than
+        // asserting anything about it, so there is nothing to ground it against.
+        let conclusion = parsed.conclusion.flatMap { Self.isGrounded(answer: $0, in: window) ? $0 : nil }
+        let facts = parsed.facts.filter { Self.isGrounded(answer: $0, in: window) }
+        return (parsed.topic, conclusion, facts)
     }
 
     static let readSystemPrompt = """
     Read this meeting excerpt and report only what it actually says.
-    Reply with strict JSON and nothing else: {"conclusion": "...", "facts": ["...", "..."]}
+    Reply with strict JSON and nothing else: \
+    {"topic": "...", "conclusion": "...", "facts": ["...", "..."]}
+    `topic` names what this excerpt is about, as a noun phrase of at most five words. \
+    Name the subject, not the activity: "Q3 pricing", never "a discussion" or "the \
+    meeting". Small talk is a subject like any other — call it "weather" or "weekend \
+    plans" rather than reaching for a work topic that is not being discussed.
     `conclusion` is one short sentence saying where the discussion landed — a decision, \
     an outcome, an agreement. Use "" if it did not land anywhere.
     `facts` are concrete figures and specifics: numbers, dates, names, owners, deadlines. \
     Each at most ten words. Use [] if there are none.
-    Omit opinions, small talk, and anything you are inferring rather than reading.
+    Omit opinions and anything you are inferring rather than reading. Small talk belongs \
+    in `topic`, never in `facts`.
     """
 
-    struct ParsedRead { let conclusion: String?; let facts: [String] }
+    struct ParsedRead { let topic: String?; let conclusion: String?; let facts: [String] }
 
     static func parseRead(_ raw: String) -> ParsedRead? {
         guard let start = raw.firstIndex(of: "{"), let end = raw.lastIndex(of: "}"), start < end else {
             return nil
         }
-        struct Shape: Decodable { let conclusion: String?; let facts: [String]? }
+        struct Shape: Decodable { let topic: String?; let conclusion: String?; let facts: [String]? }
         guard let shape = try? JSONDecoder().decode(Shape.self, from: Data(raw[start...end].utf8)) else {
             return nil
         }
         let conclusion = shape.conclusion?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let topic = shape.topic?.trimmingCharacters(in: .whitespacesAndNewlines)
         return ParsedRead(
+            topic: (topic?.isEmpty ?? true) ? nil : topic,
             conclusion: (conclusion?.isEmpty ?? true) ? nil : conclusion,
             facts: (shape.facts ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty })
+    }
+
+    // MARK: - Repetition
+
+    /// The model restates the same point across overlapping windows, and a HUD
+    /// that repeats itself is noise — but only *within* one topic. A figure
+    /// raised again after the subject changed is the speaker saying it bears on
+    /// this too, and hiding it would hide the point of the restatement.
+    ///
+    /// Asking the cards rather than keeping a running set is what makes that
+    /// work. A set would have to be cleared at each boundary, and the pass that
+    /// commits the boundary would then re-emit the facts it had just filed —
+    /// filing them twice under the new topic.
+    private func alreadyShown(_ fact: String, at: Double) -> Bool {
+        let key = QuestionDetector.normalized(fact)
+        return sameTopic(as: at).contains {
+            $0.kind == .fact && QuestionDetector.normalized($0.headline) == key
+        }
+    }
+
+    /// Only the conclusion *currently showing* counts as a restatement: a call
+    /// that returns to an earlier landing point after covering other ground is
+    /// saying something, where the same sentence twice running is not.
+    private func restatesConclusion(_ conclusion: String, at: Double) -> Bool {
+        let last = sameTopic(as: at).last { $0.kind == .conclusion }
+        guard let last else { return false }
+        return QuestionDetector.normalized(last.headline) == QuestionDetector.normalized(conclusion)
+    }
+
+    /// Cards filed under the same topic as something said at `at`.
+    private func sameTopic(as at: Double) -> [OverlayCard] {
+        guard let seg = segmenter.segment(containing: at) else { return cards }
+        return cards.filter { seg.contains($0.at) }
     }
 
     // MARK: - Cards

@@ -10,10 +10,60 @@ import TranscriptsCore
     /// finalized line, because the pill's job is to be current.
     @Published var partial = ""
     @Published var expanded = false
+    /// The topic the user has paged back to, held by id rather than by index.
+    /// Nil follows the topic on the floor. An index would slide out from under
+    /// them the moment a new topic opened, and a reopened topic changes which
+    /// index is current — the id is the only stable handle.
+    @Published var pinnedTopic: UUID?
 
     var pillText: String {
         if !partial.isEmpty { return partial }
         return digest.lastSpoken
+    }
+
+    var visibleIndex: Int? {
+        guard !digest.topics.isEmpty else { return nil }
+        if let pinnedTopic, let i = digest.topics.firstIndex(where: { $0.id == pinnedTopic }) {
+            return i
+        }
+        return digest.currentTopicIndex
+    }
+
+    var visibleTopic: TopicDigest? {
+        guard let i = visibleIndex, digest.topics.indices.contains(i) else { return nil }
+        return digest.topics[i]
+    }
+
+    /// The lanes for the page on screen. Before the first topic exists there is
+    /// nothing to page through, so the digest's own lanes stand in.
+    var shown: TopicDigest? {
+        if let visibleTopic { return visibleTopic }
+        guard !digest.isEmpty else { return nil }
+        return TopicDigest(title: "Overlay", startedAt: 0,
+                           conclusion: digest.conclusion, facts: digest.facts,
+                           lastQuestion: digest.lastQuestion, isCurrent: true)
+    }
+
+    /// Indexed through `visibleTopic` rather than into `topics` directly: this
+    /// draws on every digest during a live call, and a stale index must render
+    /// nothing rather than trap.
+    var pageLabel: String {
+        guard let i = visibleIndex, let topic = visibleTopic else { return "" }
+        return "\(i + 1) of \(digest.topics.count)\(topic.isCurrent ? " · on the floor" : "")"
+    }
+
+    func canPage(_ delta: Int) -> Bool {
+        guard let i = visibleIndex else { return false }
+        return digest.topics.indices.contains(i + delta)
+    }
+
+    /// Paging onto the topic on the floor resumes following it, so a user who
+    /// pages forward to the present is not left pinned to a topic that is about
+    /// to stop being current.
+    func page(by delta: Int) {
+        guard let i = visibleIndex, digest.topics.indices.contains(i + delta) else { return }
+        let target = digest.topics[i + delta]
+        pinnedTopic = target.isCurrent ? nil : target.id
     }
 }
 
@@ -59,6 +109,7 @@ final class OverlayPanel {
         guard panel == nil else { return }
         model.digest = OverlayDigest()
         model.expanded = false
+        model.pinnedTopic = nil
 
         let host = NSHostingController(rootView: OverlayContent(
             model: model,
@@ -243,19 +294,19 @@ private struct OverlayContent: View {
             Divider().opacity(0.4)
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    Lane(title: "Last conclusion", icon: "flag.checkered") {
-                        if let c = model.digest.conclusion {
+                    Lane(title: "Where it landed", icon: "flag.checkered") {
+                        if let c = model.shown?.conclusion {
                             LaneText(c.headline)
                         } else {
-                            LaneEmpty("Nothing settled yet")
+                            LaneEmpty("Nothing settled in this topic")
                         }
                     }
                     Lane(title: "Facts & figures", icon: "number") {
-                        if model.digest.facts.isEmpty {
-                            LaneEmpty("No numbers or names yet")
+                        if model.shown?.facts.isEmpty ?? true {
+                            LaneEmpty("No numbers or names in this topic")
                         } else {
                             VStack(alignment: .leading, spacing: 5) {
-                                ForEach(model.digest.facts) { fact in
+                                ForEach(model.shown?.facts ?? []) { fact in
                                     HStack(alignment: .firstTextBaseline, spacing: 7) {
                                         Circle().frame(width: 3, height: 3).foregroundStyle(.tertiary)
                                         LaneText(fact.headline)
@@ -265,7 +316,7 @@ private struct OverlayContent: View {
                         }
                     }
                     Lane(title: "Last question", icon: "questionmark") {
-                        if let q = model.digest.lastQuestion {
+                        if let q = model.shown?.lastQuestion {
                             VStack(alignment: .leading, spacing: 4) {
                                 LaneText(q.headline).fontWeight(.semibold)
                                 if let answer = q.answer { LaneText(answer) }
@@ -274,7 +325,7 @@ private struct OverlayContent: View {
                                     .foregroundStyle(.secondary)
                             }
                         } else {
-                            LaneEmpty("Nothing asked yet")
+                            LaneEmpty("Nothing asked in this topic")
                         }
                     }
                 }
@@ -285,12 +336,26 @@ private struct OverlayContent: View {
         }
     }
 
+    /// Names the topic the lanes belong to, and gets you back to the ones
+    /// before it. A meeting that has moved on has not thrown the earlier
+    /// stretches away — they are a page back, which is the difference between
+    /// an overlay that forgets and one that files.
     private var header: some View {
-        HStack {
-            Label("Overlay", systemImage: "waveform")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
-            Spacer()
+        HStack(spacing: 7) {
+            pageButton(-1, icon: "chevron.left", help: "Previous topic")
+            VStack(alignment: .leading, spacing: 0) {
+                Text(model.shown?.title ?? "Overlay")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                if model.digest.topics.count > 1 {
+                    Text(model.pageLabel)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+            pageButton(1, icon: "chevron.right", help: "Next topic")
             Button(action: onClose) {
                 Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
             }
@@ -301,6 +366,18 @@ private struct OverlayContent: View {
         .padding(.horizontal, 15)
         .padding(.top, 11)
         .padding(.bottom, 7)
+    }
+
+    /// Dimmed rather than hidden at the ends of the call, so the controls do not
+    /// appear and vanish as topics open under the cursor.
+    private func pageButton(_ delta: Int, icon: String, help: String) -> some View {
+        Button { model.page(by: delta) } label: {
+            Image(systemName: icon).font(.system(size: 9, weight: .bold))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(model.canPage(delta) ? AnyShapeStyle(.secondary) : AnyShapeStyle(.quaternary))
+        .disabled(!model.canPage(delta))
+        .help(help)
     }
 
     /// Every answer says where it came from. An unanswered question says that

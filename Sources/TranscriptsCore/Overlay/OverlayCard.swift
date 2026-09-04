@@ -67,6 +67,39 @@ public struct OverlayCard: Identifiable, Equatable, Sendable {
 }
 
 
+/// One topic's worth of the digest — the lanes, scoped to a single stretch of
+/// the call that was about one thing.
+public struct TopicDigest: Identifiable, Equatable, Sendable {
+    public let id: UUID
+    /// Never empty: an unnamed opening segment reads as "Opening".
+    public var title: String
+    public var startedAt: Double
+    /// Nil for the topic on the floor.
+    public var endedAt: Double?
+    public var conclusion: OverlayCard?
+    public var facts: [OverlayCard]
+    public var lastQuestion: OverlayCard?
+    /// The topic currently being discussed. Exactly one is current.
+    public var isCurrent: Bool
+
+    public init(id: UUID = UUID(), title: String, startedAt: Double, endedAt: Double? = nil,
+                conclusion: OverlayCard? = nil, facts: [OverlayCard] = [],
+                lastQuestion: OverlayCard? = nil, isCurrent: Bool = false) {
+        self.id = id
+        self.title = title
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.conclusion = conclusion
+        self.facts = facts
+        self.lastQuestion = lastQuestion
+        self.isCurrent = isCurrent
+    }
+
+    public var isEmpty: Bool {
+        conclusion == nil && facts.isEmpty && lastQuestion == nil
+    }
+}
+
 /// What the overlay puts on screen, arranged the way it is read rather than the
 /// order it arrived.
 ///
@@ -75,27 +108,49 @@ public struct OverlayCard: Identifiable, Equatable, Sendable {
 /// *what was just said*, *where did we land*, *what was that number*, *what did
 /// they just ask me*. So the digest is those lanes, each holding only its most
 /// recent, useful item.
+///
+/// The lanes are scoped to the topic currently on the floor, not to the whole
+/// call. That is what stops the opening small talk from occupying the fact lane
+/// for an hour: when the conversation moves on, the weather does not follow it,
+/// it stays in the segment where it was said and is still reachable by paging
+/// back through `topics`. See `TopicSegmenter`.
 public struct OverlayDigest: Equatable, Sendable {
     /// The most recent line of transcript, verbatim. No model involved, so it
     /// updates the moment a turn is finalized — this is what makes the collapsed
     /// pill feel live rather than lagging a summarization pass.
     public var lastSpoken: String
-    /// Where the discussion last landed.
+    /// Where the current topic last landed.
     public var conclusion: OverlayCard?
-    /// Facts and figures, most recent first.
+    /// Facts and figures from the current topic, most recent first.
     public var facts: [OverlayCard]
-    /// The last question asked, with its answer when one could be grounded.
+    /// The last question asked in the current topic, with its answer when one
+    /// could be grounded.
     public var lastQuestion: OverlayCard?
+    /// Every topic the call has been on, in the order they started. The pager
+    /// reads this; the lanes above are the current entry, hoisted so callers
+    /// that do not page keep working unchanged.
+    public var topics: [TopicDigest]
+    /// Index into `topics` of the topic on the floor. Nil before the first turn.
+    public var currentTopicIndex: Int?
 
     public init(lastSpoken: String = "", conclusion: OverlayCard? = nil,
-                facts: [OverlayCard] = [], lastQuestion: OverlayCard? = nil) {
+                facts: [OverlayCard] = [], lastQuestion: OverlayCard? = nil,
+                topics: [TopicDigest] = [], currentTopicIndex: Int? = nil) {
         self.lastSpoken = lastSpoken
         self.conclusion = conclusion
         self.facts = facts
         self.lastQuestion = lastQuestion
+        self.topics = topics
+        self.currentTopicIndex = currentTopicIndex
     }
 
     public var isEmpty: Bool {
         lastSpoken.isEmpty && conclusion == nil && facts.isEmpty && lastQuestion == nil
+    }
+
+    /// The topic on the floor.
+    public var currentTopic: TopicDigest? {
+        guard let currentTopicIndex, topics.indices.contains(currentTopicIndex) else { return nil }
+        return topics[currentTopicIndex]
     }
 }
