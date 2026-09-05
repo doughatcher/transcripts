@@ -64,7 +64,13 @@ final class StatusBarController: NSObject {
         // After the first library scan, or the window opens onto an empty list.
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
             switch what {
-            case "recordings", "library": self?.showRecordings(select: nil)
+            case "recordings", "library":
+                // A bare Recordings window shows "Select a recording" in the
+                // detail pane, which is not what the guide needs a picture of.
+                // TRANSCRIPTS_SELECT names the take to open alongside it.
+                let wanted = ProcessInfo.processInfo.environment["TRANSCRIPTS_SELECT"]
+                    .flatMap(UUID.init(uuidString:))
+                self?.showRecordings(select: wanted)
             case "settings": self?.openSettings()
             default: break
             }

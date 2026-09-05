@@ -23,6 +23,11 @@ enum FirstRunInstaller {
     private static let declinedKey = "declinedInstallToApplications"
 
     static func offerIfNeeded() {
+        // The screenshot harness runs a second copy straight out of .build, which
+        // is exactly the situation this offer exists for — and a modal grabbing
+        // focus is the one thing a headless capture cannot answer. Any run that
+        // asked for a window on launch is a screenshot run, not a first run.
+        guard ProcessInfo.processInfo.environment["TRANSCRIPTS_SHOW"] == nil else { return }
         guard !UserDefaults.standard.bool(forKey: declinedKey) else { return }
         let current = Bundle.main.bundleURL
         guard !isInAnApplicationsFolder(current) else { return }

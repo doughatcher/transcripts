@@ -112,6 +112,8 @@ def main() -> int:
     ap.add_argument("--show", default="recordings",
                     choices=["recordings", "settings", "none"],
                     help="which window to open on launch")
+    ap.add_argument("--select", default="",
+                    help="record UUID to open in the detail pane; 'first' picks the newest")
     ap.add_argument("--keep-running", action="store_true",
                     help="leave the demo instance up to compose shots by hand")
     args = ap.parse_args()
@@ -153,10 +155,22 @@ def main() -> int:
         print("  ! no .demo-history.json — the window will be empty. "
               "Re-run scripts/demo-library.py.", file=sys.stderr)
 
+    if args.select == "first":
+        try:
+            recs = json.loads((library / ".demo-history.json").read_text())
+            recs = recs.get("records", recs) if isinstance(recs, dict) else recs
+            args.select = sorted(recs, key=lambda r: r.get("recordedAt", ""),
+                                 reverse=True)[0]["id"]
+            print(f"  · selecting newest take {args.select}")
+        except Exception as exc:
+            print(f"  ! could not resolve --select first: {exc}", file=sys.stderr)
+            args.select = ""
+
     env = dict(os.environ,
                TRANSCRIPTS_SUPPORT_DIR=str(support),
                TRANSCRIPTS_CONFIG=str(support / "config.json"),
-               TRANSCRIPTS_SHOW=args.show)
+               TRANSCRIPTS_SHOW=args.show,
+               **({"TRANSCRIPTS_SELECT": args.select} if args.select else {}))
     print(f"▶ launching demo instance\n  config  {cfg}\n  library {library}")
     proc = subprocess.Popen([str(binary)], env=env,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -170,6 +184,15 @@ def main() -> int:
         print(f"▶ {len(found)} window(s) for pid {proc.pid}")
         for wid, w, h, name in found:
             print(f"    {wid}  {w}x{h}  {name!r}")
+
+        # Bring it forward first: an unfocused window photographs with grey
+        # traffic lights and a dimmed title, which reads as a screenshot of an
+        # app nobody is using.
+        subprocess.run(["osascript", "-e",
+                        'tell application "System Events" to set frontmost of '
+                        f'(first process whose unix id is {proc.pid}) to true'],
+                       capture_output=True)
+        time.sleep(1.5)
 
         shot_count = 0
         for wid, w, h, name in found:
