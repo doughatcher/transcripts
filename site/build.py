@@ -61,6 +61,9 @@ GUIDE_SECTIONS = [
         ("routing", "Sorting and sessions"),
         ("reference", "routing.json reference"),
     ]),
+    ("Going further", [
+        ("worked-example", "A worked example"),
+    ]),
     ("About", [
         ("privacy", "Privacy"),
         ("changelog", "Changelog"),

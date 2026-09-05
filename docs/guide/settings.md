@@ -100,4 +100,4 @@ stable releases only.
 
 ---
 
-Next: [Privacy](/guide/privacy/)
+Next: [A worked example](/guide/worked-example/)
