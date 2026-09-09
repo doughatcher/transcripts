@@ -125,6 +125,50 @@ jobs:
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
+      # A relationship comes back as links only — no `data` key — unless it is
+      # explicitly included. Reading relationships.build off the version object
+      # therefore reports "no build attached" for every version, attached or
+      # not. These have to be fetched by following the related link.
+      - name: Diagnose each version
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          BUNDLE_ID: ${{ inputs.bundle_id }}
+        run: |
+          export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
+          asc() { python3 scripts/asc.py "$1" 2>/dev/null || echo '{}'; }
+          APP_ID="$(asc "apps?filter[bundleId]=$BUNDLE_ID&limit=1" | jq -r '.data[0].id // empty')"
+
+          {
+            echo
+            echo "### Version diagnosis"
+            echo '```'
+            for VID in $(asc "apps/$APP_ID/appStoreVersions?limit=10" | jq -r '.data[]?.id'); do
+              VS="$(asc "appStoreVersions/$VID" | jq -r '.data.attributes.versionString // "?"')"
+              ST="$(asc "appStoreVersions/$VID" | jq -r '.data.attributes.appStoreState // .data.attributes.appVersionState // "?"')"
+              BUILD="$(asc "appStoreVersions/$VID/build" | jq -r '.data.attributes.version // "*** NO BUILD ATTACHED ***"')"
+              SUB="$(asc "appStoreVersions/$VID/appStoreVersionSubmission" | jq -r 'if .data then "present" else "none" end')"
+              # appStoreReviewDetail carries demo-account credentials and a
+              # contact phone and email. This repo is public, so its Actions
+              # logs are too — report only that it exists, never its contents.
+              RD="$(asc "appStoreVersions/$VID/appStoreReviewDetail" | jq -r 'if .data then "present (contents redacted)" else "none" end')"
+              echo "$VS  state=$ST"
+              echo "    build attached : $BUILD"
+              echo "    submission     : $SUB"
+              echo "    review detail  : $RD"
+            done
+            echo '```'
+            echo
+
+            echo "### Review submission contents"
+            echo '```'
+            for RID in $(asc "apps/$APP_ID/reviewSubmissions?limit=10" | jq -r '.data[]?.id'); do
+              asc "reviewSubmissions/$RID?include=items" \
+                | jq -r '"\(.data.attributes.state // "?")  submitted=\(.data.attributes.submittedDate // "-")  items=\([.included[]?.type] | join(","))"'
+            done
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
       # The summary flattens each record to one line. When the question is
       # "why is it in that state", the fields it dropped are usually the answer.
       - name: Raw JSON
