@@ -169,6 +169,60 @@ jobs:
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
+      # "Is it queued, or is it stuck on something we own?" Everything below is
+      # a thing that can hold a submission on the developer's side, and which
+      # the top-level states do not distinguish from ordinary waiting.
+      - name: Blockers
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          BUNDLE_ID: ${{ inputs.bundle_id }}
+        run: |
+          export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
+          asc() { python3 scripts/asc.py "$1" 2>/dev/null || echo '{}'; }
+          APP_ID="$(asc "apps?filter[bundleId]=$BUNDLE_ID&limit=1" | jq -r '.data[0].id // empty')"
+
+          {
+            echo
+            echo "### Submission items (per-item state)"
+            echo '```'
+            for RID in $(asc "apps/$APP_ID/reviewSubmissions?limit=10" | jq -r '.data[]?.id'); do
+              RS="$(asc "reviewSubmissions/$RID" | jq -r '.data.attributes.state // "?"')"
+              echo "submission $RS"
+              asc "reviewSubmissions/$RID/items" \
+                | jq -r '.data[]? | "    item state=\(.attributes.state // "?")  removed=\(.attributes.removed // "?")"'
+            done
+            echo '```'
+            echo
+
+            echo "### Attached build health"
+            echo '```'
+            for VID in $(asc "apps/$APP_ID/appStoreVersions?limit=10" | jq -r '.data[]?.id'); do
+              BID="$(asc "appStoreVersions/$VID/build" | jq -r '.data.id // empty')"
+              [ -z "$BID" ] && { echo "no build attached"; continue; }
+              asc "builds/$BID" | jq -r '"build \(.data.attributes.version)  processing=\(.data.attributes.processingState)  expired=\(.data.attributes.expired)  usesNonExemptEncryption=\(.data.attributes.usesNonExemptEncryption)"'
+              # A build missing its encryption declaration cannot go to review.
+              asc "builds/$BID/appEncryptionDeclaration" \
+                | jq -r 'if .data then "    encryption declaration: \(.data.attributes.appEncryptionDeclarationState // "present")" else "    encryption declaration: NONE" end'
+            done
+            echo '```'
+            echo
+
+            echo "### Whats New present for the submitted version"
+            echo '```'
+            for VID in $(asc "apps/$APP_ID/appStoreVersions?limit=10" | jq -r '.data[]?.id'); do
+              asc "appStoreVersions/$VID/appStoreVersionLocalizations?limit=10" \
+                | jq -r '.data[]? | "    \(.attributes.locale)  whatsNew=\(if (.attributes.whatsNew // "") == "" then "EMPTY" else "present" end)"'
+            done
+            echo '```'
+            echo
+
+            echo "### App-level"
+            echo '```'
+            asc "apps/$APP_ID" | jq -r '.data.attributes | "contentRights=\(.contentRightsDeclaration // "?")  locale=\(.primaryLocale // "?")"'
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
       # The summary flattens each record to one line. When the question is
       # "why is it in that state", the fields it dropped are usually the answer.
       - name: Raw JSON
