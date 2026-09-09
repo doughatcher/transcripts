@@ -1,0 +1,106 @@
+# Ask App Store Connect what state a release is actually in.
+#
+# The ASC key lives only in this repo's secrets, so a work laptop cannot run
+# scripts/asc.py at all. That blindness is not theoretical: a handoff once went
+# out guessing that a version might never have been submitted, when it had been
+# and was simply queued. Running the same script here, where the key already is,
+# puts the answer in a step summary any machine with a browser can read.
+#
+# Read-only. Every call is a GET; nothing here uploads, submits or mutates.
+
+name: ASC Status
+
+on:
+  workflow_dispatch:
+    inputs:
+      bundle_id:
+        description: "Bundle id to report on"
+        required: false
+        default: "ltd.hatcher.transcripts"
+
+jobs:
+  status:
+    name: Status
+    # ubuntu, not macOS: asc.py needs python3 and openssl and nothing else, and
+    # a read-only status check is not worth a macOS runner's minutes.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same path convention as testflight.yml, so ASC_KEY_PATH matches what
+      # asc.py expects without either file learning a new one.
+      - name: Install App Store Connect API key
+        env:
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          printf '%s' "$ASC_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
+          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
+
+      - name: Report
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          BUNDLE_ID: ${{ inputs.bundle_id }}
+        # No `set -e`: one endpoint answering 404 should not hide the three that
+        # answered. Each call reports its own failure and the rest carry on.
+        run: |
+          export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
+          asc() { python3 scripts/asc.py "$1" 2>&1; }
+
+          APP_ID="$(asc "apps?filter[bundleId]=$BUNDLE_ID&limit=1" | jq -r '.data[0].id // empty')"
+          if [ -z "$APP_ID" ]; then
+            echo "✗ could not resolve an app id for $BUNDLE_ID" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          {
+            echo "## App Store Connect — \`$BUNDLE_ID\` (app $APP_ID)"
+            echo
+
+            echo "### Builds"
+            echo '```'
+            asc "apps/$APP_ID/builds?limit=8" \
+              | jq -r '.data[]? | "\(.attributes.version)  processing=\(.attributes.processingState // "?")  expired=\(.attributes.expired // "?")  uploaded=\(.attributes.uploadedDate // "?")"' \
+              || echo "(builds query failed)"
+            echo '```'
+            echo
+
+            # appStoreState is the classic field; appVersionState is what newer
+            # API versions answer with. Ask for both so a rename cannot turn a
+            # real answer into "?".
+            echo "### App Store versions"
+            echo '```'
+            asc "apps/$APP_ID/appStoreVersions?limit=5" \
+              | jq -r '.data[]? | "\(.attributes.versionString)  state=\(.attributes.appStoreState // .attributes.appVersionState // "?")  platform=\(.attributes.platform // "?")  created=\(.attributes.createdDate // "?")"' \
+              || echo "(versions query failed)"
+            echo '```'
+            echo
+
+            # The one that answers "was it ever actually submitted?" — as
+            # opposed to merely uploaded, which is all the TestFlight workflow
+            # does.
+            echo "### Review submissions"
+            echo '```'
+            asc "apps/$APP_ID/reviewSubmissions?limit=5" \
+              | jq -r '.data[]? | "state=\(.attributes.state // "?")  platform=\(.attributes.platform // "?")  submitted=\(.attributes.submittedDate // "-")"' \
+              || echo "(review submissions query failed)"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # The summary flattens each record to one line. When the question is
+      # "why is it in that state", the fields it dropped are usually the answer.
+      - name: Raw JSON
+        if: always()
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          BUNDLE_ID: ${{ inputs.bundle_id }}
+        run: |
+          export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
+          APP_ID="$(python3 scripts/asc.py "apps?filter[bundleId]=$BUNDLE_ID&limit=1" | jq -r '.data[0].id // empty')"
+          for ep in "builds?limit=5" "appStoreVersions?limit=3" "reviewSubmissions?limit=3"; do
+            echo "===== $ep ====="
+            python3 scripts/asc.py "apps/$APP_ID/$ep" || true
+          done
