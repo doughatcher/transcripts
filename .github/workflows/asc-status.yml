@@ -59,9 +59,12 @@ jobs:
             echo "## App Store Connect — \`$BUNDLE_ID\` (app $APP_ID)"
             echo
 
-            echo "### Builds"
+            # sort=-uploadedDate is load-bearing: unsorted, ASC answers in an
+            # order that buried the newest build below eight older ones and made
+            # a delivered build look like it had never arrived.
+            echo "### Builds (newest first)"
             echo '```'
-            asc "apps/$APP_ID/builds?limit=8" \
+            asc "apps/$APP_ID/builds?limit=10&sort=-uploadedDate" \
               | jq -r '.data[]? | "\(.attributes.version)  processing=\(.attributes.processingState // "?")  expired=\(.attributes.expired // "?")  uploaded=\(.attributes.uploadedDate // "?")"' \
               || echo "(builds query failed)"
             echo '```'
@@ -72,9 +75,20 @@ jobs:
             # real answer into "?".
             echo "### App Store versions"
             echo '```'
-            asc "apps/$APP_ID/appStoreVersions?limit=5" \
+            asc "apps/$APP_ID/appStoreVersions?limit=10&sort=-createdDate" \
               | jq -r '.data[]? | "\(.attributes.versionString)  state=\(.attributes.appStoreState // .attributes.appVersionState // "?")  platform=\(.attributes.platform // "?")  created=\(.attributes.createdDate // "?")"' \
               || echo "(versions query failed)"
+            echo '```'
+            echo
+
+            # Which TestFlight trains exist at all. An App Store version is a
+            # separate object from the builds under it, so a train can be full
+            # of builds while no App Store version for it has ever been created.
+            echo "### TestFlight trains (pre-release versions)"
+            echo '```'
+            asc "apps/$APP_ID/preReleaseVersions?limit=10&sort=-version" \
+              | jq -r '.data[]? | "\(.attributes.version)  platform=\(.attributes.platform // "?")"' \
+              || echo "(pre-release versions query failed)"
             echo '```'
             echo
 
