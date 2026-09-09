@@ -47,7 +47,18 @@ jobs:
         # answered. Each call reports its own failure and the rest carry on.
         run: |
           export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
-          asc() { python3 scripts/asc.py "$1" 2>&1; }
+
+          # asc.py writes its HTTP errors to stderr. Merging them into stdout
+          # feeds "HTTP 400: ..." to jq, which then reports a JSON parse error
+          # and buries the actual cause — so errors go to the log and jq gets
+          # an empty object it can handle.
+          asc() {
+            if ! python3 scripts/asc.py "$1" 2>/tmp/asc.err; then
+              echo "  ! query failed: $1" >&2
+              sed 's/^/    /' /tmp/asc.err >&2
+              echo '{}'
+            fi
+          }
 
           APP_ID="$(asc "apps?filter[bundleId]=$BUNDLE_ID&limit=1" | jq -r '.data[0].id // empty')"
           if [ -z "$APP_ID" ]; then
@@ -55,51 +66,62 @@ jobs:
             exit 1
           fi
 
+          # Sorting happens in jq, not in the query. App Store Connect rejects a
+          # `sort=` it does not recognise for that endpoint, and the rejection
+          # arrives as a 400 that costs more to diagnose than the sort saves.
+          # Unsorted is not an option either: it once answered with eight
+          # weeks-old builds and omitted the one just delivered, which reads as
+          # "the upload never arrived" — the exact wrong conclusion this
+          # workflow exists to prevent.
           {
             echo "## App Store Connect — \`$BUNDLE_ID\` (app $APP_ID)"
             echo
 
-            # sort=-uploadedDate is load-bearing: unsorted, ASC answers in an
-            # order that buried the newest build below eight older ones and made
-            # a delivered build look like it had never arrived.
             echo "### Builds (newest first)"
             echo '```'
-            asc "apps/$APP_ID/builds?limit=10&sort=-uploadedDate" \
-              | jq -r '.data[]? | "\(.attributes.version)  processing=\(.attributes.processingState // "?")  expired=\(.attributes.expired // "?")  uploaded=\(.attributes.uploadedDate // "?")"' \
-              || echo "(builds query failed)"
+            asc "apps/$APP_ID/builds?limit=200" \
+              | jq -r '[.data[]? | {v:.attributes.version, s:.attributes.processingState, u:.attributes.uploadedDate}]
+                       | sort_by(.u // "") | reverse | .[:12][]
+                       | "build \(.v)  processing=\(.s // "?")  uploaded=\(.u // "?")"'
             echo '```'
             echo
 
             # appStoreState is the classic field; appVersionState is what newer
             # API versions answer with. Ask for both so a rename cannot turn a
             # real answer into "?".
-            echo "### App Store versions"
+            echo "### App Store versions (newest first)"
             echo '```'
-            asc "apps/$APP_ID/appStoreVersions?limit=10&sort=-createdDate" \
-              | jq -r '.data[]? | "\(.attributes.versionString)  state=\(.attributes.appStoreState // .attributes.appVersionState // "?")  platform=\(.attributes.platform // "?")  created=\(.attributes.createdDate // "?")"' \
-              || echo "(versions query failed)"
+            asc "apps/$APP_ID/appStoreVersions?limit=50" \
+              | jq -r '[.data[]? | {v:.attributes.versionString,
+                                    s:(.attributes.appStoreState // .attributes.appVersionState),
+                                    p:.attributes.platform, c:.attributes.createdDate}]
+                       | sort_by(.c // "") | reverse | .[:10][]
+                       | "\(.v)  state=\(.s // "?")  platform=\(.p // "?")  created=\(.c // "?")"'
             echo '```'
             echo
 
             # Which TestFlight trains exist at all. An App Store version is a
-            # separate object from the builds under it, so a train can be full
-            # of builds while no App Store version for it has ever been created.
+            # separate object from the builds beneath it, so a train can be full
+            # of builds while no App Store version for it has ever been created
+            # — and that difference is invisible from the repo.
             echo "### TestFlight trains (pre-release versions)"
             echo '```'
-            asc "apps/$APP_ID/preReleaseVersions?limit=10&sort=-version" \
-              | jq -r '.data[]? | "\(.attributes.version)  platform=\(.attributes.platform // "?")"' \
-              || echo "(pre-release versions query failed)"
+            asc "apps/$APP_ID/preReleaseVersions?limit=50" \
+              | jq -r '[.data[]? | {v:.attributes.version, p:.attributes.platform}]
+                       | sort_by(.v // "") | reverse | .[:10][]
+                       | "\(.v)  platform=\(.p // "?")"'
             echo '```'
             echo
 
             # The one that answers "was it ever actually submitted?" — as
             # opposed to merely uploaded, which is all the TestFlight workflow
             # does.
-            echo "### Review submissions"
+            echo "### Review submissions (newest first)"
             echo '```'
-            asc "apps/$APP_ID/reviewSubmissions?limit=5" \
-              | jq -r '.data[]? | "state=\(.attributes.state // "?")  platform=\(.attributes.platform // "?")  submitted=\(.attributes.submittedDate // "-")"' \
-              || echo "(review submissions query failed)"
+            asc "apps/$APP_ID/reviewSubmissions?limit=50" \
+              | jq -r '[.data[]? | {s:.attributes.state, p:.attributes.platform, d:.attributes.submittedDate}]
+                       | sort_by(.d // "") | reverse | .[:8][]
+                       | "state=\(.s // "?")  platform=\(.p // "?")  submitted=\(.d // "-")"'
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
