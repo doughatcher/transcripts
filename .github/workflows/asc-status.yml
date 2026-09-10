@@ -17,6 +17,9 @@ on:
         description: "Bundle id to report on"
         required: false
         default: "ltd.hatcher.transcripts"
+  schedule:
+    # 14:00 UTC daily, which is a workday morning in ET.
+    - cron: "0 14 * * *"
 
 jobs:
   status:
@@ -42,7 +45,7 @@ jobs:
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          BUNDLE_ID: ${{ inputs.bundle_id }}
+          BUNDLE_ID: ${{ inputs.bundle_id || 'ltd.hatcher.transcripts' }}
         # No `set -e`: one endpoint answering 404 should not hide the three that
         # answered. Each call reports its own failure and the rest carry on.
         run: |
@@ -133,7 +136,7 @@ jobs:
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          BUNDLE_ID: ${{ inputs.bundle_id }}
+          BUNDLE_ID: ${{ inputs.bundle_id || 'ltd.hatcher.transcripts' }}
         run: |
           export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
           asc() { python3 scripts/asc.py "$1" 2>/dev/null || echo '{}'; }
@@ -176,7 +179,7 @@ jobs:
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          BUNDLE_ID: ${{ inputs.bundle_id }}
+          BUNDLE_ID: ${{ inputs.bundle_id || 'ltd.hatcher.transcripts' }}
         run: |
           export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
           asc() { python3 scripts/asc.py "$1" 2>/dev/null || echo '{}'; }
@@ -223,6 +226,45 @@ jobs:
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
+      # The daily watch. Succeeds while nothing has changed and fails the
+      # moment it does, because GitHub emails on failure by default — so a
+      # state change reaches an inbox without anyone opening a dashboard, and
+      # a queue that is still a queue stays silent.
+      #
+      # A query that could not answer is NOT a change: it exits 0. An alert
+      # that cries wolf every time Apple's API blips is an alert people learn
+      # to ignore, which is worse than not having one.
+      - name: Watch for a state change
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          BUNDLE_ID: ${{ inputs.bundle_id || 'ltd.hatcher.transcripts' }}
+          WATCH_FOR: WAITING_FOR_REVIEW
+        run: |
+          export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
+          asc() { python3 scripts/asc.py "$1" 2>/dev/null || echo '{}'; }
+          APP_ID="$(asc "apps?filter[bundleId]=$BUNDLE_ID&limit=1" | jq -r '.data[0].id // empty')"
+          STATE="$(asc "apps/$APP_ID/appStoreVersions?limit=50" \
+            | jq -r '[.data[]? | {s:(.attributes.appStoreState // .attributes.appVersionState), c:.attributes.createdDate}]
+                     | sort_by(.c // "") | reverse | .[0].s // empty')"
+
+          if [ -z "$STATE" ]; then
+            echo "Could not determine the state. Not treating that as a change."
+            exit 0
+          fi
+          echo "newest App Store version state: $STATE"
+          if [ "$STATE" = "$WATCH_FOR" ]; then
+            echo "Still $WATCH_FOR — nothing to report."
+            exit 0
+          fi
+
+          echo "::error::App Store state changed: $WATCH_FOR -> $STATE"
+          echo "## State changed: \`$STATE\`" >> "$GITHUB_STEP_SUMMARY"
+          # Only the scheduled run fails. A manual run should report the state
+          # without painting itself red for answering the question correctly.
+          [ "${{ github.event_name }}" = "schedule" ] && exit 1
+          exit 0
+
       # The summary flattens each record to one line. When the question is
       # "why is it in that state", the fields it dropped are usually the answer.
       - name: Raw JSON
@@ -230,7 +272,7 @@ jobs:
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          BUNDLE_ID: ${{ inputs.bundle_id }}
+          BUNDLE_ID: ${{ inputs.bundle_id || 'ltd.hatcher.transcripts' }}
         run: |
           export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
           APP_ID="$(python3 scripts/asc.py "apps?filter[bundleId]=$BUNDLE_ID&limit=1" | jq -r '.data[0].id // empty')"
