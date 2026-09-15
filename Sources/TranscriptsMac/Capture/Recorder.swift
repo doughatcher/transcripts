@@ -88,6 +88,22 @@ final class Recorder {
             throw RecorderError.engineStart("selected device reports no channels")
         }
 
+        // What the engine thinks the device runs at, versus what the device is
+        // actually running at right now. They disagree when another client already
+        // holds the device in voice-processing mode — a call app's echo canceller
+        // drops it to 16k/24k — and the engine keeps reporting the rate it
+        // negotiated. The tap then writes digital zero for the whole meeting, and
+        // nothing says so until `stop()` reports peak=0.0 with the call already
+        // over. The dead-mic watchdog does catch this, but not for 90 seconds, so
+        // a short recording never hears about it at all. Say it at open instead.
+        let hardwareRate = AudioInputDevices.nominalSampleRate(device.deviceID)
+        if hardwareRate > 0, abs(hardwareRate - format.sampleRate) > 1 {
+            Log.write("recorder: ⚠️ '\(device.name)' is running at \(Int(hardwareRate))Hz but the engine opened it at "
+                      + "\(Int(format.sampleRate))Hz (\(AudioInputDevices.describeSignalPath(device))) — another app is "
+                      + "probably holding it in echo-cancellation mode, and this track will record silence. "
+                      + "Pick a different input in Settings ▸ General.")
+        }
+
         // Write the tap's native LPCM format straight through — no encoder on the
         // hot path (an encoder config error can stop the whole engine; LPCM can't
         // fail that way, and it's what makes the CAF readable mid-write).
