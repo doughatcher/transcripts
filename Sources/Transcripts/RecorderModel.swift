@@ -71,10 +71,10 @@ final class RecorderModel: ObservableObject {
     let destination = Destination()
     /// The session this device is recording into, if any.
     let session = SessionState()
-    /// Knows when a phone call is in progress. It cannot record one — see
-    /// `CallAwareness` — but it can stop a capture cleanly instead of letting
-    /// iOS pull the audio route out from under it.
-    private(set) var calls: CallAwareness!
+    /// Knows when something else has taken the audio session — a phone call, Siri,
+    /// an alarm, another app. It can't record through any of them, but it can stop
+    /// a capture cleanly instead of letting iOS pull the route out from under it.
+    private(set) var interruptions: AudioInterruption!
 
     /// One instance, because App Intents run outside the SwiftUI scene and must
     /// act on the same recorder the UI is showing — two would mean an intent
@@ -167,14 +167,14 @@ final class RecorderModel: ObservableObject {
     init() {
         loadMeta()
         reload()
-        calls = CallAwareness { [weak self] in
+        interruptions = AudioInterruption { [weak self] in
             guard let self, self.isRecording else { return }
-            // A call takes the audio session exclusively. Stopping now keeps
-            // everything captured so far as a finished recording; carrying on
-            // would leave a take claiming the full span and holding only the
+            // An interruption takes the audio session exclusively. Stopping now
+            // keeps everything captured so far as a finished recording; carrying
+            // on would leave a take claiming the full span and holding only the
             // minutes before the phone rang.
             self.transcriptionNote =
-                "Stopped — a phone call took over the microphone. iOS doesn't let apps record calls."
+                "Stopped — a call or another app took over the microphone."
             self.toggle()
         }
         resumeInterruptedRecording()
