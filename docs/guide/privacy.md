@@ -68,8 +68,11 @@ third-party dependencies at all.
 ## This website
 
 The apps collect nothing — that is a property of how they are built. The iOS app
-contains no networking code at all, and the Mac app's only outbound request is
-checking whether a newer version exists.
+contains no networking code at all. The Mac app reaches the network in three
+places, none of them carrying your recordings: it checks whether a newer version
+exists, and it downloads the speaker-diarization and on-device language models
+once from Hugging Face. If you point it at a local Ollama server, that traffic
+never leaves your machine.
 
 This website counts visits using Cloudflare Web Analytics, which measures page
 views, referrers and rough location **without cookies** and without building a

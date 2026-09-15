@@ -127,14 +127,15 @@ nowhere is worse than filing what was captured.
 
 ## Phone calls
 
-**iOS does not let any third-party app record a phone call.** `CallKit` reports
-only whether a call is connected — not its audio — and no audio-session mode
-routes call audio to an app. During a call iOS takes the microphone
+**iOS does not let any third-party app record a phone call.** No audio-session
+mode routes call audio to an app, and during a call iOS takes the microphone
 exclusively, so Transcripts cannot capture even your own side.
 
-Transcripts knows a call has started and **stops cleanly**, keeping what it
-already recorded, rather than being cut off mid-capture and leaving a take that
-claims forty minutes and holds four.
+Transcripts notices that the audio session has been taken away and **stops
+cleanly**, keeping what it already recorded, rather than being cut off
+mid-capture and leaving a take that claims forty minutes and holds four. The
+same applies to anything else that seizes the session — Siri, an alarm, another
+app recording.
 
 What you can do instead:
 
