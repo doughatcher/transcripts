@@ -509,7 +509,8 @@ final class AppController: ObservableObject {
                     return
                 }
 
-                if !self.carriedFragments.isEmpty {
+                let hadFragments = !self.carriedFragments.isEmpty
+                if hadFragments {
                     await self.stitchCarriedFragments(into: &recording, recordID: recordID)
                 }
 
@@ -521,6 +522,25 @@ final class AppController: ObservableObject {
                         self.updateRecord(recordID) { $0.audioPath = mixedURL.path }
                         Log.write("call: mixed your mic + the other participants for transcription")
                     }
+                }
+                // Both sides came back empty: the mic read digital zero and the
+                // system tap never produced a sample. There is nothing here to
+                // transcribe, and handing an empty file to the transcribe stage
+                // parks a task that never returns — the record then sits in
+                // `processing` for good, and because a task suspended in an
+                // unresumed continuation cannot be cancelled, its own stage
+                // timeout never gets to fire either. Both facts are already known
+                // and logged by this point, so the decision belongs here rather
+                // than four stages downstream.
+                if silent, sysURL == nil, recording.systemAudioURL == nil, !hadFragments {
+                    Log.write("empty capture: mic silent and no system audio — nothing to transcribe")
+                    self.updateRecord(recordID) { r in
+                        r.status = .failed
+                        r.errorText = "Nothing was recorded — the mic read silence and no system audio was captured."
+                    }
+                    self.refreshRecents()
+                    self.applyArmState()
+                    return
                 }
                 self.runPipeline(for: recording, recordID: recordID)
             }
@@ -2041,16 +2061,35 @@ final class AppController: ObservableObject {
         let interrupted = history.records.filter { $0.status == .recording || $0.status == .processing }
         guard !interrupted.isEmpty else { return }
         Log.write("recovery: \(interrupted.count) interrupted recording(s) found at launch")
+
+        // Settling the ones with no usable audio is free, so that still happens
+        // for the whole backlog.
+        var replayable: [RecordingRecord] = []
         for r in interrupted {
             guard let audio = r.audioURL, FileManager.default.fileExists(atPath: audio.path),
                   (try? audio.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0 > 1_000 else {
                 updateRecord(r.id) { $0.status = .failed; $0.errorText = "interrupted before audio was saved" }
                 continue
             }
-            Log.write("recovery: reprocessing \(r.id) from \(audio.lastPathComponent)")
-            updateRecord(r.id) { $0.status = .processing }
-            runPipeline(for: rebuildRecording(from: r, audio: audio), recordID: r.id)
+            replayable.append(r)
         }
+
+        // Replaying is one at a time, oldest first. runPipeline hands its work to
+        // the MainActor, so starting a whole backlog at once put several native
+        // transcriptions on the one thread: none of them finished, and none of
+        // their stage timeouts got scheduled to say so either, which is how a
+        // record stays `processing` rather than failing honestly. The next launch
+        // then found the same records and did the same thing. Three meetings sat
+        // that way for a week. The rest of the backlog waits for a later launch —
+        // slower per launch, and it actually converges.
+        guard let next = replayable.min(by: { $0.recordedAt < $1.recordedAt }),
+              let audio = next.audioURL else { refreshRecents(); return }
+        if replayable.count > 1 {
+            Log.write("recovery: \(replayable.count - 1) more held for a later launch")
+        }
+        Log.write("recovery: reprocessing \(next.id) from \(audio.lastPathComponent)")
+        updateRecord(next.id) { $0.status = .processing }
+        runPipeline(for: rebuildRecording(from: next, audio: audio), recordID: next.id)
         refreshRecents()
     }
 
