@@ -37,6 +37,10 @@ on:
         description: "Build and stage only — no cert import, signing, notarization or publishing"
         type: boolean
         default: false
+      sign_only:
+        description: "Sign and notarize, then stop — no tag, no release, no appcast, no cask. The zip still lands as a workflow artifact."
+        type: boolean
+        default: false
 
 permissions:
   contents: write   # release.sh pushes the tag and creates the GitHub release
@@ -85,7 +89,17 @@ jobs:
             echo "::notice::dry_run — building and staging only; no keychain is touched."
           elif [ -n "$CERT_P12" ]; then
             NOTARIZE=1
-            if [ -n "$CF_TOKEN" ]; then
+            # sign_only exists because the two existing modes cannot answer
+            # "does this build behave correctly when properly signed?". dry_run
+            # skips signing, which is the variable under test, and a full run
+            # publishes — tag, release, appcast, cask — which is far too much
+            # blast radius for an experiment. The first thing it is wanted for
+            # is the sandbox question: whether a Developer ID build carrying
+            # App Sandbox entitlements still captures system audio, or reports
+            # TCC-authorized silence the way a self-signed one does.
+            if [ "${{ inputs.sign_only }}" = "true" ]; then
+              echo "::notice::sign_only — signing and notarizing; publishing nothing. The zip is in the run's artifacts."
+            elif [ -n "$CF_TOKEN" ]; then
               PUBLISH=1
             else
               echo "::warning::No CLOUDFLARE_API_TOKEN — signing and notarizing, publishing nothing."
