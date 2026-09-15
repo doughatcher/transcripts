@@ -191,8 +191,16 @@ final class SystemAudioCapturer: NSObject, SCStreamOutput, SCStreamDelegate, @un
 
         if #available(macOS 14.2, *), let tap = tapEngine as? SystemAudioTap { tap.stop() }
         if let stream { try? await stream.stopCapture() }
-        input?.markAsFinished()
+        // markAsFinished() raises unless the writer is actually .writing, and
+        // the writer only gets there when the first sample reaches ingest(). A
+        // recording that captured no system audio at all — a mic-only note in a
+        // silent room — never gets that sample, so this call used to throw an
+        // ObjC exception and take the process down with it. The deadmic watchdog
+        // made it reachable in practice: swapping a dead input calls stop(), and
+        // on a quiet Mac there is nothing in the system track to have started
+        // the writer. Both calls belong behind the one status check.
         if let writer, writer.status == .writing {
+            input?.markAsFinished()
             await writer.finishWriting()
         }
 
