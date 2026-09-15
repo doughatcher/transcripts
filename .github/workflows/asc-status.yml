@@ -234,12 +234,19 @@ jobs:
       # A query that could not answer is NOT a change: it exits 0. An alert
       # that cries wolf every time Apple's API blips is an alert people learn
       # to ignore, which is worse than not having one.
+      #
+      # WATCH_FOR names the state we are currently parked in, not a state we
+      # are hoping for, and it has to be re-pointed whenever the submission
+      # genuinely moves. Left at WAITING_FOR_REVIEW after 1.0.6 came back
+      # REJECTED on 2026-09-15, every scheduled run would have failed every
+      # morning — the same cried-wolf failure this step was written to avoid,
+      # only self-inflicted.
       - name: Watch for a state change
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           BUNDLE_ID: ${{ inputs.bundle_id || 'ltd.hatcher.transcripts' }}
-          WATCH_FOR: WAITING_FOR_REVIEW
+          WATCH_FOR: REJECTED
         run: |
           export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
           asc() { python3 scripts/asc.py "$1" 2>/dev/null || echo '{}'; }
