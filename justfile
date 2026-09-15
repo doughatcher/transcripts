@@ -5,8 +5,8 @@ export DEVELOPER_DIR := "/Applications/Xcode.app/Contents/Developer"
 
 default: build
 
-# Regenerate Transcripts.xcodeproj from project.yml (the xcodeproj is not
-# checked in — the spec is the source of truth).
+# The xcodeproj is not checked in — project.yml is the source of truth.
+# Regenerate Transcripts.xcodeproj from project.yml.
 project:
     xcodegen generate
 
@@ -16,12 +16,14 @@ build: project
       -destination 'generic/platform=iOS Simulator' \
       CODE_SIGNING_ALLOWED=NO | tail -5
 
-# Open in Xcode (for device runs, signing, archives).
-# Rebuild and relaunch, carrying any live recording forward. Safe mid-session:
-# the running app stops gracefully and the new one resumes the same meeting.
+# Carries any live recording forward. Safe mid-session: the running app stops
+# gracefully and the new one resumes the same meeting.
+#
+# Rebuild, reinstall to ~/Applications and relaunch.
 reload:
     scripts/make-app.sh
 
+# Open in Xcode (for device runs, signing, archives).
 open: project
     open Transcripts.xcodeproj
 
@@ -34,6 +36,8 @@ open: project
 # named with a Unicode right quote that does not survive shell round-tripping,
 # and matching by name fails with CoreDeviceError 1000. `just devices` prints
 # the identifiers.
+#
+# Build and install onto every paired iPhone and iPad.
 devices: project
     #!/usr/bin/env bash
     set -euo pipefail
@@ -102,6 +106,8 @@ devices: project
 # Two upload paths meant one of them was always the untested one. So this is a
 # thin wrapper now: push, dispatch the workflow, follow it. Slower than a local
 # archive, and it produces builds that are accepted.
+#
+# Build and upload to TestFlight, by way of CI.
 testflight:
     #!/usr/bin/env bash
     set -euo pipefail

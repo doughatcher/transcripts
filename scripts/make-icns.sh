@@ -12,7 +12,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-if [[ -z "${DEVELOPER_DIR:-}" && -d /Applications/Xcode.app ]]; then
+# Not -z: a shell exporting /Library/Developer/CommandLineTools sets the
+# variable without providing a toolchain. See scripts/make-app.sh.
+if [[ ! -d "${DEVELOPER_DIR:-}/Platforms/MacOSX.platform" && -d /Applications/Xcode.app ]]; then
   export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 fi
 

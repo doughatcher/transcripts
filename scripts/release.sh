@@ -29,10 +29,17 @@ ZIP_NAME="$APP_NAME-$VERSION.zip"
 NOTARIZE="${NOTARIZE:-1}"
 BASE_URL="${BASE_URL:-https://transcripts.doughatcher.com}"
 
-if [[ -z "${DEVELOPER_DIR:-}" ]]; then
+# Tested for a usable toolchain, not merely a set variable — a shell exporting
+# /Library/Developer/CommandLineTools passes -z and then cannot build. Same
+# guard as scripts/make-app.sh; see the longer note there.
+if [[ ! -d "${DEVELOPER_DIR:-}/Platforms/MacOSX.platform" ]]; then
   for x in "$HOME/Downloads/Xcode-beta.app" /Applications/Xcode-beta.app /Applications/Xcode.app; do
     [[ -d "$x" ]] && { export DEVELOPER_DIR="$x/Contents/Developer"; break; }
   done
+  if [[ ! -d "${DEVELOPER_DIR:-}/Platforms/MacOSX.platform" ]]; then
+    echo "✗ no full Xcode found — DEVELOPER_DIR=${DEVELOPER_DIR:-<unset>} has no Platforms/." >&2
+    exit 1
+  fi
 fi
 
 # --- 1. Version the build ----------------------------------------------------
