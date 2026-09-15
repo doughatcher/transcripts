@@ -53,3 +53,22 @@ jobs:
             -scheme Transcripts \
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO
+
+      # The Mac app had no compile check anywhere. `swift test` covers
+      # TranscriptsCore and TranscriptsEngine, and the step above covers iOS —
+      # but everything under Sources/TranscriptsMac was only ever verified by
+      # someone running `just reload` on their own machine. When Xcode 27 landed
+      # and the license agreement on file was still 26.5, that stopped being
+      # possible and the Mac target had no verification path at all: not local,
+      # not here.
+      #
+      # Signing is off for the same reason as the simulator step. This proves it
+      # compiles, which is the gap; release.yml still owns proving it ships.
+      - name: Build the Mac app
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Transcripts.xcodeproj \
+            -scheme TranscriptsMac \
+            -destination 'generic/platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO
