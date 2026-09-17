@@ -265,15 +265,19 @@ jobs:
             # classic relationship; appAvailabilityV2 is what newer API versions
             # answer with. If both come back empty the app really is listed
             # nowhere; if one answers, that is the count.
-            T1="$(python3 scripts/asc.py "apps/$APP_ID/availableTerritories?limit=200" 2>/dev/null || echo '{}')"
-            C1="$(printf '%s' "$T1" | jq -r '[.data[]?] | length')"
-            T2="$(python3 scripts/asc.py "appAvailabilityV2/$APP_ID/availableTerritories?limit=200" 2>/dev/null || echo '{}')"
-            C2="$(printf '%s' "$T2" | jq -r '[.data[]?] | length')"
-            COUNT=$(( C1 > C2 ? C1 : C2 ))
-            if printf '%s%s' "$T1" "$T2" | grep -q '"CHN"'; then
-              echo "territories=$COUNT  CHINA=LISTED (CallKit must not be active)"
-            elif [ "$COUNT" -eq 0 ]; then
-              echo "territories=0 from BOTH endpoints — either listed nowhere, or neither endpoint answered. Check Pricing and Availability by hand."
+            # v2, not v1: availability moved, and apps/{id}/availableTerritories
+            # answers with nothing rather than an error — which is how a check
+            # querying it reported "listed nowhere" about a fully listed app.
+            # The territory code is not a field; it is base64 inside the record
+            # id, as {"s":"<app>","t":"<code>"}.
+            TERR="$(asc "v2/appAvailabilities/$APP_ID/territoryAvailabilities?limit=200")"
+            AVAIL="$(printf '%s' "$TERR" \
+              | jq -c '[.data[]? | select(.attributes.available == true) | .id | @base64d | fromjson | .t]' 2>/dev/null || echo '[]')"
+            COUNT="$(printf '%s' "$AVAIL" | jq -r 'length')"
+            if [ "$COUNT" -eq 0 ]; then
+              echo "territories=? — the availability query returned nothing. Check Pricing and Availability by hand."
+            elif printf '%s' "$AVAIL" | jq -e 'index("CHN")' >/dev/null 2>&1; then
+              echo "territories=$COUNT  CHINA=LISTED (CallKit must not be active there)"
             else
               echo "territories=$COUNT  CHINA=not listed"
             fi
