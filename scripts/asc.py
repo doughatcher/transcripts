@@ -15,6 +15,7 @@ The .p8 signs the token and is never printed.
 import base64
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -64,8 +65,15 @@ def token() -> str:
 
 
 def main() -> int:
+    # v1 is the default so every existing caller keeps working, but not every
+    # resource lives there: app availability moved to v2, and its relationship
+    # links come back absolute against /v2/. A path that names its own version
+    # is passed through untouched.
+    path = sys.argv[1]
+    if not re.match(r"^v\d+/", path):
+        path = "v1/" + path
     req = urllib.request.Request(
-        "https://api.appstoreconnect.apple.com/v1/" + sys.argv[1],
+        "https://api.appstoreconnect.apple.com/" + path,
         headers={"Authorization": f"Bearer {token()}"})
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
