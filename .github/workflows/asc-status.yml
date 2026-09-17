@@ -223,6 +223,20 @@ jobs:
             echo "### App-level"
             echo '```'
             asc "apps/$APP_ID" | jq -r '.data.attributes | "contentRights=\(.contentRightsDeclaration // "?")  locale=\(.primaryLocale // "?")"'
+
+            # Territory is not cosmetic. 1.0.6 was rejected under guideline 5
+            # because the app linked CallKit *and* listed China, where MIIT
+            # requires CallKit be deactivated — a pairing invisible from the repo,
+            # since one half lives in the source and the other in App Store
+            # Connect. CHN is called out by name because it is the one that
+            # carries rules the code cannot satisfy on its own.
+            TERR="$(asc "apps/$APP_ID/availableTerritories?limit=200")"
+            COUNT="$(printf '%s' "$TERR" | jq -r '[.data[]?] | length')"
+            if printf '%s' "$TERR" | jq -e '[.data[]?.id] | index("CHN")' >/dev/null 2>&1; then
+              echo "territories=$COUNT  CHINA=LISTED (CallKit must not be active)"
+            else
+              echo "territories=$COUNT  CHINA=not listed"
+            fi
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
