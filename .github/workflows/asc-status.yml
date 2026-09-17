@@ -17,6 +17,10 @@ on:
         description: "Bundle id to report on"
         required: false
         default: "ltd.hatcher.transcripts"
+      endpoint:
+        description: "Optional: dump one raw endpoint, e.g. apps/{id} — {id} is substituted. Read-only."
+        required: false
+        default: ""
   schedule:
     # 14:00 UTC daily, which is a workday morning in ET.
     - cron: "0 14 * * *"
@@ -125,6 +129,30 @@ jobs:
               | jq -r '[.data[]? | {s:.attributes.state, p:.attributes.platform, d:.attributes.submittedDate}]
                        | sort_by(.d // "") | reverse | .[:8][]
                        | "state=\(.s // "?")  platform=\(.p // "?")  submitted=\(.d // "-")"'
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # Ad-hoc read. Guessing endpoint shapes from memory is how the territory
+      # check shipped querying two paths that both answer with nothing; the
+      # reliable move is to ask the API what its relationships are actually
+      # called and follow the link it gives back. Having that on the workflow
+      # means it takes one dispatch instead of an edit-push-run loop.
+      - name: Raw endpoint
+        if: inputs.endpoint != ''
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          BUNDLE_ID: ${{ inputs.bundle_id || 'ltd.hatcher.transcripts' }}
+          ENDPOINT: ${{ inputs.endpoint }}
+        run: |
+          export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
+          APP_ID="$(python3 scripts/asc.py "apps?filter[bundleId]=$BUNDLE_ID&limit=1" | jq -r '.data[0].id // empty')"
+          EP="${ENDPOINT//\{id\}/$APP_ID}"
+          {
+            echo
+            echo "### Raw: \`$EP\`"
+            echo '```json'
+            python3 scripts/asc.py "$EP" || echo "(query failed — see the step log)"
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
