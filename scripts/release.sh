@@ -404,7 +404,10 @@ if [[ "${PUBLISH:-1}" == "1" && "$NOTARIZE" == "1" ]]; then
     if gh release view "$TAG" >/dev/null 2>&1; then
       gh release edit "$TAG" --notes-file "$NOTES_FILE" >/dev/null && echo "  ✓ release updated"
     else
-      gh release create "$TAG" "${PRE[@]}" --title "Transcripts $VERSION" \
+      # ${PRE[@]+…}: an empty array is "unbound" to bash 3.2 under set -u, so a
+      # stable release (no --prerelease) died here after everything else had
+      # shipped. 1.1.1 was the first stable release to reach this line.
+      gh release create "$TAG" ${PRE[@]+"${PRE[@]}"} --title "Transcripts $VERSION" \
         --notes-file "$NOTES_FILE" "$ZIP" >/dev/null && echo "  ✓ release published with the artifact"
     fi
     rm -f "$NOTES_FILE"
