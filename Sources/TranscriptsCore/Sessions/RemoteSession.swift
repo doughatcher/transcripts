@@ -15,7 +15,7 @@ import Foundation
 /// whether the Mac wakes ten minutes later or ten days.
 public enum RemoteSession {
     /// One tagged recording, reduced to what the grouping actually needs.
-    public struct Item: Equatable, Sendable {
+    public struct Item: Equatable, Sendable, Codable {
         public let id: UUID
         public let sessionID: String
         public let label: String?

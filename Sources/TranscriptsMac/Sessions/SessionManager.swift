@@ -146,27 +146,84 @@ final class SessionManager: ObservableObject {
         set { UserDefaults.standard.set(Array(newValue), forKey: Self.firedKey) }
     }
 
+    // MARK: - Recorded elsewhere
+
+    /// Recordings another device tagged with a session, kept until the evening
+    /// they belong to has completed.
+    ///
+    /// Persisted, where it used to live only in memory: an evening can arrive in
+    /// the middle of the game and close hours later, and a relaunch in between
+    /// forgot which session the recordings belonged to, so the hook never ran.
+    private static let remoteKey = "transcripts.sessions.remoteItems"
+    private var remoteItems: [RemoteSession.Item] {
+        get {
+            guard let data = UserDefaults.standard.data(forKey: Self.remoteKey) else { return [] }
+            return (try? JSONDecoder().decode([RemoteSession.Item].self, from: data)) ?? []
+        }
+        set { UserDefaults.standard.set(try? JSONEncoder().encode(newValue), forKey: Self.remoteKey) }
+    }
+
+    var hasPendingRemote: Bool { !remoteItems.isEmpty }
+
+    /// Notes a recording that arrived tagged with a session.
+    func rememberRemote(_ item: RemoteSession.Item) {
+        var all = remoteItems.filter { $0.id != item.id }
+        all.append(item)
+        remoteItems = all
+    }
+
+    /// Where a tagged recording should be filed: its session's destination, the
+    /// same as if the session had been running on this Mac. Nil for anything
+    /// untagged, or a session that sets no destination.
+    func remoteDestination(for recordID: UUID?) -> String? {
+        guard let recordID, let item = remoteItems.first(where: { $0.id == recordID }) else { return nil }
+        return profiles().first { $0.id == item.sessionID }?.destination
+    }
+
+    func isRemote(_ recordID: UUID) -> Bool { remoteItems.contains { $0.id == recordID } }
+
     /// Groups recordings tagged by another device and completes the runs that
     /// are finished.
     ///
-    /// Called after ingesting device captures. The Mac may not have been awake
-    /// when any of this happened, which is the whole point: the evening is
-    /// reconstructed from the recordings rather than watched as it occurs.
-    func reconcileRemote(items: [RemoteSession.Item],
+    /// The Mac may not have been awake when any of this happened, which is the
+    /// whole point: the evening is reconstructed from the recordings rather than
+    /// watched as it occurs. Called after an import, whenever a tagged
+    /// recording finishes processing, on a timer, and at launch — a run can
+    /// close long after its last recording arrived, and nothing else would
+    /// notice.
+    ///
+    /// `settled` says whether a recording has finished processing. A closed run
+    /// waits for all of its recordings: completing the moment the files were
+    /// imported handed the hook an evening with no transcripts in it yet, and
+    /// then marked it done for good.
+    func reconcileRemote(settled: (UUID) -> Bool,
                          complete: (RemoteSession.Run, SessionProfile) async -> Void) async {
-        for profile in profiles() {
+        let items = remoteItems
+        guard !items.isEmpty else { return }
+        var finished: Set<UUID> = []
+        let known = profiles()
+        for profile in known {
             for run in RemoteSession.runs(from: items, profile: profile, now: Date()) {
                 guard run.isClosed else { continue }          // may still be going
                 let key = RemoteSession.key(for: run)
-                guard !firedRuns.contains(key) else { continue }
+                if firedRuns.contains(key) {
+                    finished.formUnion(run.items.map(\.id))
+                    continue
+                }
+                guard run.items.allSatisfy({ settled($0.id) }) else { continue }
                 // Recorded before running, not after: a crash mid-publish should
                 // cost one evening's hook rather than re-fire it on every launch
                 // for the rest of time. The log says what happened.
                 firedRuns.insert(key)
+                finished.formUnion(run.items.map(\.id))
                 Log.write("session: '\(profile.id)' recorded elsewhere — \(run.items.count) recording(s), ended \(run.endedAt) (\(run.reason.rawValue))")
                 await complete(run, profile)
             }
         }
+        // A tag naming no profile can never complete; drop it rather than keep
+        // it for ever.
+        let ids = Set(known.map(\.id))
+        remoteItems = remoteItems.filter { !finished.contains($0.id) && ids.contains($0.sessionID) }
     }
 
     // MARK: - The clock

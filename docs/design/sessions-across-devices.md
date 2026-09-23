@@ -1,7 +1,18 @@
 # Sessions across devices
 
-Status: **designed, not built.** The live-clock session in `SessionManager` is
-built and shipping; everything here is the next step.
+Status: **built.** `RemoteSession` groups tagged captures and the Mac completes
+them. Four gaps were closed on 2026-09-23:
+
+- The tags are persisted, so a relaunch between import and the end of the
+  evening no longer forgets them.
+- Tagged recordings file into the session's destination.
+- Completion waits until every recording in the run has finished processing.
+  Before, it ran at import, with no transcripts yet, and then counted as done.
+- The Mac re-checks on a five-minute timer and at launch, not only after an
+  import, so a run that closes later by the clock still completes.
+
+macOS 26 also added time-of-day automations, so the "only iOS can automate"
+premise below no longer holds: either device can start a session.
 
 ## The problem
 

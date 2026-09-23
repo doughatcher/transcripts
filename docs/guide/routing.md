@@ -169,19 +169,32 @@ Because these are Shortcuts actions they automate. The best trigger is a
 evening you play — because that fires when you are already at the table. A
 time-only automation is the case where you might want the recording toggle off.
 
-Both platforms provide the actions. On **iPhone and iPad** this is a personal
-automation, and it is the better home for a recurring one: iOS can trigger on
-*arriving somewhere* combined with a time, which is what makes a weekly game
-reliable — you are already at the table when it fires.
+Both platforms provide the actions, and both have personal automations, so set
+it up on whichever device is at the table. The iPad is light and has a good
+microphone. The Mac can do more while it records: the other side of a call, and
+live speaker names. In the Shortcuts app, go to **Automation** and add one for
+the evening you play: **Time of Day**, weekly, then **Start Session**. On
+iPhone and iPad you can also trigger on *arriving somewhere* at that time, so it
+fires when you are already at the table. On the Mac, choose **Run
+Immediately** so it doesn't wait for a click. Mac automations need macOS 26 or
+later.
+
+If one table alternates between games, give each game its own session and
+start the shortcut with **Choose from Menu**, one item per session. Picking the
+item is then the same as saying which game it is, and nothing can guess wrong.
 
 The mobile app does less behind the action, on purpose. iOS suspends the app
 between takes and has no shell, so it does not run the idle clock or the
 completion command. What it does is the part only the device in the room can:
 each recording it makes during a session is **tagged** with that session, and
-travels to the Mac carrying it. The Mac does the grouping and runs
-`onComplete` — whenever it next wakes, which need not be that evening.
+travels to the Mac carrying it. The Mac files each one into the session's
+`destination`, groups them into the evening, and runs `onComplete` once all of
+them are transcribed and the session is over by its idle timeout or hard stop.
+That can happen the same evening, if the Mac is awake, or whenever it next
+wakes. The Mac looks again every few minutes and at launch, so an evening that
+ends after its recordings arrived still completes.
 
-On the Mac, a `launchd` job or a calendar event running:
+From a script, a `launchd` job, or anything else that can run a command:
 
 ```bash
 shortcuts run "Start Session"

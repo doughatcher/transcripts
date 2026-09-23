@@ -3,10 +3,11 @@ import Foundation
 
 /// Shortcuts actions on iPhone and iPad.
 ///
-/// This is the device that is actually at the table, so this is where the
-/// automation belongs: an iOS personal automation can combine *arriving
-/// somewhere* with *the right evening*, which macOS cannot, and which is exactly
-/// the trigger that makes recording a weekly game reliable.
+/// Often the device that is actually at the table. An iOS personal automation
+/// can combine *arriving somewhere* with *the right evening*, which is exactly
+/// the trigger that makes recording a weekly game reliable. The Mac has had
+/// time-of-day automations since macOS 26 too, so either device can start the
+/// session; the Mac does the grouping and completion either way.
 ///
 /// The actions mirror the Mac's, but the work behind them does not. iOS suspends
 /// the app between takes and has no shell, so nothing here runs a clock or a

@@ -241,6 +241,7 @@ final class AppController: ObservableObject {
         // away, and completing it wants the recordings already back in history.
         sessions.restore()
         startDeviceWatcher()
+        startRemoteSessionWatch()
         pruneBackups()
         if !StoreEdition.isStore { checkForUpdatesQuietly() }
         Notifier.shared.onStartRecording = { [weak self] in
@@ -1408,8 +1409,11 @@ final class AppController: ObservableObject {
                 if let seedTranscript {
                     result = try await self.processNote(recording: recording, transcript: seedTranscript, cfg: cfg)
                 } else {
+                    // A session running here, or the one another device tagged
+                    // this recording with.
                     result = try await engine.process(
-                        recording, forcedDestination: self.sessions.destinationOverride)
+                        recording, forcedDestination: self.sessions.destinationOverride
+                            ?? self.sessions.remoteDestination(for: recordID))
                 }
                 let md = result.finalPaths.first { $0.pathExtension == "md" }
                 let dropped = result.finalPaths.map(\.lastPathComponent).joined(separator: ", ")
@@ -1465,6 +1469,11 @@ final class AppController: ObservableObject {
             }
             self.refreshRecents()
             self.applyArmState()
+            // The last recording of an evening recorded elsewhere may be the one
+            // that just finished; its session can complete now.
+            if let recordID, self.sessions.isRemote(recordID) {
+                Task { await self.reconcileRemoteSessions() }
+            }
         }
     }
 
@@ -1987,9 +1996,11 @@ final class AppController: ObservableObject {
             var recording = Recording(audioURL: local, startedAt: capture.startedAt, endedAt: ended)
             recording.title = capture.titleHint
             if let sid = capture.sessionID {
-                remoteTags[recordID] = RemoteSession.Item(
+                // Before the pipeline starts, so it files into the session's
+                // destination the way a session run on this Mac would.
+                sessions.rememberRemote(RemoteSession.Item(
                     id: recordID, sessionID: sid, label: capture.sessionLabel,
-                    startedAt: capture.startedAt, duration: capture.duration)
+                    startedAt: capture.startedAt, duration: capture.duration))
             }
             Log.write("device inbox: importing \(capture.audioFilename) from \(capture.deviceName)")
 
@@ -2006,17 +2017,25 @@ final class AppController: ObservableObject {
         Task { await reconcileRemoteSessions() }
     }
 
-    /// Tagged captures seen this launch, keyed by recording id.
-    ///
-    /// Deliberately not persisted. A run's completion is remembered instead
-    /// (see `SessionManager.firedRuns`), which is the fact that actually needs
-    /// to survive; re-deriving the items from a fresh ingest is cheap and
-    /// self-correcting.
-    private var remoteTags: [UUID: RemoteSession.Item] = [:]
+    /// Evenings recorded elsewhere close by the clock (idle timeout, hard stop)
+    /// with no event to announce it, so look every few minutes while any are
+    /// outstanding, and once at launch.
+    private var remoteSessionTimer: Timer?
+    private func startRemoteSessionWatch() {
+        Task { await reconcileRemoteSessions() }
+        remoteSessionTimer?.invalidate()
+        remoteSessionTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
+            Task { @MainActor in await self?.reconcileRemoteSessions() }
+        }
+    }
 
     private func reconcileRemoteSessions() async {
-        guard !remoteTags.isEmpty else { return }
-        await sessions.reconcileRemote(items: Array(remoteTags.values)) { [weak self] run, profile in
+        guard sessions.hasPendingRemote else { return }
+        let settled: (UUID) -> Bool = { [weak self] id in
+            guard let r = self?.history.record(id) else { return true }
+            return r.status == .completed || r.status == .failed
+        }
+        await sessions.reconcileRemote(settled: settled) { [weak self] run, profile in
             guard let self else { return }
             // Reuse the same completion path as a locally-run session, so a
             // publish script cannot tell the difference between an evening
