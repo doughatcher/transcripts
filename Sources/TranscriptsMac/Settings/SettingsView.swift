@@ -207,7 +207,9 @@ struct SettingsView: View {
                 TextField("Open with", text: openCommandBinding,
                           prompt: Text(#"open "obsidian://open?path={path_encoded}""#))
                     .textFieldStyle(.roundedBorder)
-                Text("Optional. Opens a recording's document with this command. **{path}** is the file path (for `open -a \"App\" \"{path}\"`); **{path_encoded}** is URL-encoded (for URIs like `obsidian://`). Blank = Transcripts's built-in viewer.")
+                Text(StoreEdition.isStore
+                     ? "Optional. Opens a recording's document with this link, where **{path_encoded}** is the file's URL-encoded path — for example `obsidian://open?path={path_encoded}`. Blank = your Mac's default app for Markdown."
+                     : "Optional. Opens a recording's document with this command. **{path}** is the file path (for `open -a \"App\" \"{path}\"`); **{path_encoded}** is URL-encoded (for URIs like `obsidian://`). Blank = Transcripts's built-in viewer.")
                     .font(.caption2).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {
@@ -363,7 +365,8 @@ struct SettingsView: View {
                     if controller.config.destinations.vaultMirror.map({ (($0 as NSString).expandingTildeInPath) })
                         != vault.path {
                         Button("Use “\(vault.lastPathComponent)”") {
-                            controller.config.destinations.vaultMirror = Self.tildeify(vault.path)
+                            guard let picked = Self.adoptFolder(vault.path, title: "Allow access to your Obsidian vault") else { return }
+                            controller.config.destinations.vaultMirror = Self.tildeify(picked)
                         }
                     }
                 }
@@ -391,7 +394,9 @@ struct SettingsView: View {
                 if Locations.isICloudAvailable,
                    controller.config.destinations.deviceInbox != Locations.defaultDeviceInbox() {
                     Button("Use iCloud Drive") {
-                        controller.config.destinations.deviceInbox = Locations.defaultDeviceInbox()
+                        guard let inbox = Locations.defaultDeviceInbox(),
+                              let picked = Self.adoptFolder(inbox, title: "Allow access to Transcripts in iCloud Drive") else { return }
+                        controller.config.destinations.deviceInbox = Self.tildeify(picked)
                         controller.startDeviceWatcher()
                     }
                 }
@@ -407,7 +412,9 @@ struct SettingsView: View {
             Section("Sorting") {
                 Picker("File recordings", selection: routingBinding(\.mode)) {
                     Text("Automatic (on-device)").tag(RoutingConfig.Mode.automatic)
-                    Text("Custom script").tag(RoutingConfig.Mode.script)
+                    if !StoreEdition.isStore {
+                        Text("Custom script").tag(RoutingConfig.Mode.script)
+                    }
                     Text("Off — fixed folder").tag(RoutingConfig.Mode.off)
                 }
                 TextField("Default / fallback folder", text: routingBinding(\.fallback))
@@ -423,7 +430,7 @@ struct SettingsView: View {
                         .font(.caption2).foregroundStyle(.secondary)
                 }
 
-                if controller.routing.mode == .script {
+                if controller.routing.mode == .script && !StoreEdition.isStore {
                     TextField("Script executable", text: scriptExecBinding)
                     TextField("Arguments (${transcriptURL} ${audioURL} ${title})", text: scriptArgsBinding)
                     Text("Runs when a recording is done; print a vault-relative destination (or JSON {\"destination\":\"…\"}).")
@@ -478,11 +485,13 @@ struct SettingsView: View {
                             }
                         }
 
-                        TextField("When it ends, run", text: Binding(
-                            get: { Self.commandText(session.onComplete) },
-                            set: { session.onComplete = Self.command(from: $0) }))
-                        Text("Runs once, when the whole session is over. ${sessionLabel}, ${sessionName} and the session's files are substituted in.")
-                            .font(.caption2).foregroundStyle(.secondary)
+                        if !StoreEdition.isStore {
+                            TextField("When it ends, run", text: Binding(
+                                get: { Self.commandText(session.onComplete) },
+                                set: { session.onComplete = Self.command(from: $0) }))
+                            Text("Runs once, when the whole session is over. ${sessionLabel}, ${sessionName} and the session's files are substituted in.")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
 
                         Button("Remove “\(session.name)”", role: .destructive) {
                             controller.routing.sessions.removeAll { $0.id == session.id }
@@ -703,13 +712,15 @@ struct SettingsView: View {
 
     private var pipelineTab: some View {
         Form {
-            Picker("Mode", selection: binding(\.pipeline.mode)) {
-                Text("Baked-in (native stages)").tag(PipelineMode.bakedIn)
-                Text("Handoff (one external script)").tag(PipelineMode.handoff)
+            if !StoreEdition.isStore {
+                Picker("Mode", selection: binding(\.pipeline.mode)) {
+                    Text("Baked-in (native stages)").tag(PipelineMode.bakedIn)
+                    Text("Handoff (one external script)").tag(PipelineMode.handoff)
+                }
+                .pickerStyle(.radioGroup)
             }
-            .pickerStyle(.radioGroup)
 
-            if controller.config.pipeline.mode == .handoff {
+            if controller.config.pipeline.mode == .handoff && !StoreEdition.isStore {
                 handoffEditor
             } else {
                 Section("Stages") {
@@ -769,22 +780,36 @@ struct SettingsView: View {
     /// `~/Library/CloudStorage/…` or `~/Library/Mobile Documents/…` comfortably —
     /// both are hidden from Finder's sidebar by default — and those are exactly
     /// where a device inbox lives.
-    static func chooseFolder(title: String) -> String? {
+    ///
+    /// Sandboxed, this panel is also the permission: the folder it returns is
+    /// the only kind the app can open, so every pick is remembered in
+    /// `FolderAccess` for the next launch.
+    static func chooseFolder(title: String, startingAt start: URL? = nil) -> String? {
         let panel = NSOpenPanel()
+        panel.directoryURL = start
         panel.title = title
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
         panel.showsHiddenFiles = true
-        guard panel.runModal() == .OK else { return nil }
-        return panel.url?.path
+        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        FolderAccess.grant(url)
+        return url.path
+    }
+
+    /// A one-click folder shortcut. Unsandboxed it just sets the path;
+    /// sandboxed a path alone opens nothing, so the panel comes up already on
+    /// that folder and one click grants it.
+    static func adoptFolder(_ path: String, title: String) -> String? {
+        guard FolderAccess.isSandboxed else { return path }
+        return chooseFolder(title: title, startingAt: URL(fileURLWithPath: Locations.expand(path)))
     }
 
     /// Stores paths under the home directory as `~/…` so a config stays readable
     /// and portable between accounts.
     static func tildeify(_ path: String) -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let home = Locations.userHome
         return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
     }
 
@@ -876,15 +901,19 @@ struct AboutTab: View {
                         Text("Version \(version)").font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Check for Updates…") { controller.checkForUpdatesInteractive() }
+                    if !StoreEdition.isStore {
+                        Button("Check for Updates…") { controller.checkForUpdatesInteractive() }
+                    }
                 }
 
-                Toggle("Ride the beta train — offer pre-release builds", isOn: Binding(
-                    get: { controller.config.includePrereleases },
-                    set: { controller.config.includePrereleases = $0 }))
-                Text("Update checks will include pre-releases (e.g. 0.8.1-beta.1) before they're blessed as stable. Betas are field-tested first, but expect rough edges.")
-                    .font(.caption2).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                if !StoreEdition.isStore {
+                    Toggle("Ride the beta train — offer pre-release builds", isOn: Binding(
+                        get: { controller.config.includePrereleases },
+                        set: { controller.config.includePrereleases = $0 }))
+                    Text("Update checks will include pre-releases (e.g. 0.8.1-beta.1) before they're blessed as stable. Betas are field-tested first, but expect rough edges.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 GroupBox {
                     VStack(alignment: .leading, spacing: 10) {
@@ -904,9 +933,13 @@ struct AboutTab: View {
                         VStack(alignment: .leading, spacing: 8) {
                             bullet("Fully on-device: transcription (Apple Speech) and summaries (Apple Intelligence, with a built-in fallback) run locally. No audio or transcript is sent to any cloud service.")
                             bullet("A local Ollama server is used for summaries only if you explicitly run one.")
-                            bullet("Recordings and transcripts are stored locally — in your knowledge vault and under ~/Library/Application Support/Transcripts. Nothing leaves your Mac unless you move it.")
+                            bullet(StoreEdition.isStore
+                                   ? "Recordings and transcripts are stored in the folder you chose and in the app's own storage on this Mac. If that folder is in iCloud Drive, iCloud syncs it to your other devices; nothing else leaves your Mac."
+                                   : "Recordings and transcripts are stored locally — in your knowledge vault and under ~/Library/Application Support/Transcripts. Nothing leaves your Mac unless you move it.")
                             bullet("Microphone and Screen Recording access are granted by you via macOS; Transcripts never bypasses those prompts.")
-                            bullet("No accounts, no analytics, no telemetry. The only network request Transcripts makes on its own is the update check.")
+                            bullet(StoreEdition.isStore
+                                   ? "No accounts, no analytics, no telemetry. The only network requests Transcripts makes on its own download the speaker-recognition and summary models, once, the first time they are needed."
+                                   : "No accounts, no analytics, no telemetry. The only network request Transcripts makes on its own is the update check.")
                         }
                     }
                     .padding(.vertical, 4)
@@ -940,13 +973,15 @@ struct AboutTab: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                GroupBox {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Label("Updates", systemImage: "arrow.triangle.2.circlepath").font(.headline)
-                        Text("Transcripts checks its public releases on launch and installs new versions to ~/Applications. Installed with Homebrew? Use `brew upgrade --cask transcripts` instead, so Homebrew's records stay accurate.")
-                            .font(.caption).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Button("Check now") { controller.checkForUpdatesInteractive() }
+                if !StoreEdition.isStore {
+                    GroupBox {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Label("Updates", systemImage: "arrow.triangle.2.circlepath").font(.headline)
+                            Text("Transcripts checks its public releases on launch and installs new versions to ~/Applications. Installed with Homebrew? Use `brew upgrade --cask transcripts` instead, so Homebrew's records stay accurate.")
+                                .font(.caption).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Button("Check now") { controller.checkForUpdatesInteractive() }
+                        }
                     }
                 }
             }
@@ -976,7 +1011,9 @@ private struct StageRow: View {
             HStack {
                 Text(stage.id.rawValue.capitalized).frame(width: 90, alignment: .leading)
                 Picker("", selection: kindBinding) {
-                    ForEach(Kind.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+                    ForEach(Kind.allCases.filter { !StoreEdition.isStore || $0 != .external }, id: \.self) {
+                        Text($0.rawValue.capitalized).tag($0)
+                    }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()

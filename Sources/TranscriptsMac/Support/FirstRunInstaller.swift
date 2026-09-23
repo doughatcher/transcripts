@@ -1,6 +1,7 @@
 import AppKit
 import TranscriptsEngine   // Log
 
+#if !APP_STORE
 /// Offers, on first launch from somewhere else, to move Transcripts into
 /// `~/Applications` and reopen from there.
 ///
@@ -107,3 +108,10 @@ enum FirstRunInstaller {
         return parent == "/Applications" || parent == "\(home)/Applications"
     }
 }
+#else
+/// The App Store installs the store build where it belongs; there is nothing
+/// to offer.
+enum FirstRunInstaller {
+    static func offerIfNeeded() {}
+}
+#endif

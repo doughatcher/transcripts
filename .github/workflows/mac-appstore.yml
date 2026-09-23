@@ -1,0 +1,213 @@
+# Build the Mac App Store edition (the TranscriptsMacStore target) and upload
+# it to App Store Connect, where it lands in TestFlight for macOS.
+#
+# Tag-driven like testflight.yml, so one `git tag v1.2.0 && git push --tags`
+# ships the iPhone, iPad and Mac store builds of the same version. The direct
+# download (Developer ID, notarized, Homebrew) is release.yml and is untouched.
+#
+# The store edition is sandboxed and compiled with APP_STORE; what that leaves
+# out, and why, is in Sources/TranscriptsMac/Support/StoreEdition.swift.
+
+name: Mac App Store
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Marketing version, e.g. 1.1.0"
+        required: true
+
+concurrency:
+  # Shares testflight.yml's group: both read App Store Connect's highest build
+  # number and add one, so two uploads at once would race for the same number.
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    name: Upload to App Store Connect
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Refuse a beta toolchain
+        run: |
+          xcodebuild -version
+          if xcodebuild -version | grep -qi beta; then
+            echo "::error::Beta Xcode cannot produce an App Store build."
+            exit 1
+          fi
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "marketing=${VERSION%%-*}" >> "$GITHUB_OUTPUT"
+          echo "▶ ${VERSION%%-*}"
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      # Without it the app builds but ships no MLX default.metallib, and the
+      # summarizer kills the process at first use. Checked after the archive.
+      - name: Metal toolchain
+        run: sudo xcodebuild -downloadComponent MetalToolchain || xcodebuild -downloadComponent MetalToolchain
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Install App Store Connect API key
+        env:
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          printf '%s' "$ASC_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
+          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
+
+      # Highest build number App Store Connect holds for this app, any
+      # platform, plus one — the same rule testflight.yml follows, for the same
+      # reasons.
+      - name: Next build number
+        id: build
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
+          python3 scripts/asc.py "builds?filter[app]=6802331047&limit=200" | python3 -c '
+          import json, sys
+          seen = [int(b["attributes"]["version"]) for b in json.load(sys.stdin)["data"]
+                  if str(b["attributes"].get("version", "")).isdigit()]
+          print(f"number={max(seen) + 1 if seen else 1}")' >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+      # Archived with a local ad-hoc signature, before any certificate is in a
+      # keychain. On a release runner xcodebuild deadlocks in Swift package
+      # loading once a signing keychain leads the search list (see PHASE in
+      # scripts/release.sh), and this target has remote packages where the iOS
+      # app has none. The export below re-signs everything for the store, so
+      # the archive never needed the real identity.
+      - name: Archive (before any keychain exists)
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project Transcripts.xcodeproj \
+            -scheme TranscriptsMacStore \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -archivePath "$RUNNER_TEMP/TranscriptsMacStore.xcarchive" \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- PROVISIONING_PROFILE_SPECIFIER= \
+            DEVELOPMENT_TEAM=${{ secrets.TEAM_ID }} \
+            MARKETING_VERSION=${{ steps.version.outputs.marketing }} \
+            CURRENT_PROJECT_VERSION=${{ steps.build.outputs.number }} \
+            | tee "$RUNNER_TEMP/archive.log" | grep -E "error:|warning: .*APP_STORE|ARCHIVE (SUCCEEDED|FAILED)" || true
+          grep -q "ARCHIVE SUCCEEDED" "$RUNNER_TEMP/archive.log"
+
+      - name: Check the archive
+        run: |
+          APP="$RUNNER_TEMP/TranscriptsMacStore.xcarchive/Products/Applications/Transcripts.app"
+          if ! find "$APP" -name "*.metallib" | grep -q .; then
+            echo "::error::No Metal library in the app — the summarizer would crash on first use."
+            exit 1
+          fi
+          # StoreEdition compiles the shell paths out. If one comes back, App
+          # Review is the wrong place to find out.
+          if strings -a "$APP/Contents/MacOS/Transcripts" | grep -E '^/bin/sh$|homebrew/bin/ollama'; then
+            echo "::error::The store binary still carries a shell or tool path."
+            exit 1
+          fi
+          echo "✓ Metal library present, no shell paths"
+
+      # Same two certificates as testflight.yml, for the same reason: a stored
+      # development identity stops automatic signing minting a throwaway one.
+      # The Mac installer certificate is not stored — the export gets it from
+      # Apple's cloud signing through the API key.
+      - name: Import signing certificates
+        env:
+          CERT_P12: ${{ secrets.DIST_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.DIST_CERT_PASSWORD }}
+          DEV_CERT_P12: ${{ secrets.DEV_CERT_P12 }}
+          DEV_CERT_PASSWORD: ${{ secrets.DEV_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          for pair in "CERT_P12:CERT_PASSWORD" "DEV_CERT_P12:DEV_CERT_PASSWORD"; do
+            data="${pair%%:*}"; pass="${pair##*:}"
+            if [ -z "${!data}" ]; then echo "::error::${data} is unset or empty."; exit 1; fi
+            echo "${!data}" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+            security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "${!pass}" \
+              -T /usr/bin/codesign -T /usr/bin/security -T /usr/bin/productbuild
+            rm "$RUNNER_TEMP/cert.p12"
+          done
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" \
+            $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
+      - name: Export the package
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>${{ secrets.TEAM_ID }}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>destination</key><string>export</string>
+          </dict>
+          </plist>
+          PLIST
+          # /usr/bin first for the same openrsync reason as testflight.yml.
+          PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH" xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/TranscriptsMacStore.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8 \
+            -authenticationKeyID ${{ secrets.ASC_KEY_ID }} \
+            -authenticationKeyIssuerID ${{ secrets.ASC_ISSUER_ID }}
+
+      - name: Check the signed app
+        run: |
+          rm -rf "$RUNNER_TEMP/unpacked" && mkdir "$RUNNER_TEMP/unpacked" && cd "$RUNNER_TEMP/unpacked"
+          xar -xf "$RUNNER_TEMP/export/Transcripts.pkg"
+          cat */Payload | gunzip -dc | cpio -id --quiet
+          APP="$(find . -name Transcripts.app -maxdepth 4 | head -1)"
+          codesign --verify --strict --deep "$APP"
+          ENT="$(codesign -d --entitlements - --xml "$APP" 2>/dev/null)"
+          for key in com.apple.security.app-sandbox com.apple.security.device.audio-input \
+                     com.apple.security.files.user-selected.read-write com.apple.security.files.bookmarks.app-scope; do
+            echo "$ENT" | grep -q "$key" || { echo "::error::missing entitlement $key"; exit 1; }
+          done
+          echo "✓ signed, sandboxed, entitlements present"
+
+      - name: Validate
+        run: |
+          xcrun altool --validate-app -f "$RUNNER_TEMP/export/Transcripts.pkg" -t macos \
+            --apiKey ${{ secrets.ASC_KEY_ID }} --apiIssuer ${{ secrets.ASC_ISSUER_ID }}
+
+      - name: Upload
+        run: |
+          xcrun altool --upload-app -f "$RUNNER_TEMP/export/Transcripts.pkg" -t macos \
+            --apiKey ${{ secrets.ASC_KEY_ID }} --apiIssuer ${{ secrets.ASC_ISSUER_ID }}
+
+      - name: Keep the package
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Transcripts-mac-${{ steps.version.outputs.marketing }}-${{ steps.build.outputs.number }}
+          path: ${{ runner.temp }}/export/Transcripts.pkg
+          if-no-files-found: warn

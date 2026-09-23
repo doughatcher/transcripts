@@ -152,18 +152,18 @@ public struct DestinationsConfig: Codable, Equatable, Sendable {
     /// Expanded vault-mirror root, or nil when mirroring is off.
     public var resolvedVaultMirror: URL? {
         guard let p = vaultMirror?.trimmingCharacters(in: .whitespaces), !p.isEmpty else { return nil }
-        return URL(fileURLWithPath: (p as NSString).expandingTildeInPath)
+        return URL(fileURLWithPath: Locations.expand(p))
     }
 
     /// Expanded device-inbox root, or nil when ingest is switched off.
     public var resolvedDeviceInbox: URL? {
         guard let p = deviceInbox?.trimmingCharacters(in: .whitespaces), !p.isEmpty else { return nil }
-        return URL(fileURLWithPath: (p as NSString).expandingTildeInPath)
+        return URL(fileURLWithPath: Locations.expand(p))
     }
 
     /// Expands a leading `~` to the user's home directory.
     public var resolvedRoot: URL {
-        URL(fileURLWithPath: (knowledgeRoot as NSString).expandingTildeInPath)
+        URL(fileURLWithPath: Locations.expand(knowledgeRoot))
     }
 
     /// Tolerant decoding, for the same reason `AppConfig` has it — and with more

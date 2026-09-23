@@ -22,3 +22,4 @@ Sources/TranscriptsMac/Support/Info.plist
 
 # Left by running the scripts/ helpers.
 __pycache__/
+Sources/TranscriptsMac/Support/InfoStore.plist

@@ -316,3 +316,92 @@ targets:
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "Transcripts Local Signing"
         CODE_SIGN_ENTITLEMENTS: ""
+
+  TranscriptsMacStore:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/TranscriptsMac
+        excludes: ["Support/Info.plist", "Support/InfoStore.plist", "Support/*.entitlements"]
+      - path: Sources/TranscriptsMac/Support/Transcripts.icns
+        buildPhase: resources
+    dependencies:
+      - package: Transcripts
+        product: TranscriptsCore
+      - package: Transcripts
+        product: TranscriptsEngine
+    # Every key must be declared here. `info.path` GENERATES the plist rather
+    # than copying an existing one, so the hand-ported file that used to live at
+    # that path was silently overwritten — taking LSUIElement, both TCC usage
+    # strings and the icon with it. Nothing failed loudly: the app still built,
+    # still launched, and still recorded, it just grew a Dock icon and lost the
+    # sentences macOS shows when asking for the microphone.
+    info:
+      path: Sources/TranscriptsMac/Support/InfoStore.plist
+      properties:
+        CFBundleDisplayName: Transcripts
+        CFBundleName: Transcripts
+        # An agent app: menu bar only, no Dock icon, no menu bar of its own.
+        LSUIElement: true
+        LSMinimumSystemVersion: "14.0"
+        CFBundleIconFile: Transcripts
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # The store wants a category, and asks the encryption question on every
+        # upload unless the answer is in the binary.
+        LSApplicationCategoryType: public.app-category.productivity
+        ITSAppUsesNonExemptEncryption: false
+        NSMicrophoneUsageDescription: Transcripts records meetings and voice notes from your microphone.
+        NSSpeechRecognitionUsageDescription: Transcripts transcribes your recordings on this device to create readable transcripts.
+        # Shown by the system-audio permission dialog (Core Audio process tap —
+        # see SystemAudioTap.swift). Optional by design: declining leaves
+        # recordings microphone-only.
+        NSAudioCaptureUsageDescription: Transcripts records this Mac's audio during calls, so the other participants' side is included. Recordings work without it — they are just microphone-only.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ltd.hatcher.transcripts
+        PRODUCT_NAME: Transcripts
+        GENERATE_INFOPLIST_FILE: NO
+        MARKETING_VERSION: "1.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        # The Mac App Store build. Same sources and bundle identifier as
+        # TranscriptsMac (so one App Store Connect record serves iPhone, iPad
+        # and Mac), but sandboxed, and compiled with APP_STORE so that what the
+        # store does not allow is left out rather than failing at runtime:
+        # shell commands, launching other programs, updating itself, moving
+        # itself into /Applications. See StoreEdition.swift.
+        #
+        # The sandbox was proven before this target existed (sandbox-spike):
+        # the Core Audio tap still hears system audio, and folders the user
+        # picks stay reachable across launches through FolderAccess.
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 6Q9BX97LMS
+        CODE_SIGN_ENTITLEMENTS: Sources/TranscriptsMac/Support/TranscriptsStore.entitlements
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APP_STORE"

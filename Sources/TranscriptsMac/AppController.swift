@@ -207,9 +207,12 @@ final class AppController: ObservableObject {
     init() {
         let store = ConfigStore()
         self.configStore = store
-        let cfg = (try? store.load()) ?? .default
+        var cfg = (try? store.load()) ?? .default
+        StoreEdition.sanitize(&cfg)
         self.config = cfg
-        self.routing = RoutingStore(knowledgeRoot: cfg.destinations.resolvedRoot).loadOrSeed()
+        var routing = RoutingStore(knowledgeRoot: cfg.destinations.resolvedRoot).loadOrSeed()
+        StoreEdition.sanitize(&routing)
+        self.routing = routing
         self.sessions = SessionManager(
             // Read through to the live config each time: routing.json is
             // hand-edited, and a profile may be added or retimed mid-evening.
@@ -236,7 +239,7 @@ final class AppController: ObservableObject {
         sessions.restore()
         startDeviceWatcher()
         pruneBackups()
-        checkForUpdatesQuietly()
+        if !StoreEdition.isStore { checkForUpdatesQuietly() }
         Notifier.shared.onStartRecording = { [weak self] in
             Task { @MainActor in self?.startPendingCallRecording() }
         }
@@ -1376,7 +1379,7 @@ final class AppController: ObservableObject {
         // Teams call without the setting being wrong for one of them.
         let isCall = recordID.flatMap { id in history.records.first { $0.id == id }?.isCall } ?? false
         let stages = nativeStages(for: cfg, roomMode: cfg.micRecordsARoom && !isCall)
-        let runner: CommandRunner = ProcessCommandRunner()
+        let runner: CommandRunner = StoreEdition.commandRunner()
         // Identifies the job in `processingJobs`. Notes have no record id, so they
         // get one of their own rather than being left untracked and invisible.
         let jobID = recordID ?? UUID()
@@ -2388,6 +2391,20 @@ final class AppController: ObservableObject {
         //   {path}          → the raw filesystem path (for `open -a AppName "{path}"`)
         //   {path_encoded}  → URL-encoded path (for URIs like obsidian://open?path=…)
         // With no placeholder we append a shell-quoted path.
+        #if APP_STORE
+        // No shell in the store build: a URL template (obsidian://…) opens
+        // through NSWorkspace, and anything else falls back to the default app.
+        // StoreEdition.sanitize already drops non-URL templates from the config.
+        let encodedPath = path.addingPercentEncoding(withAllowedCharacters: Self.uriPathAllowed) ?? path
+        if let raw = StoreEdition.urlTemplate(in: template),
+           let url = URL(string: raw.replacingOccurrences(of: "{path_encoded}", with: encodedPath)
+                                    .replacingOccurrences(of: "{path}", with: encodedPath)) {
+            Log.write("open: \(url.absoluteString)")
+            NSWorkspace.shared.open(url)
+        } else {
+            NSWorkspace.shared.open(URL(fileURLWithPath: path))
+        }
+        #else
         let cmd: String
         if template.contains("{path}") || template.contains("{path_encoded}") {
             let encoded = path.addingPercentEncoding(withAllowedCharacters: Self.uriPathAllowed) ?? path
@@ -2406,6 +2423,7 @@ final class AppController: ObservableObject {
             Log.write("open: FAILED — \(error)")
             lastError = "Couldn't open externally: \(Self.shortError(error))"
         }
+        #endif
     }
 
     /// Walks up from `path` looking for the `.obsidian` folder that marks a vault
@@ -2571,7 +2589,7 @@ final class AppController: ObservableObject {
             knowledgeRoot: cfg.destinations.resolvedRoot,
             routing: routing,
             destinations: store.effectiveDestinations(routing),
-            runner: ProcessCommandRunner())
+            runner: StoreEdition.commandRunner())
     }
 
     private func nativeStages(for cfg: AppConfig, roomMode: Bool = false) -> [PipelineStage] {
@@ -2606,7 +2624,10 @@ final class AppController: ObservableObject {
             config.hides = true
             NSWorkspace.shared.openApplication(at: app, configuration: config) { _, _ in }
         } else {
+            #if !APP_STORE
             // Headless install (brew formula only): spawn a detached server.
+            // Not in the store build, which cannot launch a command-line tool —
+            // there a brew-installed Ollama has to be started by the user.
             let bins = ["\(NSHomeDirectory())/homebrew/bin/ollama",
                         "/opt/homebrew/bin/ollama", "/usr/local/bin/ollama"]
             if let bin = bins.first(where: { fm.isExecutableFile(atPath: $0) }) {
@@ -2615,6 +2636,7 @@ final class AppController: ObservableObject {
                 p.arguments = ["serve"]
                 try? p.run()
             }
+            #endif
         }
 
         for _ in 0..<30 {   // up to ~15s for the server to come up
@@ -2795,6 +2817,12 @@ final class AppController: ObservableObject {
     }
 
     func installUpdate(_ release: Updater.Release) {
+        #if APP_STORE
+        // The App Store updates the store build. Nothing reaches here there —
+        // no check runs and no update is ever offered — but a self-installer
+        // has no business being in that binary at all.
+        return
+        #else
         Task { @MainActor in
             do {
                 Log.write("update: downloading \(release.version)")
@@ -2837,6 +2865,7 @@ final class AppController: ObservableObject {
                 Self.info(title: "Update failed", message: error.localizedDescription)
             }
         }
+        #endif
     }
 
     private static func findApp(in dir: URL) -> URL? {
@@ -2948,7 +2977,7 @@ final class AppController: ObservableObject {
         let resolved = TemplateEngine.resolve(command, with: vars)
         Log.write("session: running onComplete for '\(profile.id)' over \(recs.count) recording(s)")
         do {
-            let result = try await ProcessCommandRunner().run(resolved, stdin: nil)
+            let result = try await StoreEdition.commandRunner().run(resolved, stdin: nil)
             if result.exitCode != 0 {
                 Log.write("session: onComplete exited \(result.exitCode): \(result.stderrString.prefix(400))")
             } else {

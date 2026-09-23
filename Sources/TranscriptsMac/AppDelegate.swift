@@ -9,6 +9,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var sigtermSource: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Before anything reads the library, inbox or vault: sandboxed, those
+        // folders open only through the bookmarks the user granted last time.
+        FolderAccess.restoreAll()
         // Doc-screenshot mode: render Settings tabs to PNGs and quit before any
         // menu-bar / recording machinery starts. See DocCapture.
         if DocCapture.isRequested {
@@ -46,7 +49,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // recording is worth more than the folder it was launched from. Runs
         // ahead of the status item so a user who accepts never sees this
         // process finish starting — it relaunches from the new location.
-        FirstRunInstaller.offerIfNeeded()
+        // The App Store installs and updates the store build itself.
+        if !StoreEdition.isStore { FirstRunInstaller.offerIfNeeded() }
+        // Store build: a fresh sandbox can open no folder, so settle where the
+        // library lives before the controller loads the config and looks.
+        StoreEdition.prepareLibrary()
 
         NSApp.setActivationPolicy(.accessory)
         statusBar = StatusBarController(controller: .shared)

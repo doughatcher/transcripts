@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- The Mac App Store build (TranscriptsMacStore). The direct download is
+         signed without entitlements and is not sandboxed; see project.yml. -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+    <!-- The library, the device inbox and the vault are folders the user picks;
+         FolderAccess keeps them reachable across launches. -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    <key>com.apple.security.files.bookmarks.app-scope</key>
+    <true/>
+    <!-- Outgoing only: the diarization and summary models download on first
+         use, and a local Ollama is reached over HTTP. Nothing listens. -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+</dict>
+</plist>
