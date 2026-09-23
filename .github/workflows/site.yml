@@ -1,0 +1,67 @@
+# Deploy transcripts.doughatcher.com whenever the guide or the site changes.
+#
+# Until this existed the site only deployed as part of a Mac release
+# (release.sh), so guide changes sat in git while the live pages went stale —
+# for three weeks the homepage showed screenshots of a real library after the
+# guide had been re-shot from invented data.
+#
+# A Pages deploy replaces the whole site, and the site also serves what a
+# release put there: the download zips and the two appcasts every installed
+# copy checks for updates. Those are carried over from the live site into each
+# deploy. If any of them cannot be fetched, nothing deploys — a page with a
+# dead download button, or an updater that 404s, is worse than a stale page.
+
+name: site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/guide/**"
+      - "site/**"
+      - ".github/workflows/site.yml"
+  workflow_dispatch:
+
+concurrency:
+  # release.sh deploys the same project; never two deploys at once.
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: python3 site/build.py
+
+      - name: Carry over the release artifacts
+        env:
+          BASE: https://transcripts.doughatcher.com
+        run: |
+          set -euo pipefail
+          cd site/public
+          for feed in appcast.json appcast-beta.json; do
+            curl -fsS --retry 3 "$BASE/$feed" -o "$feed"
+          done
+          # Every zip either appcast points at, and every zip the new page links.
+          ZIPS=$(python3 - <<'PY'
+          import json, re, os
+          names = set()
+          for feed in ("appcast.json", "appcast-beta.json"):
+              names.add(os.path.basename(json.load(open(feed))["url"]))
+          names.update(re.findall(r'href="/(Transcripts-[^"/]+\.zip)"', open("index.html").read()))
+          print("\n".join(sorted(names)))
+          PY
+          )
+          for zip in $ZIPS; do
+            curl -fsS --retry 3 "$BASE/$zip" -o "$zip"
+            echo "✓ $zip ($(stat -c%s "$zip") bytes)"
+          done
+
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx --yes wrangler@4 pages deploy site/public --project-name=transcripts --branch=main --commit-dirty=true

@@ -47,7 +47,9 @@ mechanism.
 **`script`** — hands the decision to a command of yours. It receives the
 recording's paths and context, and prints a vault-relative folder. Print nothing
 and the recording goes to `fallback`; print `handled` and Transcripts assumes
-your script filed it itself.
+your script filed it itself. Not available in the Mac App Store edition, which
+cannot run other programs; a routing.json set to `script` is treated as
+`automatic` there.
 
 **`off`** — everything goes to `fallback`. Nothing is inferred.
 
@@ -100,7 +102,7 @@ groups them, and runs something once when the whole thing is over.
 | `destination` | Files this session's recordings here, skipping the usual sorting entirely. Optional. |
 | `idleTimeout` | Seconds of no recording before the session ends by itself. `0` disables it. Default one hour. |
 | `hardStop` | Local `"HH:mm"` backstop. The first occurrence at or after the start — so a 22:00 session with a `01:00` stop ends in the small hours, not before it began. |
-| `onComplete` | Runs **once**, when the session is genuinely over. |
+| `onComplete` | Runs **once**, when the session is genuinely over. Ignored by the Mac App Store edition, which cannot run other programs. |
 
 ### When a session ends
 

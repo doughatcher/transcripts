@@ -125,10 +125,16 @@ main { padding: 0 1.5rem; }
 .how figcaption { color: var(--muted); font-size: 1rem; line-height: 1.5; max-width: 34rem; }
 .how figcaption strong { color: var(--fg); }
 .how figure.wide figcaption { margin: 0 auto; text-align: center; }
+/* One meeting on iPad and iPhone, side by side at the same height. Stays a
+   row on a phone too: stacked, the iPhone shot would be taller than the page. */
+.how figure.devices { grid-template-columns: minmax(0, 1050fr) minmax(0, 644fr); align-items: end; max-width: 52rem; }
+.how figure.devices figcaption { grid-column: 1 / -1; margin: 0 auto; text-align: center; }
 @media (max-width: 40rem) {
   .how figure { grid-template-columns: minmax(0, 1fr); }
   .how figure:not(.wide) img { max-width: 20rem; margin: 0 auto; }
   .how figcaption { text-align: center; margin: 0 auto; }
+  .how figure.devices { grid-template-columns: minmax(0, 1050fr) minmax(0, 644fr); gap: .75rem; }
+  .how figure.devices img { max-width: none; }
 }
 
 /* Collapsed under the download: most visitors own their Mac, and the ones who

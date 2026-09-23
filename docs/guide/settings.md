@@ -55,12 +55,18 @@ it in Settings ▸ Sorting ▸ Obsidian; cleared stays cleared.
 
 Changing these does not move anything already written.
 
+In the Mac App Store edition, every folder here is one you choose in a file
+dialog, which is what gives the app permission to use it. Typing a path is not
+enough, and it does not find your Obsidian vault by itself: choose it here. See
+[Mac App Store or download](/guide/install/#mac-app-store-or-download).
+
 ## Sorting
 
 ![The Sorting settings pane](/guide/images/settings-sorting.png)
 
 How finished recordings are filed — Automatic, Custom script, or Off. See
-[Your transcripts](/guide/transcripts/).
+[Your transcripts](/guide/transcripts/). The Mac App Store edition has no Custom
+script.
 
 ## Pipeline
 
@@ -71,7 +77,8 @@ classify → persist**. This pane shows each one and lets you replace any of the
 with a script of your own, which receives the recording and returns its result.
 
 Most people never touch this. It exists because the alternative to an escape
-hatch is a rewrite.
+hatch is a rewrite. The Mac App Store edition cannot run scripts, so there every
+stage is built in or off, and there is no Handoff mode.
 
 ## Voices
 
@@ -96,7 +103,8 @@ data.
 
 **Ride the beta train** opts you into pre-release builds — ones published for
 testing before they are blessed as stable. Leave it off and the updater follows
-stable releases only.
+stable releases only. The Mac App Store edition shows neither: the App Store
+updates it.
 
 ---
 

@@ -34,6 +34,41 @@ unzip it, and drag **Transcripts.app** to your Applications folder.
 
 The app checks for updates on launch and can install them itself.
 
+## Mac App Store or download
+
+There will be two ways to get the Mac app. The download above, and Homebrew, is
+the full app. A Mac App Store edition is on its way for people who would rather
+install from the store. It is the same app, with the same transcription, live
+transcript, overlay, speaker names, summaries and the other side of calls. But
+the store only accepts apps that stay inside Apple's sandbox, and a few things
+cannot:
+
+- **It cannot run your own scripts.** Custom-script sorting, the Handoff
+  pipeline, script stages, and a session's "When it ends, run" command are not
+  in it. **Open with** takes a link such as `obsidian://open?path={path_encoded}`,
+  not a shell command. If you use any of these, use the download.
+- **It cannot start a Homebrew-installed Ollama for you.** It opens Ollama.app if
+  you have it; with only the command-line install, start `ollama serve`
+  yourself.
+- **It asks for folders instead of reading paths.** On first launch it asks
+  where to keep recordings and starts in iCloud Drive. Choose the same
+  **Transcripts** folder your iPhone and iPad use, and that folder becomes both
+  your library and where phone recordings arrive, so everything syncs as it does
+  with the download. Choose **Keep on This Mac Only** and recordings stay in the
+  app's own storage until you pick a folder in Settings. It does not find your
+  Obsidian vault by itself either: choose it in Settings ▸ Sorting ▸ Obsidian.
+- **It asks before recording a call.** A new install starts in ask-first mode:
+  when a call begins, Transcripts shows a notification and records only if you
+  say so. Switch it to record automatically in Settings ▸ General.
+- **The App Store updates it.** It has no updater of its own, no beta channel,
+  and does not offer to move itself into Applications.
+
+Settings do not carry over between the two, because the store edition keeps its
+own. Your recordings do: they are in the folder you chose, so pointing the store
+edition at that folder brings the whole library back. Speaker names you taught
+the download stay with the download. Run one edition or the other, not both at
+once, or both will try to record the same call.
+
 ## Managed Macs
 
 A work Mac under MDM — Jamf, Intune, Kandji — usually has no admin rights, a
@@ -79,14 +114,17 @@ To check a machine without guessing, run the built-in self-test:
 TRANSCRIPTS_SELFCHECK=1 ~/Applications/Transcripts.app/Contents/MacOS/Transcripts
 ```
 
-It records a second from the microphone and from the system, and exits **0**
+It records two seconds from the microphone and from the system together, and exits **0**
 when both work, **1** if the microphone flow is broken, **2** if the microphone
 is authorized but delivering silence, and **3** if the microphone is fine and
 only system audio is unavailable — the expected answer when Screen Recording is
 locked.
 
 Use 1.1.0-beta.3 or later. Earlier notarized builds could not reach the
-microphone at all.
+microphone at all. Up to 1.1.0-beta.10 the self-test checked the two sources one
+after the other, and on its own the system-audio check got nothing, so those
+builds could answer **3** on a Mac where calls recorded both sides perfectly.
+Trust a recording over that answer on those builds.
 
 ## Requirements
 
