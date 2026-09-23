@@ -227,3 +227,11 @@ platform's version.
 
 **New installs start in ask-first consent mode**, not one-party, because a
 stranger from the store should not be recorded into a call by default.
+
+**First submission.** macOS 1.1.0, build 22, submitted 23 September 2026 and
+waiting for review alongside iOS 1.1.0. Build 20 was uploaded first and must
+not be used: its first-launch folder choice was read too late and then saved
+over, so recordings failed to file. That was fixed in b60b536, and found by
+running a development-signed build of this target with a real recording
+before submitting. The self-check probes never create the controller, so
+they cannot catch that kind of bug.
