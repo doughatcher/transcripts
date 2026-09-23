@@ -363,7 +363,8 @@ struct SettingsView: View {
                     if controller.config.destinations.vaultMirror.map({ (($0 as NSString).expandingTildeInPath) })
                         != vault.path {
                         Button("Use “\(vault.lastPathComponent)”") {
-                            controller.config.destinations.vaultMirror = Self.tildeify(vault.path)
+                            guard let picked = Self.adoptFolder(vault.path, title: "Allow access to your Obsidian vault") else { return }
+                            controller.config.destinations.vaultMirror = Self.tildeify(picked)
                         }
                     }
                 }
@@ -391,7 +392,9 @@ struct SettingsView: View {
                 if Locations.isICloudAvailable,
                    controller.config.destinations.deviceInbox != Locations.defaultDeviceInbox() {
                     Button("Use iCloud Drive") {
-                        controller.config.destinations.deviceInbox = Locations.defaultDeviceInbox()
+                        guard let inbox = Locations.defaultDeviceInbox(),
+                              let picked = Self.adoptFolder(inbox, title: "Allow access to Transcripts in iCloud Drive") else { return }
+                        controller.config.destinations.deviceInbox = Self.tildeify(picked)
                         controller.startDeviceWatcher()
                     }
                 }
@@ -769,22 +772,36 @@ struct SettingsView: View {
     /// `~/Library/CloudStorage/…` or `~/Library/Mobile Documents/…` comfortably —
     /// both are hidden from Finder's sidebar by default — and those are exactly
     /// where a device inbox lives.
-    static func chooseFolder(title: String) -> String? {
+    ///
+    /// Sandboxed, this panel is also the permission: the folder it returns is
+    /// the only kind the app can open, so every pick is remembered in
+    /// `FolderAccess` for the next launch.
+    static func chooseFolder(title: String, startingAt start: URL? = nil) -> String? {
         let panel = NSOpenPanel()
+        panel.directoryURL = start
         panel.title = title
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
         panel.showsHiddenFiles = true
-        guard panel.runModal() == .OK else { return nil }
-        return panel.url?.path
+        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        FolderAccess.grant(url)
+        return url.path
+    }
+
+    /// A one-click folder shortcut. Unsandboxed it just sets the path;
+    /// sandboxed a path alone opens nothing, so the panel comes up already on
+    /// that folder and one click grants it.
+    static func adoptFolder(_ path: String, title: String) -> String? {
+        guard FolderAccess.isSandboxed else { return path }
+        return chooseFolder(title: title, startingAt: URL(fileURLWithPath: Locations.expand(path)))
     }
 
     /// Stores paths under the home directory as `~/…` so a config stays readable
     /// and portable between accounts.
     static func tildeify(_ path: String) -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let home = Locations.userHome
         return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
     }
 

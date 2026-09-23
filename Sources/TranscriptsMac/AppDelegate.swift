@@ -9,6 +9,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var sigtermSource: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Before anything reads the library, inbox or vault: sandboxed, those
+        // folders open only through the bookmarks the user granted last time.
+        FolderAccess.restoreAll()
         // Doc-screenshot mode: render Settings tabs to PNGs and quit before any
         // menu-bar / recording machinery starts. See DocCapture.
         if DocCapture.isRequested {

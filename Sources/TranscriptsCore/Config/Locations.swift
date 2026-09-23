@@ -16,6 +16,27 @@ import Foundation
 public enum Locations {
     public static let folderName = "Transcripts"
 
+    /// The user's real home directory. Not `NSHomeDirectory()` on the Mac: inside
+    /// App Sandbox that is the app's container, so `~/Library/Mobile Documents`
+    /// would resolve to a folder that does not exist and a configured path would
+    /// quietly point somewhere else. The password database is not redirected.
+    /// On iOS the home directory is the app sandbox and that is what is meant.
+    public static var userHome: String {
+        #if os(macOS)
+        if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
+            return String(cString: dir)
+        }
+        #endif
+        return NSHomeDirectory()
+    }
+
+    /// Expands a leading `~` against `userHome`.
+    public static func expand(_ path: String) -> String {
+        if path == "~" { return userHome }
+        if path.hasPrefix("~/") { return userHome + path.dropFirst(1) }
+        return path
+    }
+
     /// iCloud Drive's document root, when the user has it.
     ///
     /// `NSHomeDirectory()` rather than `homeDirectoryForCurrentUser`, which is
@@ -24,7 +45,7 @@ public enum Locations {
     /// these paths (on iOS the home directory is an app sandbox, where none of
     /// this would mean anything).
     public static func iCloudDrive(fileManager: FileManager = .default) -> URL? {
-        let url = URL(fileURLWithPath: NSHomeDirectory())
+        let url = URL(fileURLWithPath: userHome)
             .appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs", isDirectory: true)
         var isDir: ObjCBool = false
         guard fileManager.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else {
