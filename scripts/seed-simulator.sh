@@ -75,26 +75,27 @@ PY
   echo "  ✓ ${title:-（untitled）}"
 }
 
-seed "Nalli — ERP sync and checkout" \
-     "Orders placed in the admin panel are not syncing to the ERP. Vishal is investigating; a hotfix is planned for Friday." \
-     yes 0 "09:15" \
-     "Right, the ERP sync issue. Orders placed via the Magento admin panel are not reaching the ERP at all, and the ones that do arrive are deducting quantity twice. Vishal thinks it is the API response handling. We agreed to hotfix it Friday and re-test the checkout flow afterwards."
+# Invented, like everything demo-library.py writes: the same fictional product
+# team, so a shot that shows local takes beside shared transcripts reads as one
+# person's week. Nothing here may name a real client, colleague or relative —
+# these rows end up on the App Store and in a public repo.
+seed "Standup — release week" \
+     "The beta is feature-complete. Priya is closing the last onboarding bug; Marcus starts the walkthrough on Thursday." \
+     yes 0 "08:40" \
+     "Quick standup. The beta is feature complete as of last night. Priya is closing the last onboarding bug this morning, and Marcus starts the five person walkthrough on Thursday. Nothing is blocked."
 
-seed "" "" no 0 "14:40" \
-     "Quick note to self before I forget. Ask Lavanya about the retainer model, and whether they want the CDN credit refunded or rolled into next month."
+seed "" "" no 1 "17:50" \
+     "Note to self. Send Dana the signup numbers before the pricing call, and book the big room for Thursday's walkthrough."
 
-seed "person Starts cry som" "" yes 1 "11:02" \
-     "So the thing about the schema is that it was never really designed, it accreted. Every integration added a column and nobody ever took one away."
+seed "Walkthrough prep" \
+     "Five testers booked for Thursday. The script now starts from an empty library so the new copy gets tested." \
+     yes 1 "10:05" \
+     "For the walkthrough we have five people booked on Thursday. I rewrote the script so every session starts from an empty library, which means the new empty state copy actually gets seen instead of skipped."
 
-seed "Weekly catchup — Echidna" \
-     "Timeline slipped again. Shipment mail trigger and customer order sync remain open." \
-     yes 1 "16:30" \
-     "On the timeline, customer orders sync should be done by Friday since Kaushal is testing locally with production data. The shipment mail trigger is still open and we have not heard back from the eShipz team about their changes."
-
-seed "Book — chapter one notes" \
-     "Segregated school chapter. Need to check the year with Dad before writing the transition." \
-     yes 4 "20:12" \
-     "For chapter one I keep going back and forth on the segregated school stretch. I need to ask him directly what year the school actually closed, because the two accounts I have do not agree and I do not want to guess in print."
+seed "Release notes ideas" \
+     "Lead with the moved permission prompt; keep the list to three items." \
+     yes 3 "18:30" \
+     "Thinking about the release notes. Lead with the permission prompt moving after the first recording, since that is the change people will notice. Then the empty state, then search. Three items, no more."
 
 cp "$META" "$CAPTURES/takes-meta.json"
 echo "▶ wrote takes-meta.json"

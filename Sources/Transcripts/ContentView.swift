@@ -322,6 +322,13 @@ struct ContentView: View {
                    ?? model.takes.max(by: { $0.startedAt < $1.startedAt }) {
                 selection = .take(best.id)
             }
+            // The recorder, for the phone. At compact width it is a pushed
+            // screen behind the "New Recording" row, so it is exactly as
+            // unreachable from `simctl` as a take is. The iPad needs no help:
+            // it opens there already.
+            if CommandLine.arguments.contains("--seed-select-recorder") {
+                selection = .newRecording
+            }
             #endif
             // The first scan can land before iCloud has materialised anything it
             // was asked for; a second pass a few seconds later picks those up

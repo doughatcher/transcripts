@@ -37,6 +37,15 @@ if [[ ! -d "${DEVELOPER_DIR:-}/Platforms/MacOSX.platform" ]]; then
   fi
 fi
 
+# mlx-swift compiles Metal shaders, and current Xcode ships the Metal compiler
+# as a separate download. Without it the build fails minutes in, on a
+# CompileMetalFile line that names none of this — so ask the stub up front.
+if ! xcrun metal --version > /dev/null 2>&1; then
+  echo "✗ the Metal Toolchain is not installed for $DEVELOPER_DIR." >&2
+  echo "  xcodebuild -downloadComponent MetalToolchain" >&2
+  exit 1
+fi
+
 APP_NAME="Transcripts"
 SCHEME="TranscriptsMac"          # NOT "Transcripts" — that is the iOS app.
 BUNDLE_ID="ltd.hatcher.transcripts"

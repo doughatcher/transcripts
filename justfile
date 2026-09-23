@@ -25,6 +25,20 @@ shots:
     NO_LAUNCH=1 NO_INSTALL=1 scripts/make-app.sh
     python3 scripts/guide-shots.py
 
+# App Store screenshots, iPhone 6.9" and iPad 13", from invented data, into
+# dist/appstore/. Throwaway simulators, so the ones you use are left alone.
+store-shots:
+    scripts/store-shots.sh
+
+# Replace the App Store screenshots on the version being prepared, from
+# dist/appstore/. Refuses a version that is waiting for review or live.
+# `just store-upload --dry-run` says what it would do.
+store-upload *ARGS:
+    set -a; . ./.env.signing; set +a; python3 scripts/asc-screenshots.py {{ARGS}}
+
+# Every screenshot the project publishes: the guide, then the App Store.
+screenshots: shots store-shots
+
 # Carries any live recording forward. Safe mid-session: the running app stops
 # gracefully and the new one resumes the same meeting.
 #

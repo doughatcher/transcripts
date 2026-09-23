@@ -19,3 +19,6 @@ Sources/TranscriptsMac/Support/Info.plist
 # Wrangler's local cache — carries the Cloudflare account id and name.
 .wrangler/
 .env.signing
+
+# Left by running the scripts/ helpers.
+__pycache__/
