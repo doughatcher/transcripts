@@ -30,6 +30,11 @@ shots:
 store-shots:
     scripts/store-shots.sh
 
+# Mac App Store screenshots, composed from the guide's images (so from the same
+# invented data), into dist/appstore/mac/. Needs Pillow.
+mac-store-shots:
+    python3 scripts/mac-store-shots.py
+
 # Replace the App Store screenshots on the version being prepared, from
 # dist/appstore/. Refuses a version that is waiting for review or live.
 # `just store-upload --dry-run` says what it would do.

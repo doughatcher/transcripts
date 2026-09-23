@@ -5,9 +5,10 @@
     python3 scripts/asc-screenshots.py --dry-run     # say what would change
     python3 scripts/asc-screenshots.py               # do it
 
-Writes to App Store Connect, unlike asc.py, and only to one place: the
-screenshot sets of the newest version that is still editable (preparing,
-rejected, or developer-rejected). A version that is waiting for review or live
+Writes to App Store Connect, unlike asc.py, and only to one place per
+platform: the screenshot sets of that platform's newest version, if it is still
+editable (preparing, rejected, or developer-rejected). iPhone and iPad shots go
+to the iOS version and Mac shots (mac-store-shots.py) to the macOS one. A version that is waiting for review or live
 is refused rather than touched — editing a queued submission's metadata can
 knock it out of the queue.
 
@@ -43,8 +44,12 @@ API = "https://api.appstoreconnect.apple.com/v1/"
 EDITABLE = {"PREPARE_FOR_SUBMISSION", "REJECTED", "METADATA_REJECTED",
             "DEVELOPER_REJECTED", "INVALID_BINARY"}
 # Newest-first fallbacks, used only when a family has no set yet.
-DEFAULT_TYPE = {"iphone": "APP_IPHONE_67", "ipad": "APP_IPAD_PRO_3GEN_129"}
-PREFIX = {"iphone": "APP_IPHONE_", "ipad": "APP_IPAD_"}
+DEFAULT_TYPE = {"iphone": "APP_IPHONE_67", "ipad": "APP_IPAD_PRO_3GEN_129", "mac": "APP_DESKTOP"}
+PREFIX = {"iphone": "APP_IPHONE_", "ipad": "APP_IPAD_", "mac": "APP_DESKTOP"}
+# Each family belongs to one platform's version: iPhone and iPad shots to the
+# iOS version, Mac shots to the macOS one. The two are separate versions with
+# separate states — one can be in review while the other is still being made.
+PLATFORM = {"iphone": "IOS", "ipad": "IOS", "mac": "MAC_OS"}
 
 
 def call(method: str, path: str, body: dict | None = None) -> dict:
@@ -92,28 +97,46 @@ def main() -> int:
     shots = Path(args.dir)
 
     app = call("GET", f"apps?filter[bundleId]={args.bundle_id}&limit=1")["data"][0]["id"]
-    versions = call("GET", f"apps/{app}/appStoreVersions?limit=20")["data"]
-    versions.sort(key=lambda v: v["attributes"].get("createdDate") or "", reverse=True)
-    newest = versions[0]
-    state = newest["attributes"].get("appStoreState") or newest["attributes"].get("appVersionState")
-    vs = newest["attributes"]["versionString"]
-    if state not in EDITABLE:
-        raise SystemExit(f"✗ {vs} is {state}; refusing to change screenshots on a version "
-                         "that is not editable. Create the next version first.")
-    print(f"▶ {vs} ({state})")
+    targets: dict[str, tuple[dict, list[dict]] | None] = {}
 
-    locs = call("GET", f"appStoreVersions/{newest['id']}/appStoreVersionLocalizations?limit=50")["data"]
-    loc = next((l for l in locs if l["attributes"]["locale"] == args.locale), None)
-    if not loc:
-        raise SystemExit(f"✗ no {args.locale} localization on {vs}")
-    sets = call("GET", f"appStoreVersionLocalizations/{loc['id']}/appScreenshotSets"
-                       "?include=appScreenshots&limit=50")["data"]
+    def target(platform: str):
+        """(localization, its screenshot sets) on the platform's newest
+        version, or None when that version is not editable."""
+        if platform in targets:
+            return targets[platform]
+        versions = call("GET", f"apps/{app}/appStoreVersions?filter[platform]={platform}&limit=20")["data"]
+        if not versions:
+            raise SystemExit(f"✗ no {platform} version in App Store Connect")
+        versions.sort(key=lambda v: v["attributes"].get("createdDate") or "", reverse=True)
+        newest = versions[0]
+        state = newest["attributes"].get("appStoreState") or newest["attributes"].get("appVersionState")
+        vs = newest["attributes"]["versionString"]
+        if state not in EDITABLE:
+            print(f"✗ {platform} {vs} is {state}; refusing to change screenshots on a version "
+                  "that is not editable. Create the next version first.")
+            targets[platform] = None
+            return None
+        print(f"▶ {platform} {vs} ({state})")
+        locs = call("GET", f"appStoreVersions/{newest['id']}/appStoreVersionLocalizations?limit=50")["data"]
+        loc = next((l for l in locs if l["attributes"]["locale"] == args.locale), None)
+        if not loc:
+            raise SystemExit(f"✗ no {args.locale} localization on {platform} {vs}")
+        sets = call("GET", f"appStoreVersionLocalizations/{loc['id']}/appScreenshotSets"
+                           "?include=appScreenshots&limit=50")["data"]
+        targets[platform] = (loc, sets)
+        return targets[platform]
 
-    for kind in ("iphone", "ipad"):
+    refused = False
+    for kind in ("iphone", "ipad", "mac"):
         files = sorted(shots.glob(f"{kind}/*.png"))
         if not files:
             print(f"  – {kind}: nothing in {shots / kind}, leaving it alone")
             continue
+        found = target(PLATFORM[kind])
+        if found is None:
+            refused = True
+            continue
+        loc, sets = found
         dtype, set_id = target_type(kind, sets)
         old = []
         if set_id:
@@ -164,7 +187,7 @@ def main() -> int:
             time.sleep(4)
         else:
             print("    … still processing; check App Store Connect in a minute")
-    return 0
+    return 1 if refused else 0
 
 
 if __name__ == "__main__":

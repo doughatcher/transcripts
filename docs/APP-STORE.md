@@ -191,3 +191,39 @@ Formation sequence, costs and open legal questions live in the vault at
 `Context/plans/hatcher-ltd-entity-formation.md`. Note that Hatcher Ltd already
 trades — Square account, checking account, invoiced client revenue — without an
 entity behind it, so this is regularisation rather than a new venture.
+
+---
+
+## 6. The Mac App Store edition
+
+Added 22 September 2026. The Mac app ships two ways: the direct download
+(Developer ID, notarized, Homebrew; `release.yml`) and the store edition, the
+`TranscriptsMacStore` target. It has the same sources and bundle identifier, so
+it is the macOS platform of this one App Store Connect record, but it is
+sandboxed and compiled with `APP_STORE`. What that leaves out, and why, is in
+`Sources/TranscriptsMac/Support/StoreEdition.swift`; the user-facing version is
+in the guide under *Mac App Store or download*.
+
+**Building and uploading.** `mac-appstore.yml`, on the same `v*` tags as
+TestFlight or by hand with a version. It archives with an ad-hoc signature
+before any keychain exists (the package-loading deadlock in `release.sh`), then
+the export re-signs with the stored Apple Distribution certificate and gets the
+*3rd Party Mac Developer Installer* certificate from cloud signing through the
+API key. No installer certificate is stored anywhere.
+
+**Privacy label.** Still *Data Not Collected*. The Mac edition does make
+network requests, unlike the iOS app: it downloads the speaker-recognition
+(FluidAudio) and summary (MLX) models from Hugging Face the first time they are
+needed, and can reach a local Ollama. None of that transmits anything about the
+user. The iOS no-networking assertion in `testflight.yml` stays iOS-only.
+
+**Listing.** The macOS version has its own description, promotional text and
+review notes, set on 22 September through the API. The review notes explain
+the menu-bar-only UI, the first-launch folder choice, the system-audio
+permission, ask-first call detection and every network request. Screenshots
+are `just mac-store-shots` (composed from the guide's invented-data images),
+uploaded with `just store-upload`, which sends each family to its own
+platform's version.
+
+**New installs start in ask-first consent mode**, not one-party, because a
+stranger from the store should not be recorded into a call by default.
