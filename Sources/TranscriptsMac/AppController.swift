@@ -205,6 +205,9 @@ final class AppController: ObservableObject {
     private var deviceWatcher: DeviceInboxWatcher?
 
     init() {
+        // Store edition: reopen the folders the user granted and settle
+        // first-run defaults before anything below reads or saves the config.
+        StoreEdition.prepareConfig()
         let store = ConfigStore()
         self.configStore = store
         var cfg = (try? store.load()) ?? .default
@@ -2610,6 +2613,19 @@ final class AppController: ObservableObject {
     /// before the pipeline needs it: launch the Ollama app (hidden) or a headless
     /// `ollama serve`, then wait briefly for the port. Without this, a reboot
     /// silently degraded every summary until the user remembered to start it.
+    /// Takes the config on disk as current: the library, the device inbox and
+    /// the sorting rules that live in the library. For a config changed
+    /// outside the controller — the store edition's first-launch folder choice.
+    func reloadConfig() {
+        var cfg = (try? configStore.load()) ?? config
+        StoreEdition.sanitize(&cfg)
+        config = cfg
+        var fresh = RoutingStore(knowledgeRoot: cfg.destinations.resolvedRoot).loadOrSeed()
+        StoreEdition.sanitize(&fresh)
+        routing = fresh
+        startDeviceWatcher()
+    }
+
     private func ensureOllamaRunning(_ cfg: AppConfig) async {
         guard cfg.llmProvider == .ollama else { return }
         let base = URL(string: cfg.ollama.url) ?? URL(string: "http://localhost:11434")!

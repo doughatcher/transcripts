@@ -16,6 +16,7 @@ struct TranscriptsApp: App {
         ProcessInfo.processInfo.environment["TRANSCRIPTS_SELFCHECK"] != nil
         || ProcessInfo.processInfo.environment["TRANSCRIPTS_DIARIZE"] != nil
         || ProcessInfo.processInfo.environment["TRANSCRIPTS_MLX"] != nil
+        || ProcessInfo.processInfo.environment["TRANSCRIPTS_PRINT_LOG"] != nil
 
     var body: some Scene {
         // The only SwiftUI scene. The dropdown and the Recordings window are AppKit-

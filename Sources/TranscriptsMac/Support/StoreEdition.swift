@@ -81,25 +81,19 @@ enum StoreEdition {
 
     // MARK: - First launch
 
-    /// Makes sure the library folder is one this build can open, before the
-    /// controller loads the config.
-    ///
-    /// A fresh sandboxed install can reach no folder at all, so the default
-    /// iCloud Drive path would open nothing and the app would look empty with
-    /// no explanation. Ask once, starting in iCloud Drive: the folder chosen
-    /// becomes both the library and the folder the iPhone and iPad send
-    /// recordings to, which is the setup the phone app suggests too. Declining
-    /// keeps a library inside the app's own container, so the app still works
-    /// on this Mac alone and a folder can be chosen later in Settings.
-    @MainActor
-    static func prepareLibrary() {
+    /// The part of first launch that needs no UI, run from the very top of
+    /// AppController.init — before it loads the config, and before anything in
+    /// it can save one. SwiftUI builds the Settings scene, and so the
+    /// controller, ahead of applicationDidFinishLaunching; the first build of
+    /// this edition set its defaults after that, so they were read too late
+    /// and then saved over (found in its own first run, 2026-09-22).
+    static func prepareConfig() {
         guard isStore else { return }
+        FolderAccess.restoreAll()
         let store = ConfigStore()
         let firstRun = !FileManager.default.fileExists(atPath: store.url.path)
         var cfg = (try? store.load()) ?? .default
         var changed = sanitize(&cfg)
-        defer { if changed { try? store.save(cfg) } }
-
         // A store install is someone who has never heard of this app, not
         // someone who built it. Recording the moment a call opens the mic is
         // right for the author and wrong as a stranger's first experience —
@@ -110,9 +104,27 @@ enum StoreEdition {
             cfg.consentMode = .twoParty
             changed = true
         }
+        if changed { try? store.save(cfg) }
+    }
 
+    /// Makes sure the library folder is one this build can open. Runs from
+    /// the app delegate, because it may put up a dialog; returns true when it
+    /// changed the config, so the caller can have the controller reload it.
+    ///
+    /// A fresh sandboxed install can reach no folder at all, so the default
+    /// iCloud Drive path would open nothing and the app would look empty with
+    /// no explanation. Ask once, starting in iCloud Drive: the folder chosen
+    /// becomes both the library and the folder the iPhone and iPad send
+    /// recordings to, which is the setup the phone app suggests too. Declining
+    /// keeps a library inside the app's own container, so the app still works
+    /// on this Mac alone and a folder can be chosen later in Settings.
+    @MainActor
+    static func prepareLibrary() -> Bool {
+        guard isStore else { return false }
+        let store = ConfigStore()
+        var cfg = (try? store.load()) ?? .default
         let root = cfg.destinations.resolvedRoot.path
-        if FolderAccess.canReach(root) || root.hasPrefix(NSHomeDirectory()) { return }
+        if FolderAccess.canReach(root) || root.hasPrefix(NSHomeDirectory()) { return false }
 
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
@@ -150,7 +162,8 @@ enum StoreEdition {
             cfg.destinations.deviceInbox = nil
             Log.write("store: library kept on this Mac at \(local.path)")
         }
-        changed = true
+        try? store.save(cfg)
+        return true
     }
 }
 

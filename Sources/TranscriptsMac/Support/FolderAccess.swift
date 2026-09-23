@@ -26,6 +26,9 @@ enum FolderAccess {
     private static let defaultsKey = "folderBookmarks"
     private static var open: [String: URL] = [:]
     private static let lock = NSLock()
+    /// restoreAll runs from the controller's init, which SwiftUI reaches before
+    /// the app delegate does; once is enough.
+    private static var restored = false
 
     /// Records access to a folder the user just picked in an open panel. The
     /// panel's grant already covers this process; the bookmark carries it into
@@ -46,10 +49,13 @@ enum FolderAccess {
         }
     }
 
-    /// Reopens every remembered folder. Call once, early in launch, before
-    /// anything reads the library, inbox or vault.
+    /// Reopens every remembered folder. Must run before anything reads the
+    /// library, inbox or vault — so from the top of AppController.init, since
+    /// SwiftUI builds the Settings scene, and with it the controller, before
+    /// applicationDidFinishLaunching. Safe to call again.
     static func restoreAll() {
-        guard isSandboxed else { return }
+        guard isSandboxed, !restored else { return }
+        restored = true
         var all = stored()
         for (path, data) in all {
             var stale = false

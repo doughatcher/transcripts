@@ -1,4 +1,5 @@
 import AppKit
+import TranscriptsEngine
 
 /// Sets up the menu-bar status item once AppKit is ready. Transcripts is a pure menu-bar
 /// utility (`.accessory`) — no Dock icon — and stays alive after its windows close.
@@ -17,6 +18,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if DocCapture.isRequested {
             DocCapture.runAndExit()
             return
+        }
+        // Print the end of this app's log and quit. The store edition's log is
+        // inside its sandbox container, which macOS keeps even a Terminal from
+        // reading; the app itself always can.
+        //   TRANSCRIPTS_PRINT_LOG=200 open -W --stdout /tmp/log.txt Transcripts.app
+        if let raw = ProcessInfo.processInfo.environment["TRANSCRIPTS_PRINT_LOG"] {
+            let lines = (try? String(contentsOf: Log.fileURL, encoding: .utf8))?
+                .split(separator: "\n", omittingEmptySubsequences: false) ?? []
+            print("\(Log.fileURL.path)")
+            print(lines.suffix(Int(raw) ?? 200).joined(separator: "\n"))
+            exit(0)
         }
         // Hardware smoke test: verify both audio flows and quit. See SelfCheck.
         if SelfCheck.isRequested {
@@ -52,8 +64,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The App Store installs and updates the store build itself.
         if !StoreEdition.isStore { FirstRunInstaller.offerIfNeeded() }
         // Store build: a fresh sandbox can open no folder, so settle where the
-        // library lives before the controller loads the config and looks.
-        StoreEdition.prepareLibrary()
+        // library lives. The controller already exists — SwiftUI made it for
+        // the Settings scene — so it has to be told to take the new config.
+        if StoreEdition.prepareLibrary() { AppController.shared.reloadConfig() }
 
         NSApp.setActivationPolicy(.accessory)
         statusBar = StatusBarController(controller: .shared)
