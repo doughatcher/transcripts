@@ -352,10 +352,18 @@ if [[ "${PUBLISH:-1}" == "1" && "$NOTARIZE" == "1" ]]; then
   # not against local files, because the failure this catches is a deploy that
   # silently did not land.
   echo "▶ Verifying published release"
-  sleep 5
   CHANNEL="appcast.json"; [[ "$VERSION" == *-* ]] && CHANNEL="appcast-beta.json"
-  PUB=$(curl -fsS --max-time 30 "$BASE_URL/$CHANNEL" | python3 -c "import json,sys;print(json.load(sys.stdin)['sha256'])" 2>/dev/null || echo "")
   TAPSHA=$(grep -oE '[a-f0-9]{64}' "$TAP/Casks/transcripts.rb" 2>/dev/null | head -1 || echo "")
+  # Polled, with a cache-busting query, rather than read once after a fixed
+  # sleep. 1.1.0 deployed correctly and still failed here: five seconds after
+  # the deploy Cloudflare's edge was serving the previous appcast, and the
+  # script exited before tagging and publishing the release.
+  PUB=""
+  for _ in $(seq 1 24); do
+    PUB=$(curl -fsS --max-time 30 "$BASE_URL/$CHANNEL?v=$SHA" | python3 -c "import json,sys;print(json.load(sys.stdin)['sha256'])" 2>/dev/null || echo "")
+    [[ "$PUB" == "$SHA" ]] && break
+    sleep 5
+  done
   if [[ "$PUB" == "$SHA" && "$TAPSHA" == "$SHA" ]]; then
     echo "  ✓ manifest, cask and artifact all agree (${SHA:0:16}…)"
   else
