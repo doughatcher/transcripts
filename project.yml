@@ -312,7 +312,7 @@ targets:
         # arbitrary user-chosen vault path. Signed without entitlements — a
         # self-signed build carrying sandbox entitlements is a known way to end
         # up "authorized" by TCC but fed silence.
-        ENABLE_APP_SANDBOX: NO
+        ENABLE_APP_SANDBOX: YES
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "Transcripts Local Signing"
-        CODE_SIGN_ENTITLEMENTS: ""
+        CODE_SIGN_ENTITLEMENTS: Sources/TranscriptsMac/Support/Transcripts.entitlements

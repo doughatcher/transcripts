@@ -15,6 +15,10 @@
       System Settings > Privacy & Security > Screen Recording. We never script it.
     -->
     <key>com.apple.security.app-sandbox</key>
-    <false/>
+    <true/>
+    <!-- Spike only: does a properly-signed sandboxed build still capture
+         system audio, or does it get TCC-authorized silence? -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
 </dict>
 </plist>
