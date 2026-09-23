@@ -106,9 +106,49 @@ With Homebrew, the same thing in one line:
 brew install --cask doughatcher/tap/transcripts --appdir=~/Applications
 ```
 
-If IT is willing to pre-approve it fleet-wide, what they need for a PPPC
-profile: bundle `ltd.hatcher.transcripts`, team `6Q9BX97LMS`, services
-**Microphone** and **Screen Recording**. Then the prompts never appear.
+### For IT
+
+Everything a software catalog (Jamf Self Service, Intune Company Portal, Kandji
+Self Service) usually asks for:
+
+| | |
+|---|---|
+| Bundle ID | `ltd.hatcher.transcripts` |
+| Team ID | `6Q9BX97LMS` (Hatcher LLC), signed with Developer ID and notarized |
+| Download | the zip on this site, the same build on [GitHub releases](https://github.com/doughatcher/transcripts/releases), or `brew install --cask doughatcher/tap/transcripts` |
+| Checksum | `sha256` in [appcast.json](https://transcripts.doughatcher.com/appcast.json), which the app's own updater also verifies |
+| Installs to | `~/Applications` by default. No administrator, no helper tools, no kernel or system extensions |
+| Requires | macOS 14 or later, Apple Silicon or Intel |
+| Source | [MIT licensed](https://github.com/doughatcher/transcripts); every release is tagged |
+
+**There is nothing to pre-approve.** Transcripts asks for two things, both
+ordinary per-user prompts: the **microphone**, and **system audio recording**
+(the other side of a call). macOS does not let MDM grant either one in advance.
+A privacy (PPPC) profile can only *deny* the microphone. So no profile makes the
+prompts go away, and none is needed for them to work. **Screen Recording is not
+used** and needs no policy. Speech recognition runs on the device and is not a
+separate permission.
+
+**Network.** The Mac app makes three kinds of outgoing request, none carrying a
+recording or a transcript:
+
+- an update check to `transcripts.doughatcher.com`;
+- a one-time download of the speaker-recognition models from `huggingface.co`;
+- a one-time download of the summary model from `huggingface.co`, only on Macs
+  without Apple Intelligence.
+
+If a user points it at their own Ollama server, that traffic stays on
+`localhost`. Nothing listens for incoming connections, and there are no
+analytics or telemetry.
+
+**Data.** Recordings and transcripts go to the folder the user chooses, often
+iCloud Drive or OneDrive, so your policy on those services applies to them.
+Settings and history live in `~/Library/Application Support/Transcripts` and the
+log in `~/Library/Logs/Transcripts.log`. `brew uninstall --zap` removes both.
+
+**Recording consent** is the user's responsibility and is stated at install and
+in Settings. Users in all-party-consent places can set Transcripts to ask before
+it records a call.
 
 To check a machine without guessing, run the built-in self-test:
 

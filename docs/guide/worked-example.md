@@ -13,6 +13,8 @@ machinery. It is a separate program that happens to read what Transcripts
 writes, which is the point of the example: the documents in your folder are a
 format other things can consume.
 
+![The Adventure Log journal: two campaigns, the one in play marked active, with its setting, DM and where the party was last seen](/guide/images/adventure-log-home.webp)
+
 ## What the evening looks like
 
 A session at the table is not one recording. Someone starts the recorder before
@@ -56,6 +58,60 @@ deliberately early.
 
 It also opens a pull request instead of pushing. A person reads the session
 before it goes up.
+
+![A journal entry written from one evening's transcripts](/guide/images/adventure-log-session.webp)
+
+## One table, two campaigns
+
+The table plays two campaigns in turn, depending on which DM is free. The
+importer won't guess which one a night belongs to: filed under the wrong party,
+a session is a mess to undo on a public site. So `--campaign` is required, and
+each campaign gets its own session profile, with the campaign in the profile's
+`id`:
+
+```json
+"sessions": [
+  {
+    "id": "courts-of-the-shadow-fey",
+    "name": "D&D — Courts of the Shadow Fey",
+    "destination": "Campaigns/transcripts/",
+    "hardStop": "23:30",
+    "onComplete": {
+      "executable": "/usr/bin/python3",
+      "arguments": ["scripts/import_transcripts_session.py",
+                    "--campaign", "${sessionID}", "--slug", "${slug}",
+                    "--started-at", "${startedAt}", "--ended-at", "${endedAt}",
+                    "--transcripts", "${transcripts}"],
+      "workingDirectory": "/Users/me/repos/adventure-log"
+    }
+  },
+  { "id": "shard-sea", "name": "D&D — Shard Sea", "...": "the same" }
+]
+```
+
+Starting a session is then the same act as saying which game it is.
+
+## When the session isn't started
+
+It happens. On 21 September the recorder ran for the whole evening, two hours
+and twenty minutes of play, but nobody started the session. Transcripts did
+what it does with any recording: it transcribed it, summarised it and sorted it
+into the general `transcripts/` folder. No session ended, so `onComplete` never
+ran and nothing reached the journal.
+
+Nothing was lost, because the transcript is an ordinary file with its
+`recorded_at` and timestamped turns. The importer takes any documents, not just
+a session's, so the night went up by hand the next morning:
+
+```
+python3 scripts/import_transcripts_session.py \
+  --campaign courts-of-the-shadow-fey --slug 2026-09-21-courts-of-the-shadow-fey \
+  --started-at 2026-09-21T22:37:31Z --ended-at 2026-09-22T00:59:10Z \
+  --transcripts ".../transcripts/2026-09-21-1837-duel-court-update-summary.md"
+```
+
+It kept all 895 turns, dropped none from outside the evening, and opened a pull
+request to read before publishing.
 
 ## Why this is the shape to copy
 
