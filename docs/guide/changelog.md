@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.1.1
+
+**Mac**
+
+- An evening recorded on the iPad or iPhone now completes on the Mac. The Mac
+  used to try to finish the session the moment the recordings arrived, before
+  any were transcribed, and then count it as done. If they arrived during the
+  game, it never looked again once the evening was over. Now it waits until
+  every recording is transcribed and the session has ended, checks again every
+  few minutes and at launch, and remembers across a restart which session each
+  recording belonged to.
+- Recordings from the iPad or iPhone file into their session's folder, the same
+  as a session run on the Mac.
+- Choosing a folder for your library or for the phone's recordings has no
+  wrong answer. Pick iCloud Drive or OneDrive itself and Transcripts uses the
+  **Transcripts** folder inside it, as the iPhone and iPad app does, creating it
+  if it isn't there.
+
 ## 1.1.0
 
 Everything from the 1.1 betas, for everyone. The beta entries below have the
