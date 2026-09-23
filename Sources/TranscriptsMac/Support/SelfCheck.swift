@@ -5,7 +5,7 @@ import TranscriptsCore
 /// Hardware smoke test for both audio flows — the part unit tests can't reach.
 /// Records ~2s from the microphone a real recording would use (same config,
 /// same resolution rules) and verifies the engine started, the file was written,
-/// and whether real signal arrived; then starts/stops system-audio capture to
+/// and whether real signal arrived; alongside it, starts/stops system-audio capture to
 /// verify that path (Core Audio tap on 14.2+, ScreenCaptureKit as fallback). Prints a PASS/FAIL report and exits.
 ///
 /// Run against the installed app so it inherits the TCC grants (mic / Screen
@@ -55,11 +55,21 @@ enum SelfCheck {
         }
         print("• mic: recording 2s from '\(device.name)' (same device a real recording would use)")
 
+        // Both flows run at once, the way a recording runs them. One after the
+        // other, the system-audio tap received no buffers at all — on every Mac,
+        // signed any way — so this check reported "no system audio" on machines
+        // where calls recorded both sides perfectly (found 2026-09-22).
         let recorder = Recorder(device: device, captureSystemAudio: false)
+        let capturer = SystemAudioCapturer()
+        let sysURL = scratch.appendingPathComponent("system.caf")
         let recording: Recording
+        let started: Bool
+        var sysOK = false
         do {
             try recorder.start(into: scratch)
+            started = await capturer.start(into: sysURL)
             try await Task.sleep(for: .seconds(2))
+            if started { sysOK = await capturer.stop() != nil }
             recording = try recorder.stop()
         } catch {
             print("✗ mic: \(error)")
@@ -84,14 +94,6 @@ enum SelfCheck {
               + (quiet ? "  (quiet room — ambient noise present, device is alive)" : ""))
 
         // ── Flow 2: system audio (the other side of calls) ────────────────────
-        let capturer = SystemAudioCapturer()
-        let sysURL = scratch.appendingPathComponent("system.caf")
-        let started = await capturer.start(into: sysURL)
-        var sysOK = false
-        if started {
-            try? await Task.sleep(for: .seconds(2))
-            sysOK = await capturer.stop() != nil
-        }
         print("\(sysOK ? "✓" : "⚠") system audio: \(sysOK ? "capture started and wrote samples" : started ? "started but wrote no samples" : "could not start (Screen Recording not granted?) — calls degrade to mic-only")")
 
         if silent { return 2 }
