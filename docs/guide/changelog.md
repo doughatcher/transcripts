@@ -1,5 +1,48 @@
 # Changelog
 
+## 1.1.0
+
+Everything from the 1.1 betas, for everyone. The beta entries below have the
+detail; this is the shape of it.
+
+**Mac**
+
+- **The overlay.** A small glass panel over your call: the last thing said,
+  and on hover the last conclusion, the facts and figures, and the last
+  question with its answer. Answers come only from earlier in the call or from
+  your own notes, and say which. Off by default; Settings ▸ General ▸ Overlay.
+- **Live text as it is spoken**, not when a phrase ends, in the overlay's pill
+  and in the live transcript file.
+- **Recordings of a room are split by voice.** Turn on "My microphone records
+  a room" and each voice gets a number or a remembered name, live and in the
+  finished document.
+- **The other side of a call without Screen Recording.** System audio comes
+  through an ordinary Allow dialog now, which is what a managed Mac needed.
+- **A recording survives a restart.** Quit, crash or update mid-meeting and it
+  picks the same recording back up. A meeting that ended up in pieces anyway
+  can be put back together, and a new recording never waits for the last one
+  to finish processing.
+- Muting in your call app no longer looks like a dead microphone, and
+  Transcripts no longer switches microphones chasing it.
+- The self-test checks the microphone and system audio together, the way a
+  recording uses them. Before, it could report no system audio on a Mac whose
+  calls recorded both sides.
+- It installs itself: open it from Downloads and it offers to move into your
+  own Applications folder.
+
+**iPhone and iPad**
+
+- Rename, archive and delete transcripts the Mac filed, not just recordings
+  still waiting to be picked up.
+- Recording notices interruptions through the audio session: a phone call,
+  Siri, an alarm or another app. CallKit is gone, so the app can be offered in
+  every storefront it is listed in.
+
+**Both**
+
+- Every turn carries the time it was spoken, and clicking one plays the audio
+  from there.
+
 ## 1.1.0-beta.8
 
 **Mac**
