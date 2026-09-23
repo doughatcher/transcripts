@@ -304,7 +304,7 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           BUNDLE_ID: ${{ inputs.bundle_id || 'ltd.hatcher.transcripts' }}
-          WATCH_FOR: REJECTED
+          WATCH_FOR: WAITING_FOR_REVIEW
         run: |
           export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
           asc() { python3 scripts/asc.py "$1" 2>/dev/null || echo '{}'; }
