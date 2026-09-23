@@ -309,22 +309,29 @@ jobs:
           export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
           asc() { python3 scripts/asc.py "$1" 2>/dev/null || echo '{}'; }
           APP_ID="$(asc "apps?filter[bundleId]=$BUNDLE_ID&limit=1" | jq -r '.data[0].id // empty')"
-          STATE="$(asc "apps/$APP_ID/appStoreVersions?limit=50" \
-            | jq -r '[.data[]? | {s:(.attributes.appStoreState // .attributes.appVersionState), c:.attributes.createdDate}]
-                     | sort_by(.c // "") | reverse | .[0].s // empty')"
+          # The newest version per platform, not overall. Since the Mac App
+          # Store edition exists, "newest" across the app is whichever platform
+          # was touched last, and an iOS decision would pass unseen behind it.
+          STATES="$(asc "apps/$APP_ID/appStoreVersions?limit=50" \
+            | jq -r '[.data[]? | {p:.attributes.platform, s:(.attributes.appStoreState // .attributes.appVersionState),
+                                  v:.attributes.versionString, c:.attributes.createdDate}]
+                     | group_by(.p) | map(sort_by(.c // "") | last) | .[] | "\(.p) \(.v) \(.s)"')"
 
-          if [ -z "$STATE" ]; then
+          if [ -z "$STATES" ]; then
             echo "Could not determine the state. Not treating that as a change."
             exit 0
           fi
-          echo "newest App Store version state: $STATE"
-          if [ "$STATE" = "$WATCH_FOR" ]; then
-            echo "Still $WATCH_FOR — nothing to report."
+          echo "newest App Store version per platform:"
+          echo "$STATES" | sed 's/^/  /'
+          MOVED="$(echo "$STATES" | awk -v w="$WATCH_FOR" '$3 != w')"
+          if [ -z "$MOVED" ]; then
+            echo "All still $WATCH_FOR — nothing to report."
             exit 0
           fi
 
-          echo "::error::App Store state changed: $WATCH_FOR -> $STATE"
-          echo "## State changed: \`$STATE\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::App Store state changed from $WATCH_FOR: $(echo "$MOVED" | paste -sd ';' -)"
+          echo "## State changed" >> "$GITHUB_STEP_SUMMARY"
+          echo "$MOVED" | sed 's/^/- /' >> "$GITHUB_STEP_SUMMARY"
           # Only the scheduled run fails. A manual run should report the state
           # without painting itself red for answering the question correctly.
           [ "${{ github.event_name }}" = "schedule" ] && exit 1
