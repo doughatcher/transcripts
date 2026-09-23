@@ -16,6 +16,15 @@ build: project
       -destination 'generic/platform=iOS Simulator' \
       CODE_SIGNING_ALLOWED=NO | tail -5
 
+# Re-shoot every image in the user guide from generated data, and rebuild the
+# site that carries them. Needs no Screen Recording permission, no awake
+# display and no live meeting — see scripts/guide-shots.py.
+shots:
+    # Staged, not installed: the shots are taken with the build in .build/, so a
+    # re-shoot never replaces or restarts the copy of the app you are running.
+    NO_LAUNCH=1 NO_INSTALL=1 scripts/make-app.sh
+    python3 scripts/guide-shots.py
+
 # Carries any live recording forward. Safe mid-session: the running app stops
 # gracefully and the new one resumes the same meeting.
 #

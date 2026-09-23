@@ -51,7 +51,7 @@ voices, then names them two ways: from the transcript itself when someone is
 addressed by name, and by matching voiceprints against people you have confirmed
 before.
 
-![A transcript with timestamps and speakers named — Ernie, Joe, Me — and unnamed ones as Speaker 1, Speaker 4](/guide/images/document-transcript.webp)
+![A transcript with timestamps and speakers named — Priya, Marcus, Me — beside the moment each turn was spoken](/guide/images/document-transcript.webp)
 
 This is best-effort and will occasionally get it wrong. So it is correctable:
 Settings ▸ Voices lets you reassign a speaker, which updates both the voiceprint

@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Photograph the Mac app against a generated library.
+"""Photograph the Mac app against a generated library, with `screencapture`.
+
+**The guide is not shot with this any more** — `guide-shots.py` renders every
+image the guide uses offscreen, from the same generated library, with no Screen
+Recording permission and no display. Use that to re-shoot the guide. This stays
+for composing a shot by hand (`--keep-running`), where a real window with real
+macOS chrome is the point.
 
 Run `demo-library.py` first; this points a copy of the app at what it made and
 captures the windows the guide uses.
@@ -94,14 +100,23 @@ def windows(pid: int, lister: Path) -> list[tuple[int, int, int, str]]:
 
 
 def looks_blank(png: Path) -> bool:
-    """A denied Screen Recording permission yields wallpaper, not an error."""
+    """A denied permission or a sleeping display yields a flat image, not an error.
+
+    Checked by file size, because a flat image compresses to almost nothing: a
+    940x640 screenshot of a real window is hundreds of KB, and one of a black
+    screen is a few. This used to check only that `sips` could read the
+    dimensions back, which a black PNG passes — so the guard reported "✓" on
+    every shot of a sleeping display.
+    """
     try:
         out = subprocess.run(
             ["sips", "-g", "pixelWidth", "-g", "pixelHeight", str(png)],
             capture_output=True, text=True, check=True).stdout
-        return "pixelWidth" not in out
+        if "pixelWidth" not in out:
+            return True
     except subprocess.CalledProcessError:
         return True
+    return png.stat().st_size < 12_000
 
 
 def main() -> int:

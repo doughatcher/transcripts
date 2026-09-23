@@ -10,6 +10,14 @@ struct SettingsView: View {
     /// Pins the visible tab for offscreen doc-screenshot rendering (`DocCapture`).
     /// nil in normal use, so the tab bar stays interactive.
     var forcedTab: Int? = nil
+    /// Draws the tab bar instead of letting `TabView` draw it — screenshots only.
+    ///
+    /// AppKit renders the *selected* segment's title with vibrancy, which needs
+    /// a compositor to sample what is behind it. An offscreen render has none,
+    /// so the title draws as nothing at all: every settings image the guide has
+    /// ever shipped has a highlighted tab with no name on it. The bar below is
+    /// six lines of SwiftUI and draws the same offscreen as on.
+    var drawnTabBar = false
     @State private var selection = 0
     /// Read once when the pane appears, not from the body: `known()` reads
     /// Obsidian's registry and stats every vault in it, and a body that does
@@ -40,14 +48,42 @@ struct SettingsView: View {
         launchAtLogin = controller.launchAtLoginEnabled
     }
 
+    /// Title and symbol per tab, in tag order.
+    fileprivate static let tabs: [(title: String, symbol: String)] = [
+        ("General", "gearshape"), ("Voices", "person.wave.2"),
+        ("Sorting", "tray.and.arrow.down"), ("Pipeline", "arrow.triangle.branch"),
+        ("About", "info.circle"),
+    ]
+
+    @ViewBuilder
+    private func pane(_ index: Int) -> some View {
+        switch index {
+        case 0: generalTab
+        case 1: voicesTab
+        case 2: sortingTab
+        case 3: pipelineTab
+        default: AboutTab()
+        }
+    }
+
     var body: some View {
-        TabView(selection: Binding(get: { forcedTab ?? selection },
-                                   set: { selection = $0 })) {
-            generalTab.tabItem { Label("General", systemImage: "gearshape") }.tag(0)
-            voicesTab.tabItem { Label("Voices", systemImage: "person.wave.2") }.tag(1)
-            sortingTab.tabItem { Label("Sorting", systemImage: "tray.and.arrow.down") }.tag(2)
-            pipelineTab.tabItem { Label("Pipeline", systemImage: "arrow.triangle.branch") }.tag(3)
-            AboutTab().tabItem { Label("About", systemImage: "info.circle") }.tag(4)
+        Group {
+            if drawnTabBar, let forcedTab {
+                VStack(spacing: 10) {
+                    DrawnTabBar(selected: forcedTab)
+                    pane(forcedTab)
+                    Spacer(minLength: 0)
+                }
+            } else {
+                TabView(selection: Binding(get: { forcedTab ?? selection },
+                                           set: { selection = $0 })) {
+                    pane(0).tabItem { Label("General", systemImage: "gearshape") }.tag(0)
+                    pane(1).tabItem { Label("Voices", systemImage: "person.wave.2") }.tag(1)
+                    pane(2).tabItem { Label("Sorting", systemImage: "tray.and.arrow.down") }.tag(2)
+                    pane(3).tabItem { Label("Pipeline", systemImage: "arrow.triangle.branch") }.tag(3)
+                    pane(4).tabItem { Label("About", systemImage: "info.circle") }.tag(4)
+                }
+            }
         }
         .frame(width: 580, height: 520)
         .padding()
@@ -61,6 +97,34 @@ struct SettingsView: View {
         // list refreshes when the window comes forward rather than never.
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didBecomeActiveNotification)) { _ in refreshDeviceState() }
+    }
+
+    // MARK: - Drawn tab bar (screenshots)
+
+    /// A stand-in for `TabView`'s own bar, close enough to be photographed in
+    /// its place. See `drawnTabBar`.
+    private struct DrawnTabBar: View {
+        let selected: Int
+
+        var body: some View {
+            HStack(spacing: 2) {
+                ForEach(Array(SettingsView.tabs.enumerated()), id: \.offset) { index, tab in
+                    Label(tab.title, systemImage: tab.symbol)
+                        .labelStyle(.titleAndIcon)
+                        .font(.system(size: 12))
+                        .foregroundStyle(index == selected ? Color.primary : Color.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background {
+                            if index == selected {
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(Color.primary.opacity(0.14))
+                            }
+                        }
+                }
+            }
+            .padding(.top, 4)
+        }
     }
 
     // MARK: - General

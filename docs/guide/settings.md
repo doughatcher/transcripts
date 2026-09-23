@@ -82,7 +82,7 @@ was heard in. Rename someone, merge two entries that turned out to be the same
 person, or reject a bad match — which un-does it in the transcript too, not just
 in the list.
 
-![After a recording, the menu asks: Remember Ernie's voice? Future meetings would name them automatically](/guide/images/remember-voice.webp)
+![After a recording, the menu asks: Remember Priya's voice? Future meetings would name them automatically](/guide/images/remember-voice.webp)
 
 When a recording ends with a voice it does not know, the menu offers to
 remember it. Say yes and that person is named in every later recording.

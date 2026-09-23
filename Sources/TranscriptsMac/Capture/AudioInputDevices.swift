@@ -29,8 +29,30 @@ enum AudioInputDevices {
     /// aggregate from *other* processes, never from the one that created it.
     static let systemAudioTapUIDPrefix = "ltd.hatcher.transcripts.systemaudio."
 
+    /// A staged device list, named by `TRANSCRIPTS_FAKE_INPUTS` as
+    /// `uid=name` pairs separated by commas. The screenshot harness sets it so
+    /// the General pane shows a plausible microphone instead of whichever
+    /// interfaces the author happened to have plugged in — that pane has
+    /// published the names of four of them, and it is the one part of it no
+    /// config could stage, because the list comes from the hardware.
+    ///
+    /// Nothing records from these: `deviceID` is `kAudioObjectUnknown`, so a
+    /// capture run that somehow reached the recorder would fail to open an
+    /// input rather than quietly record from the real one.
+    private static func staged() -> [AudioInputDevice]? {
+        guard let raw = ProcessInfo.processInfo.environment["TRANSCRIPTS_FAKE_INPUTS"],
+              !raw.isEmpty else { return nil }
+        return raw.split(separator: ",").compactMap { entry in
+            let parts = entry.split(separator: "=", maxSplits: 1)
+            guard parts.count == 2 else { return nil }
+            return AudioInputDevice(uid: String(parts[0]), name: String(parts[1]),
+                                    deviceID: kAudioObjectUnknown)
+        }
+    }
+
     static func all() -> [AudioInputDevice] {
-        deviceIDs().compactMap { id in
+        if let staged = staged() { return staged }
+        return deviceIDs().compactMap { id in
             guard inputChannelCount(id) > 0 else { return nil }
             guard let uid = stringProperty(id, kAudioDevicePropertyDeviceUID),
                   let name = stringProperty(id, kAudioObjectPropertyName) else { return nil }

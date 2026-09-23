@@ -3086,4 +3086,55 @@ final class AppController: ObservableObject {
         if case .processing = state { return true }
         return false
     }
+
+    // MARK: - Screenshot poses
+
+    /// A state the guide needs a picture of.
+    enum CapturePose {
+        /// Armed and waiting — the menu as it looks most of the time.
+        case watching
+        /// Mid-meeting: running clock, moving level bars.
+        case recording
+        /// A voice the last call named, offered for enrolment.
+        case voiceSuggestion
+    }
+
+    /// Poses the controller for a screenshot — the state arrived at by
+    /// assignment rather than by doing the thing.
+    ///
+    /// Every guide image showing the app mid-call used to be a photograph of an
+    /// actual call, because a running clock and a live pill were only reachable
+    /// by recording one. That is how a real transcript, real meeting titles and
+    /// a room's worth of real conversation ended up published. A pose is one
+    /// function, reproducible on any machine, with no meeting to hold first.
+    ///
+    /// Inert by construction: it assigns published state and nothing else. No
+    /// recorder is started, the microphone is never opened, no file is written
+    /// and no pipeline runs — so a capture run cannot record, cannot file, and
+    /// cannot disturb the copy of the app the user is actually running.
+    /// `DocCapture` is the only caller.
+    func poseForCapture(_ pose: CapturePose) {
+        voiceSuggestions = []
+        switch pose {
+        case .watching:
+            state = .armed
+        case .recording:
+            // Eleven minutes in, not three seconds: a clock that reads as a real
+            // meeting. The levels carry shape for the same reason — a flat meter
+            // photographs as a dead mic, which is the one thing this view exists
+            // to disprove.
+            state = .recording(since: Date(timeIntervalSinceNow: -(11 * 60 + 16)))
+            levels = [0.14, 0.29, 0.22, 0.41, 0.63, 0.48, 0.35, 0.44,
+                      0.67, 0.74, 0.52, 0.38, 0.27, 0.33]
+            inputLevel = 0.52
+        case .voiceSuggestion:
+            state = .armed
+            // Named after the demo library's cast (scripts/demo-library.py), so
+            // the guide reads as one product being used rather than a series of
+            // unrelated screenshots.
+            voiceSuggestions = [SpeakerSuggestion(
+                name: "Priya", label: "Speaker 2", embedding: [],
+                sourceTitle: "Onboarding flow review", affiliation: "Northwind")]
+        }
+    }
 }

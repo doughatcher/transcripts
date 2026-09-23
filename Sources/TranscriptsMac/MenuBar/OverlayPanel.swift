@@ -240,7 +240,10 @@ final class OverlayPanel {
 
 // MARK: - The view
 
-private struct OverlayContent: View {
+/// Internal rather than private so the screenshot harness can render the pill
+/// and the open panel offscreen — see `DocCapture`. Nothing else constructs one;
+/// the panel above is still the only thing that puts it on screen.
+struct OverlayContent: View {
     @ObservedObject var model: OverlayModel
     let onClose: () -> Void
 

@@ -10,8 +10,20 @@ import Foundation
 /// convention would find it.
 public enum ObsidianVault {
     /// Obsidian's own registry of known vaults (macOS).
+    ///
+    /// `TRANSCRIPTS_OBSIDIAN_REGISTRY` names a registry to read instead. This is
+    /// the same override the config and the history store already take, and it
+    /// exists for the same reason: the screenshot harness photographs the
+    /// Sorting pane, which lists every vault by name. Pointed at the real
+    /// registry it publishes the names of the user's vaults and the paths they
+    /// live at — the one part of that pane no demo config could reach, because
+    /// this file is Obsidian's, not ours.
     static var registryURL: URL {
-        URL(fileURLWithPath: NSHomeDirectory())
+        if let override = ProcessInfo.processInfo.environment["TRANSCRIPTS_OBSIDIAN_REGISTRY"],
+           !override.isEmpty {
+            return URL(fileURLWithPath: (override as NSString).expandingTildeInPath)
+        }
+        return URL(fileURLWithPath: NSHomeDirectory())
             .appendingPathComponent("Library/Application Support/obsidian/obsidian.json")
     }
 
