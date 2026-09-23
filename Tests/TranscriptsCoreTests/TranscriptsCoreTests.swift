@@ -1827,6 +1827,24 @@ import Foundation
 
 @Suite struct LocationsTests {
 
+    @Test func pickingAWholeCloudDriveMeansItsTranscriptsFolder() {
+        let home = "/Users/someone"
+        let icloud = home + "/Library/Mobile Documents/com~apple~CloudDocs"
+        #expect(Locations.libraryFolder(forPicked: icloud, home: home) == icloud + "/Transcripts")
+        #expect(Locations.libraryFolder(forPicked: icloud + "/", home: home) == icloud + "/Transcripts")
+        let onedrive = home + "/Library/CloudStorage/OneDrive-Personal"
+        #expect(Locations.libraryFolder(forPicked: onedrive, home: home) == onedrive + "/Transcripts")
+    }
+
+    @Test func anyOtherFolderIsTakenAsPicked() {
+        let home = "/Users/someone"
+        let inside = home + "/Library/Mobile Documents/com~apple~CloudDocs/Transcripts"
+        #expect(Locations.libraryFolder(forPicked: inside, home: home) == inside)
+        let deeper = home + "/Library/CloudStorage/OneDrive-Personal/Work/Calls"
+        #expect(Locations.libraryFolder(forPicked: deeper, home: home) == deeper)
+        #expect(Locations.libraryFolder(forPicked: home + "/Documents", home: home) == home + "/Documents")
+    }
+
     /// A configured install must never be relocated by a change of default —
     /// `ConfigStore.load` only builds `.default` when no file exists, and a
     /// decoded config keeps whatever root it was saved with.

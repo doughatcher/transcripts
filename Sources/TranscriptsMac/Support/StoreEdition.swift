@@ -128,27 +128,24 @@ enum StoreEdition {
 
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = "Where should Transcripts keep your recordings?"
+        alert.messageText = "Keep your recordings in iCloud Drive?"
         alert.informativeText = """
-            Choose a folder in iCloud Drive to see your transcripts on your iPhone \
-            and iPad too — pick the same “Transcripts” folder the iPhone app uses, \
-            or create one. Recordings from your phone that land there are \
-            transcribed on this Mac.
+            Transcripts keeps them in a folder called Transcripts in iCloud Drive — \
+            the same folder the iPhone and iPad app uses, so every device sees every \
+            recording, and recordings your phone puts there are transcribed on this Mac.
+
+            In the next window, just click Choose: it opens on iCloud Drive. If you \
+            already have a Transcripts folder there you can pick that instead. Either \
+            works, and the folder is created if it isn't there.
 
             You can change this later in Settings.
             """
-        alert.addButton(withTitle: "Choose Folder…")
+        alert.addButton(withTitle: "Choose iCloud Drive…")
         alert.addButton(withTitle: "Keep on This Mac Only")
 
         var picked: String?
         if alert.runModal() == .alertFirstButtonReturn {
-            let start = Locations.iCloudDrive()
-                ?? URL(fileURLWithPath: Locations.userHome)
-                    .appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs")
-            let suggested = start.appendingPathComponent(Locations.folderName, isDirectory: true)
-            picked = SettingsView.chooseFolder(
-                title: "Choose your Transcripts folder",
-                startingAt: FileManager.default.fileExists(atPath: suggested.path) ? suggested : start)
+            picked = SettingsView.chooseICloudLibrary(title: "Keep recordings in iCloud Drive")
         }
         if let picked {
             cfg.destinations.knowledgeRoot = SettingsView.tildeify(picked)

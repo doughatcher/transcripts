@@ -339,7 +339,8 @@ struct SettingsView: View {
                 HStack {
                     TextField("Knowledge root", text: binding(\.destinations.knowledgeRoot))
                     Button("Choose…") {
-                        if let picked = Self.chooseFolder(title: "Choose the knowledge root") {
+                        if let picked = Self.chooseFolder(title: "Choose the knowledge root",
+                                                          message: Self.libraryPanelMessage, library: true) {
                             controller.config.destinations.knowledgeRoot = Self.tildeify(picked)
                         }
                     }
@@ -379,7 +380,8 @@ struct SettingsView: View {
                     TextField("Device inbox (iPhone / iPad)",
                               text: binding(\.destinations.deviceInbox, default: ""))
                     Button("Choose…") {
-                        if let picked = Self.chooseFolder(title: "Choose the folder your devices sync to") {
+                        if let picked = Self.chooseFolder(title: "Choose the folder your devices sync to",
+                                                          message: Self.libraryPanelMessage, library: true) {
                             controller.config.destinations.deviceInbox = Self.tildeify(picked)
                             controller.startDeviceWatcher()
                         }
@@ -394,13 +396,17 @@ struct SettingsView: View {
                 if Locations.isICloudAvailable,
                    controller.config.destinations.deviceInbox != Locations.defaultDeviceInbox() {
                     Button("Use iCloud Drive") {
-                        guard let inbox = Locations.defaultDeviceInbox(),
-                              let picked = Self.adoptFolder(inbox, title: "Allow access to Transcripts in iCloud Drive") else { return }
+                        // Unsandboxed a path is enough; sandboxed the panel is
+                        // the permission, so it opens on iCloud Drive.
+                        let picked = FolderAccess.isSandboxed
+                            ? Self.chooseICloudLibrary(title: "Use iCloud Drive")
+                            : Locations.defaultDeviceInbox().map(Locations.expand)
+                        guard let picked else { return }
                         controller.config.destinations.deviceInbox = Self.tildeify(picked)
                         controller.startDeviceWatcher()
                     }
                 }
-                Text("Pick the same folder the Transcripts app on your iPhone or iPad sends to — its iCloud Drive or OneDrive folder shows up here as an ordinary directory. Recordings dropped there are imported and run through the full pipeline. Blank = off.")
+                Text("Pick iCloud Drive or OneDrive — or the Transcripts folder inside it; either works, and Transcripts uses that Transcripts folder, as your iPhone and iPad do. Recordings the phone puts there are imported and run through the full pipeline. Blank = off.")
                     .font(.caption2).foregroundStyle(.secondary)
                 // Named rather than detected: whether a Mac is MDM-enrolled says
                 // nothing reliable about whether client data belongs in a personal
@@ -784,10 +790,16 @@ struct SettingsView: View {
     /// Sandboxed, this panel is also the permission: the folder it returns is
     /// the only kind the app can open, so every pick is remembered in
     /// `FolderAccess` for the next launch.
-    static func chooseFolder(title: String, startingAt start: URL? = nil) -> String? {
+    ///
+    /// `library` is for the library and the device inbox: picking a whole cloud
+    /// drive there means the Transcripts folder inside it (created if missing),
+    /// as on the phone — see Locations.libraryFolder. Not for a vault.
+    static func chooseFolder(title: String, startingAt start: URL? = nil,
+                             message: String? = nil, library: Bool = false) -> String? {
         let panel = NSOpenPanel()
         panel.directoryURL = start
         panel.title = title
+        if let message { panel.message = message }
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
@@ -795,7 +807,26 @@ struct SettingsView: View {
         panel.showsHiddenFiles = true
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
         FolderAccess.grant(url)
-        return url.path
+        guard library else { return url.path }
+        let folder = Locations.libraryFolder(forPicked: url.path)
+        if folder != url.path {
+            try? FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+        }
+        return folder
+    }
+
+    /// What the library and inbox panels say, so the answer to "iCloud Drive,
+    /// or the Transcripts folder inside it?" is on screen: either.
+    static let libraryPanelMessage =
+        "Choose iCloud Drive, or the Transcripts folder inside it — either works. Transcripts uses the Transcripts folder, the same one the iPhone and iPad app uses, and creates it if it isn't there."
+
+    /// Opens the library panel on iCloud Drive itself, where choosing without
+    /// selecting anything is the right answer.
+    static func chooseICloudLibrary(title: String) -> String? {
+        chooseFolder(title: title,
+                     startingAt: Locations.iCloudDrive()
+                        ?? URL(fileURLWithPath: Locations.userHome + "/Library/Mobile Documents/com~apple~CloudDocs"),
+                     message: libraryPanelMessage, library: true)
     }
 
     /// A one-click folder shortcut. Unsandboxed it just sets the path;

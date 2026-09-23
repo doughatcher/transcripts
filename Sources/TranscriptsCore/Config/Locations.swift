@@ -56,6 +56,26 @@ public enum Locations {
 
     public static var isICloudAvailable: Bool { iCloudDrive() != nil }
 
+    /// The library folder to use when someone picks `path` for it.
+    ///
+    /// Picking a whole cloud drive — iCloud Drive itself, or a provider's root
+    /// under `~/Library/CloudStorage` such as OneDrive — means the Transcripts
+    /// folder inside it, the one the iPhone and iPad app creates when it is
+    /// pointed at the same drive. Anything else is taken as chosen, including
+    /// that Transcripts folder itself. So "iCloud Drive, or the Transcripts
+    /// folder in it?" has no wrong answer, which it had until 1.1: pick the
+    /// drive and the Mac watched all of it while the phone wrote one level down.
+    public static func libraryFolder(forPicked path: String, home: String = userHome) -> String {
+        let picked = URL(fileURLWithPath: path).standardizedFileURL.path
+        let iCloudRoot = home + "/Library/Mobile Documents/com~apple~CloudDocs"
+        let cloudStorage = home + "/Library/CloudStorage"
+        let parent = (picked as NSString).deletingLastPathComponent
+        if picked == iCloudRoot || parent == cloudStorage {
+            return picked + "/" + folderName
+        }
+        return picked
+    }
+
     /// Where a fresh install should file transcripts.
     ///
     /// Deliberately the *same* folder the phone syncs into: one location the

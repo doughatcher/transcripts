@@ -53,6 +53,11 @@ mirrored — the audio stays in the knowledge root, so a vault carried by
 Obsidian Sync doesn't fill up with recordings. Pick a different vault or clear
 it in Settings ▸ Sorting ▸ Obsidian; cleared stays cleared.
 
+When you choose one of these folders, picking a whole cloud drive (iCloud Drive
+itself, or OneDrive) means the **Transcripts** folder inside it, the same folder
+the iPhone and iPad app uses. It is created if it isn't there. Pick any other
+folder and that folder is used as it is.
+
 Changing these does not move anything already written.
 
 In the Mac App Store edition, every folder here is one you choose in a file

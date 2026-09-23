@@ -50,11 +50,13 @@ cannot:
 - **It cannot start a Homebrew-installed Ollama for you.** It opens Ollama.app if
   you have it; with only the command-line install, start `ollama serve`
   yourself.
-- **It asks for folders instead of reading paths.** On first launch it asks
-  where to keep recordings and starts in iCloud Drive. Choose the same
-  **Transcripts** folder your iPhone and iPad use, and that folder becomes both
-  your library and where phone recordings arrive, so everything syncs as it does
-  with the download. Choose **Keep on This Mac Only** and recordings stay in the
+- **It asks for folders instead of reading paths.** On first launch it offers
+  to keep recordings in iCloud Drive and opens on it: click **Choose**. Picking
+  iCloud Drive or the **Transcripts** folder inside it comes to the same thing,
+  because Transcripts uses that folder either way and creates it if needed. It's
+  the folder your iPhone and iPad use, and it becomes both your library and
+  where phone recordings arrive, so everything syncs as it does with the
+  download. Choose **Keep on This Mac Only** and recordings stay in the
   app's own storage until you pick a folder in Settings. It does not find your
   Obsidian vault by itself either: choose it in Settings ▸ Sorting ▸ Obsidian.
 - **It asks before recording a call.** A new install starts in ask-first mode:
