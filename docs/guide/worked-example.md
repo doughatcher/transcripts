@@ -15,6 +15,28 @@ format other things can consume.
 
 ![The Adventure Log journal: two campaigns, the one in play marked active, with its setting, DM and where the party was last seen](/guide/images/adventure-log-home.webp)
 
+## During the game
+
+The journal is what the table gets afterwards. There's a use during the game
+too, because the live transcript is a plain file that grows turn by turn while
+the recording runs.
+
+On 31 August the party arrived at the Shadow Fey's lower court, where standing
+is scored by the DM, point by point, for skill checks made in front of the
+right people. Mid-session, with the recorder still going, Aldric's player asked
+Claude to read `live.md` and suggest a way in. The answer came from what had
+actually been said at the table in the previous hour. It had the running
+status tally, which rooms and people the DM had described, and the fact that
+another player had just announced he was working the room with Persuasion.
+From that it suggested five openings that suited a diviner rather than a
+courtier: proofread the bearfolk emissary's letter before it was sealed, read
+an omen for the squire before his duel, and so on. It also pointed out a
+thread nobody had pulled: the whole party was wearing the Winter King's
+insignia, and no one had asked what that signalled at court.
+
+None of this needed an integration. The assistant read a Markdown file the
+recorder was already writing.
+
 ## What the evening looks like
 
 A session at the table is not one recording. Someone starts the recorder before
