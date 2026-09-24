@@ -254,32 +254,6 @@
     // `rad` is fully transparent anyway, so filling the full bitmap was blending
     // roughly a million untouched pixels on every frame for no visible result.
     ctx.fillRect(cx - rad, cy - rad, rad * 2, rad * 2);
-
-    // Ripples: the mark's own rounded square, spreading out from it on every
-    // side. The bars alone only ever moved left and right, so the effect read
-    // as a strip the icon sat in front of; the rings give it height, and put
-    // the icon at the centre of the motion rather than in its way. Computed
-    // from the clock rather than kept as objects, so the reduced-motion frame
-    // and a resize both get the same rings with no state to carry.
-    const RINGS = 4, PERIOD = 5.2;             // one ring every 1.3s
-    const half = 48;                           // the mark's half-size
-    const reach = Math.min(h * 0.5, w * 0.5) - half - 6;
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = colour;
-    for (let k = 0; k < RINGS; k++) {
-      const phase = ((time / PERIOD) + k / RINGS) % 1;
-      const s = half + phase * reach;
-      // Fades as it grows, and is gone before it meets the canvas edge.
-      // Louder moments make the rings brighter, the same swell as the aura.
-      const alpha = Math.pow(1 - phase, 1.8) * (0.16 + glow * 0.22) * Math.min(1, phase * 6);
-      if (alpha < 0.004) continue;
-      ctx.globalAlpha = alpha;
-      ctx.beginPath();
-      ctx.roundRect(cx - s, cy - s, s * 2, s * 2, 22 * (s / half) * 0.9);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-
     const mid = h * 0.5;
     const centre = w / 2;
     // The mark's own half-width, plus breathing room: bars inside this radius
