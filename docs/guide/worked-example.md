@@ -13,7 +13,7 @@ machinery. It is a separate program that happens to read what Transcripts
 writes, which is the point of the example: the documents in your folder are a
 format other things can consume.
 
-![The Adventure Log journal: two campaigns, the one in play marked active, with its setting, DM and where the party was last seen](/guide/images/adventure-log-home.webp)
+![The Adventure Log journal opens on a painting of the party entering the Shadow Fey's New Moon Hall, generated from that session's transcript](/guide/images/adventure-log-home.webp)
 
 ## During the game
 
@@ -81,7 +81,7 @@ deliberately early.
 It also opens a pull request instead of pushing. A person reads the session
 before it goes up.
 
-![A journal entry written from one evening's transcripts](/guide/images/adventure-log-session.webp)
+![A journal entry written from one evening's transcripts, headed by an illustration of the night's duel at court](/guide/images/adventure-log-session.webp)
 
 ## One table, two campaigns
 
