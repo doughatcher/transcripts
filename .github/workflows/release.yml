@@ -16,6 +16,10 @@
 #   DEVELOPER_ID_CERT_PASSWORD  its password
 #   CLOUDFLARE_API_TOKEN        Pages deploy token for `wrangler pages deploy`
 #   TAP_PUSH_TOKEN              PAT with contents:write on doughatcher/homebrew-tap
+#   DOWNSTREAM_DISPATCH_TOKEN   fine-grained PAT on BlueAcornInc/scribe with
+#                               Contents: read and write — lets a published
+#                               release tell the brand composition to build
+#                               itself (optional; see the last step)
 #
 # Degradation is deliberate and loud: with no DEVELOPER_ID_CERT_P12 the run
 # builds an UNSIGNED dry-run artifact (NOTARIZE=0 PUBLISH=0) so the pipeline
@@ -186,6 +190,39 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
         run: gh workflow run testflight.yml -f version="${VERSION%%-*}"
+
+      # Blue Acorn iCi's Scribe is a composition of this repo rather than a
+      # fork — same sources, different identity, rebuilt from a pinned commit.
+      # It can only ship what this repo has already shipped, so telling it
+      # outright is what makes "every Transcripts release has a matching Scribe
+      # build" true by construction rather than by luck. Its own weekly watch
+      # is the fallback, which is why a missing token warns instead of failing:
+      # a downstream that hears late is not a reason to fail a release that
+      # already published.
+      - name: Notify downstream compositions
+        if: steps.mode.outputs.publish == '1'
+        env:
+          DOWNSTREAM_DISPATCH_TOKEN: ${{ secrets.DOWNSTREAM_DISPATCH_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ -z "$DOWNSTREAM_DISPATCH_TOKEN" ]; then
+            echo "::warning::No DOWNSTREAM_DISPATCH_TOKEN — Scribe will not hear about $VERSION until its weekly watch."
+            exit 0
+          fi
+          # release.sh tagged HEAD, so this is exactly the source that shipped.
+          SHA=$(git rev-parse HEAD)
+          # JSON on stdin rather than -F key[sub]=value: the payload is nested,
+          # and a quoting mistake here would dispatch a build of the wrong commit.
+          # Non-fatal by construction, not by accident: the release has already
+          # published by the time this runs, and an unreachable downstream
+          # — archived, renamed, token expired — must not paint it red. The
+          # warning is the signal; the weekly watch is the recovery.
+          if python3 -c "import json,os,sys; json.dump({'event_type':'upstream-release','client_payload':{'version':os.environ['VERSION'],'sha':sys.argv[1]}}, sys.stdout)" "$SHA" \
+               | GH_TOKEN="$DOWNSTREAM_DISPATCH_TOKEN" gh api repos/BlueAcornInc/scribe/dispatches --input -; then
+            echo "▶ Dispatched upstream-release $VERSION (${SHA:0:7}) to BlueAcornInc/scribe"
+          else
+            echo "::warning::Dispatch to BlueAcornInc/scribe failed — $VERSION published here, but Scribe has not been told."
+          fi
 
       # Survives a cancel or a timeout, which is exactly when it is wanted: the
       # streamed step log is lost if the job never ends on its own.
