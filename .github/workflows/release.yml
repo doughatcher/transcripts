@@ -117,6 +117,15 @@ jobs:
       - name: Build (before any keychain exists)
         run: PHASE=build scripts/release.sh "${{ inputs.version }}"
 
+      # dmgbuild lays out the disk image's Finder window without scripting
+      # Finder. In its own venv, because the runner's Python refuses global
+      # installs; release.sh reads the path from DMGBUILD.
+      - name: Install dmgbuild
+        run: |
+          python3 -m venv "$RUNNER_TEMP/dmg"
+          "$RUNNER_TEMP/dmg/bin/pip" install -q dmgbuild
+          echo "DMGBUILD=$RUNNER_TEMP/dmg/bin/dmgbuild" >> "$GITHUB_ENV"
+
       # A dedicated keychain, unlocked with a password that exists only for
       # this run — the same pattern testflight.yml uses. The notary profile is
       # stored into the same keychain and release.sh is pointed at it via
@@ -197,10 +206,12 @@ jobs:
           path: .build/xcodebuild.log
           if-no-files-found: warn
 
-      - name: Keep the zip
+      - name: Keep the zip and the disk image
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Transcripts-${{ inputs.version }}
-          path: site/public/Transcripts-*.zip
+          path: |
+            site/public/Transcripts-*.zip
+            site/public/Transcripts-*.dmg
           if-no-files-found: warn

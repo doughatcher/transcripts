@@ -329,6 +329,8 @@ def build():
     landing = (ROOT / "site" / "index.html").read_text()
     landing = landing.replace("{{VERSION}}", version)
     landing = landing.replace("{{ZIP}}", f"Transcripts-{version}.zip")
+    # The button hands out the disk image; the zip is for the updater and brew.
+    landing = landing.replace("{{DMG}}", f"Transcripts-{version}.dmg")
     (OUT / "index.html").write_text(page("Transcripts — live meeting transcripts, entirely on device",
                                          landing, cls="landing"))
     print(f"  · version {version}")

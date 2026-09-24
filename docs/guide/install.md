@@ -29,8 +29,11 @@ recordings themselves live in the folder you chose and are never touched.
 
 ## Direct download
 
-Download the zip from [transcripts.doughatcher.com](https://transcripts.doughatcher.com),
-unzip it, and drag **Transcripts.app** to your Applications folder.
+Download Transcripts from [transcripts.doughatcher.com](https://transcripts.doughatcher.com),
+open the disk image, and drag **Transcripts** to **Applications**. The disk
+image is signed and notarized by Apple, the same as the app inside it. Each
+release is also on GitHub as a zip, for scripts and for anyone who prefers
+one.
 
 The app checks for updates on launch and can install them itself.
 
@@ -115,7 +118,7 @@ Self Service) usually asks for:
 |---|---|
 | Bundle ID | `ltd.hatcher.transcripts` |
 | Team ID | `6Q9BX97LMS` (Hatcher LLC), signed with Developer ID and notarized |
-| Download | the zip on this site, the same build on [GitHub releases](https://github.com/doughatcher/transcripts/releases), or `brew install --cask doughatcher/tap/transcripts` |
+| Download | the disk image on this site, the same build as a disk image or zip on [GitHub releases](https://github.com/doughatcher/transcripts/releases), or `brew install --cask doughatcher/tap/transcripts` |
 | Checksum | `sha256` in [appcast.json](https://transcripts.doughatcher.com/appcast.json), which the app's own updater also verifies |
 | Installs to | `~/Applications` by default. No administrator, no helper tools, no kernel or system extensions |
 | Requires | macOS 14 or later, Apple Silicon or Intel |

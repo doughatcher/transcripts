@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.2
+
+**Mac**
+
+- The download is a disk image now, a classic drag-to-Applications window,
+  signed and notarized by Apple like the app inside it. The app itself is the
+  same as 1.1.1. The in-app updater and Homebrew still use the zip, so nothing
+  changes for anyone already installed.
+
 ## 1.1.1
 
 **Mac**

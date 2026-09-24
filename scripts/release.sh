@@ -26,6 +26,7 @@ APP_NAME="Transcripts"
 BUNDLE_ID="ltd.hatcher.transcripts"
 SITE="$ROOT/site/public"
 ZIP_NAME="$APP_NAME-$VERSION.zip"
+DMG_NAME="$APP_NAME-$VERSION.dmg"
 NOTARIZE="${NOTARIZE:-1}"
 BASE_URL="${BASE_URL:-https://transcripts.doughatcher.com}"
 
@@ -166,41 +167,46 @@ MSG
   # build that was actually fine.
   NOTARY_ARGS=(--keychain-profile transcripts-notary
                --keychain "${NOTARY_KEYCHAIN:-$HOME/Library/Keychains/login.keychain-db}")
-  # `|| true`, and to a file rather than a pipe: the crash lands *after* the
-  # upload and the id have been printed, and under `set -eo pipefail` either
-  # form would take the script down with a submission already in flight.
-  SUBMIT_LOG="$ROOT/.build/notarytool-submit.log"
-  xcrun notarytool submit "$TMPZIP" "${NOTARY_ARGS[@]}" > "$SUBMIT_LOG" 2>&1 || true
-  SUBMIT_ID="$(awk '/^  id: /{print $2; exit}' "$SUBMIT_LOG")"
-  if [[ -z "$SUBMIT_ID" ]]; then
-    echo "✗ notarytool did not return a submission id:" >&2
-    cat "$SUBMIT_LOG" >&2
-    exit 1
-  fi
-  echo "  submission $SUBMIT_ID"
+  # Submits a file and waits for Apple's verdict. A function because two things
+  # are notarized: the app (as a zip) and the disk image it ships in.
+  notarize() {
+    # `|| true`, and to a file rather than a pipe: the crash lands *after* the
+    # upload and the id have been printed, and under `set -eo pipefail` either
+    # form would take the script down with a submission already in flight.
+    SUBMIT_LOG="$ROOT/.build/notarytool-submit.log"
+    xcrun notarytool submit "$1" "${NOTARY_ARGS[@]}" > "$SUBMIT_LOG" 2>&1 || true
+    SUBMIT_ID="$(awk '/^  id: /{print $2; exit}' "$SUBMIT_LOG")"
+    if [[ -z "$SUBMIT_ID" ]]; then
+      echo "✗ notarytool did not return a submission id:" >&2
+      cat "$SUBMIT_LOG" >&2
+      exit 1
+    fi
+    echo "  submission $SUBMIT_ID"
 
-  NOTARY_STATUS="In Progress"
-  for _ in $(seq 1 90); do
-    sleep 20
-    # `|| true`, for the same reason `submit` has it: under `set -eo pipefail` a
-    # single dropped `info` call — a flaky network, Apple rate-limiting — would
-    # abort the release mid-notarization, skipping staple, appcast and deploy
-    # for a build that goes on to be accepted. That is the failure this rewrite
-    # existed to remove, left in place one loop lower down.
-    NOTARY_STATUS="$(xcrun notarytool info "$SUBMIT_ID" "${NOTARY_ARGS[@]}" 2>/dev/null \
-      | awk '/status:/{ $1=""; sub(/^ /,""); print; exit }' || true)"
-    # An empty status is a failed lookup, not a verdict: keep waiting.
-    [[ -z "$NOTARY_STATUS" || "$NOTARY_STATUS" == "In Progress" ]] || break
-    NOTARY_STATUS="${NOTARY_STATUS:-In Progress}"
-    printf '.'
-  done
-  echo
-  if [[ "$NOTARY_STATUS" != "Accepted" ]]; then
-    echo "✗ notarization $NOTARY_STATUS — details:" >&2
-    xcrun notarytool log "$SUBMIT_ID" "${NOTARY_ARGS[@]}" 2>&1 | head -40 >&2
-    exit 1
-  fi
-  echo "  ✓ accepted"
+    NOTARY_STATUS="In Progress"
+    for _ in $(seq 1 90); do
+      sleep 20
+      # `|| true`, for the same reason `submit` has it: under `set -eo pipefail` a
+      # single dropped `info` call — a flaky network, Apple rate-limiting — would
+      # abort the release mid-notarization, skipping staple, appcast and deploy
+      # for a build that goes on to be accepted. That is the failure this rewrite
+      # existed to remove, left in place one loop lower down.
+      NOTARY_STATUS="$(xcrun notarytool info "$SUBMIT_ID" "${NOTARY_ARGS[@]}" 2>/dev/null \
+        | awk '/status:/{ $1=""; sub(/^ /,""); print; exit }' || true)"
+      # An empty status is a failed lookup, not a verdict: keep waiting.
+      [[ -z "$NOTARY_STATUS" || "$NOTARY_STATUS" == "In Progress" ]] || break
+      NOTARY_STATUS="${NOTARY_STATUS:-In Progress}"
+      printf '.'
+    done
+    echo
+    if [[ "$NOTARY_STATUS" != "Accepted" ]]; then
+      echo "✗ notarization $NOTARY_STATUS — details:" >&2
+      xcrun notarytool log "$SUBMIT_ID" "${NOTARY_ARGS[@]}" 2>&1 | head -40 >&2
+      exit 1
+    fi
+    echo "  ✓ accepted"
+  }
+  notarize "$TMPZIP"
   xcrun stapler staple "$APP"
   echo "  ✓ stapled"
 else
@@ -224,6 +230,28 @@ ditto -c -k --keepParent "$APP" "$ZIP"
 SHA="$(shasum -a 256 "$ZIP" | awk '{print $1}')"
 SIZE="$(stat -f%z "$ZIP")"
 echo "▶ $ZIP_NAME — $(( SIZE / 1024 / 1024 )) MB, sha256 ${SHA:0:16}…"
+
+# --- 5b. Disk image ----------------------------------------------------------
+# What the site's Download button hands out: a classic drag-to-Applications
+# window. The zip stays, because every installed copy's updater and the
+# Homebrew cask download that. The image is signed, notarized and stapled in
+# its own right, so Gatekeeper passes it offline too, and so Chrome's download
+# check has a signature to read rather than an anonymous archive.
+# dmgbuild writes the Finder layout directly; nothing scripts Finder.
+DMG=""
+if [[ "$NOTARIZE" == "1" ]]; then
+  echo "▶ Disk image"
+  DMG="$SITE/$DMG_NAME"
+  rm -f "$DMG"
+  "${DMGBUILD:-dmgbuild}" -s scripts/dmg/dmg-settings.py -D app="$APP" "$APP_NAME" "$DMG" \
+    > "$ROOT/.build/dmgbuild.log" 2>&1 \
+    || { echo "✗ dmgbuild failed — tail of .build/dmgbuild.log:" >&2; tail -20 "$ROOT/.build/dmgbuild.log" >&2; exit 1; }
+  codesign --force --timestamp --sign "$DEVID" "$DMG"
+  notarize "$DMG"
+  xcrun stapler staple "$DMG" >/dev/null
+  spctl -a -t open --context context:primary-signature "$DMG"
+  echo "  ✓ $DMG_NAME — signed, notarized, stapled"
+fi
 
 # --- 6. Appcast --------------------------------------------------------------
 # Read by the in-app updater AND the Homebrew cask. Notes come from the guide's
@@ -364,10 +392,14 @@ if [[ "${PUBLISH:-1}" == "1" && "$NOTARIZE" == "1" ]]; then
     [[ "$PUB" == "$SHA" ]] && break
     sleep 5
   done
-  if [[ "$PUB" == "$SHA" && "$TAPSHA" == "$SHA" ]]; then
+  DMG_OK=1
+  if [[ -n "$DMG" ]]; then
+    [[ "$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL/$DMG_NAME")" == "200" ]] || DMG_OK=0
+  fi
+  if [[ "$PUB" == "$SHA" && "$TAPSHA" == "$SHA" && "$DMG_OK" == "1" ]]; then
     echo "  ✓ manifest, cask and artifact all agree (${SHA:0:16}…)"
   else
-    echo "  ✗ MISMATCH — manifest=${PUB:0:16}… cask=${TAPSHA:0:16}… built=${SHA:0:16}…" >&2
+    echo "  ✗ MISMATCH — manifest=${PUB:0:16}… cask=${TAPSHA:0:16}… built=${SHA:0:16}… dmg-served=$DMG_OK" >&2
     exit 1
   fi
 
@@ -403,12 +435,13 @@ if [[ "${PUBLISH:-1}" == "1" && "$NOTARIZE" == "1" ]]; then
     PRE=(); [[ "$VERSION" == *-* ]] && PRE=(--prerelease)
     if gh release view "$TAG" >/dev/null 2>&1; then
       gh release edit "$TAG" --notes-file "$NOTES_FILE" >/dev/null && echo "  ✓ release updated"
+      [[ -n "$DMG" ]] && gh release upload "$TAG" "$DMG" --clobber >/dev/null && echo "  ✓ disk image attached"
     else
       # ${PRE[@]+…}: an empty array is "unbound" to bash 3.2 under set -u, so a
       # stable release (no --prerelease) died here after everything else had
       # shipped. 1.1.1 was the first stable release to reach this line.
       gh release create "$TAG" ${PRE[@]+"${PRE[@]}"} --title "Transcripts $VERSION" \
-        --notes-file "$NOTES_FILE" "$ZIP" >/dev/null && echo "  ✓ release published with the artifact"
+        --notes-file "$NOTES_FILE" "$ZIP" ${DMG:+"$DMG"} >/dev/null && echo "  ✓ release published with the artifacts"
     fi
     rm -f "$NOTES_FILE"
   fi

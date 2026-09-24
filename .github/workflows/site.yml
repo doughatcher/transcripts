@@ -52,7 +52,7 @@ jobs:
           names = set()
           for feed in ("appcast.json", "appcast-beta.json"):
               names.add(os.path.basename(json.load(open(feed))["url"]))
-          names.update(re.findall(r'href="/(Transcripts-[^"/]+\.zip)"', open("index.html").read()))
+          names.update(re.findall(r'href="/(Transcripts-[^"/]+\.(?:zip|dmg))"', open("index.html").read()))
           print("\n".join(sorted(names)))
           PY
           )
