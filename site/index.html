@@ -7,7 +7,7 @@
   <canvas id="wave" aria-hidden="true"
           style="position:absolute;pointer-events:none;height:340px"></canvas>
   <img class="mark" src="/icon.png" alt="" width="96" height="96">
-  <span class="early-access">Early Access · {{VERSION}}</span>
+  <span class="early-access">Now on the App Store · Mac, iPhone &amp; iPad</span>
   <h1>Live transcripts of every meeting. Entirely on device.</h1>
   <p class="sub">
     It notices the call has started, writes down what everyone says as they say
@@ -15,14 +15,15 @@
     iPad.
   </p>
   <div class="badges" id="download">
-    <a class="btn" href="/{{DMG}}">Download for Mac</a>
-    <a class="btn secondary" href="https://testflight.apple.com/join/S4gy9315">Test on iPhone &amp; iPad</a>
+    <a class="btn" href="https://apps.apple.com/app/transcripts/id6802331047?platform=mac">Mac App Store</a>
+    <a class="btn secondary" href="/{{DMG}}">Direct download for Mac</a>
+    <a class="btn" href="https://apps.apple.com/app/transcripts/id6802331047?platform=iphone">App Store for iPhone &amp; iPad</a>
     <a class="btn secondary" href="https://github.com/doughatcher/transcripts">Source on GitHub</a>
   </div>
-  <p class="brew">Transcripts {{VERSION}} · macOS 14 or later · 9 MB<br>
+  <p class="brew">Direct download {{VERSION}} · macOS 14 or later<br>
      or <code>brew install --cask doughatcher/tap/transcripts</code></p>
-  <p class="brew">The iPhone and iPad app is with App Review; until it is out,
-     TestFlight is the way in. A Mac App Store edition is on its way too.</p>
+  <p class="brew">Version 1.1.0 is available now on the App Store for Mac, iPhone and iPad.
+     <a href="/guide/install/#mac-app-store-or-download">Compare the Mac editions</a>.</p>
   <details class="mdm">
     <summary>Advice for MDM-managed Macs</summary>
     <p>On a work Mac with no admin rights, open <strong>Transcripts.app</strong>
@@ -53,9 +54,9 @@
   <div class="claim">
     <h3>It knows when the meeting started</h3>
     <p>On the Mac, Transcripts watches for Teams, Zoom, Webex and Meet. When a
-       call begins it starts recording on its own, capturing your microphone and
+       call begins it can prompt you to record, capturing your microphone and
        the other participants as separate tracks — and stops when the call ends.
-       You don't have to remember.</p>
+       The Mac App Store edition asks first; automatic recording is an option in Settings.</p>
   </div>
   <div class="claim">
     <h3>Summaries as deep as you want</h3>
@@ -85,8 +86,8 @@
     <h3>A pipeline you can open up</h3>
     <p>Every recording moves through five stages — encode, transcribe,
        summarize, classify, persist — and you can replace any of them with a
-       script of your own. Most people never will. It is there because the
-       alternative to an escape hatch is a rewrite.</p>
+       script of your own in the direct-download Mac edition. The Mac App Store
+       edition uses the built-in pipeline. <a href="/guide/install/#mac-app-store-or-download">Compare the editions</a>.</p>
   </div>
   <div class="claim">
     <h3>Your files, in your folder</h3>
@@ -99,30 +100,21 @@
 
 <section class="how" aria-labelledby="how-h">
   <h2 id="how-h">How it works</h2>
-  <figure>
-    <img src="/guide/images/menu-recording.webp" alt="The Transcripts menu while recording: a red timer, Stop &amp; process, Open live transcript, and the list of recent recordings" loading="lazy" width="430" height="812">
-    <figcaption><strong>It lives in the menu bar.</strong> Leave Auto on and it
-    notices when a call starts. Or press Start recording for anything else —
-    a voice note, a conversation in the room.</figcaption>
+  <figure class="wide">
+    <img src="/guide/images/launch/01-menu.webp" alt="Record from your menu bar. Transcripts can prompt you when a call begins. You can also start a recording yourself." loading="lazy" width="2880" height="1800">
+    <figcaption><strong>Record from your menu bar.</strong> Transcripts can prompt you when a call begins. You can also start a recording yourself.</figcaption>
   </figure>
   <figure class="wide">
-    <img src="/guide/images/live-edge.webp" alt="A desktop during a recording, with a small glass pill near the top showing the last words spoken" loading="lazy" width="1800" height="1170">
-    <figcaption><strong>Words appear as they are said.</strong> A small pill shows
-    the last thing spoken, and the whole conversation is written to a plain
-    file you — or an assistant — can read before anyone hangs up.</figcaption>
+    <img src="/guide/images/launch/02-overlay.webp" alt="Follow the conversation. Read the live text and open the overlay for answers from the call or your notes." loading="lazy" width="2880" height="1800">
+    <figcaption><strong>Follow the conversation.</strong> Read the live text and open the overlay for answers from the call or your notes.</figcaption>
   </figure>
   <figure class="wide">
-    <img src="/guide/images/overlay.webp" alt="The overlay panel open over the desktop, showing the last conclusion, facts and figures, and the last question with its source" loading="lazy" width="1800" height="1170">
-    <figcaption><strong>The overlay answers the question that was just asked</strong>
-    — from earlier in the call, or from your notes — and says which. It will not
-    answer from anywhere else.</figcaption>
+    <img src="/guide/images/launch/03-transcript.webp" alt="Read back who said what. Keep a transcript with speaker labels and timestamps alongside the audio." loading="lazy" width="2880" height="1800">
+    <figcaption><strong>Read back who said what.</strong> Keep a transcript with speaker labels and timestamps alongside the audio.</figcaption>
   </figure>
   <figure class="wide">
-    <img src="/guide/images/document-transcript.webp" alt="The Recordings window showing a finished transcript with timestamps and named speakers" loading="lazy" width="1600" height="1272">
-    <figcaption><strong>Afterwards, a document.</strong> A summary, the action
-    items, and the transcript with each speaker named — as Markdown in a folder
-    you chose, with the audio beside it. Click a timestamp to hear that
-    moment.</figcaption>
+    <img src="/guide/images/launch/04-summary.webp" alt="Leave with the next steps. Your summary and action items are saved as Markdown in the folder you choose." loading="lazy" width="2880" height="1800">
+    <figcaption><strong>Leave with the next steps.</strong> Your summary and action items are saved as Markdown in the folder you choose.</figcaption>
   </figure>
   <figure class="wide">
     <a href="/guide/worked-example/"><img src="/guide/images/adventure-log-home.webp" alt="Adventure Log, a D&amp;D campaign journal built from Transcripts' documents: a painted party of four adventurers entering a moonlit fey hall full of crows, under the journal's title" loading="lazy" width="1600" height="820"></a>
@@ -143,26 +135,17 @@
 </section>
 
 <section class="note">
-  <p><strong>What Early Access means here.</strong> Transcripts has been in daily
-  use for months, so it is not raw. What it has not had is <em>users</em> — only a
-  handful, all of them me and people near me. That is the gap this stage exists to
-  close: your microphone, your accent, your way of running a meeting may be the
-  first of their kind it meets. If something misbehaves, please
-  <a href="https://github.com/doughatcher/transcripts-support/issues">report
-  it</a>.</p>
-
-  <p><strong>1.0 on the Mac.</strong> The Mac app is signed and notarised by
-  Apple, so it installs without argument — by download or by Homebrew — and
-  updates itself from there.</p>
-
-  <p><strong>iPhone and iPad.</strong> 1.1 is with App Review. Until it is on the
-  App Store, the TestFlight link above is the way in, and it is free.</p>
-
-  <p><strong>Two ways to get the Mac app.</strong> The download above does
-  everything. A Mac App Store edition is coming for people who would rather
-  install from there; it is the same app with a few things the store does not
-  allow left out &mdash; <a href="/guide/install/#mac-app-store-or-download">what
-  differs</a>.</p>
+  <p><strong>Available now.</strong> Transcripts 1.1.0 is on the App Store for
+  Mac, iPhone and iPad. Record on your device and choose a shared iCloud Drive
+  folder to keep your recordings together.</p>
+  <p><strong>Two ways to get the Mac app.</strong> Install from the
+  <a href="https://apps.apple.com/app/transcripts/id6802331047?platform=mac">Mac App Store</a>
+  for store-managed updates, or use the signed and notarized direct download
+  or Homebrew for custom scripts and the Handoff pipeline.
+  <a href="/guide/install/#mac-app-store-or-download">See what differs</a>.</p>
+  <p>If something misbehaves, please
+  <a href="https://github.com/doughatcher/transcripts-support/issues">report it</a>.
+  To try upcoming iPhone and iPad builds, <a href="https://testflight.apple.com/join/S4gy9315">join the TestFlight beta</a>.</p>
 
   <p>Recording laws vary by country and state, and some require the consent of
   everyone in the conversation — Transcripts gives you a recorder, and the rest is

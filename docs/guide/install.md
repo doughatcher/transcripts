@@ -39,9 +39,8 @@ The app checks for updates on launch and can install them itself.
 
 ## Mac App Store or download
 
-There will be two ways to get the Mac app. The download above, and Homebrew, is
-the full app. A Mac App Store edition is on its way for people who would rather
-install from the store. It is the same app, with the same transcription, live
+There are two ways to get the Mac app: the [Mac App Store](https://apps.apple.com/app/transcripts/id6802331047?platform=mac),
+or the direct download and Homebrew. Both are available now. It is the same app, with the same transcription, live
 transcript, overlay, speaker names, summaries and the other side of calls. But
 the store only accepts apps that stay inside Apple's sandbox, and a few things
 cannot:
@@ -180,7 +179,7 @@ Trust a recording over that answer on those builds.
 
 ## iPhone and iPad
 
-The mobile app comes from the App Store. It records and transcribes on its own,
+The mobile app is available on the [App Store for iPhone and iPad](https://apps.apple.com/app/transcripts/id6802331047?platform=iphone). It records and transcribes on its own,
 and shares a folder with the Mac if you have one — see
 [iPhone, iPad and Mac](/guide/handoff/).
 
