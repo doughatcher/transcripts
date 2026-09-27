@@ -89,13 +89,31 @@ main { padding: 0 1.5rem; }
    of it, sitting on the mark's baseline rather than under it. */
 .hero .mark { display: block; width: 96px; height: 96px; border-radius: 22px; margin: 0 auto 1.5rem; }
 
-.badges { display: flex; gap: .75rem; justify-content: center; flex-wrap: wrap; }
-.btn {
-  display: inline-block; padding: .7rem 1.35rem; border-radius: 10px;
-  background: var(--accent); color: #fff; font-weight: 600;
+.downloads { max-width: 34rem; margin: 0 auto; scroll-margin-top: 6rem; }
+.store-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+.store-button {
+  --store-bg: #654cda;
+  display: flex; align-items: center; gap: .85rem; padding: .95rem 1.15rem;
+  border: 1px solid #8069ed; border-radius: 14px;
+  background: var(--store-bg); color: #fff; text-align: left;
+  box-shadow: 0 4px 16px #00000012;
 }
-.btn:hover { background: var(--accent-2); text-decoration: none; }
-.btn.secondary { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+.store-button:hover { --store-bg: #5740c7; text-decoration: none; }
+.store-button svg { width: 32px; height: 32px; flex: 0 0 32px; }
+.store-button small { display: block; font-size: .7rem; line-height: 1.5; font-weight: 450; }
+.store-button strong { display: block; font-size: 1.2rem; line-height: 1.4; font-weight: 650; }
+.download-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 0 1.5rem; margin-top: .75rem; }
+.download-links a { display: inline-flex; align-items: center; gap: .4rem; min-height: 44px; font-size: .9rem; color: var(--fg); }
+.download-links span { color: var(--muted); }
+.download-meta { color: var(--muted); font-size: .8rem; line-height: 1.8; margin: .55rem 0 0; }
+.homebrew { margin: .4rem auto 0; font-size: .8rem; color: var(--muted); }
+.homebrew summary { cursor: pointer; padding: .5rem; }
+.homebrew code { display: inline-block; max-width: 100%; margin: .4rem 0; overflow-wrap: anywhere; }
+.downloads a:focus-visible, .homebrew summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+@media (max-width: 34rem) {
+  .store-buttons { grid-template-columns: 1fr; max-width: 20rem; margin: 0 auto; }
+  .store-button { justify-content: flex-start; padding-left: 2rem; }
+}
 .early-access {
   display: inline-block; margin-bottom: 1.25rem; padding: .3rem .7rem;
   border: 1px solid var(--line); border-radius: 999px;

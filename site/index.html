@@ -14,16 +14,28 @@
     it, and files the result where you keep your notes — on your Mac, iPhone and
     iPad.
   </p>
-  <div class="badges" id="download">
-    <a class="btn" href="https://apps.apple.com/app/transcripts/id6802331047?platform=mac">Mac App Store</a>
-    <a class="btn secondary" href="/{{DMG}}">Direct download for Mac</a>
-    <a class="btn" href="https://apps.apple.com/app/transcripts/id6802331047?platform=iphone">App Store for iPhone &amp; iPad</a>
-    <a class="btn secondary" href="https://github.com/doughatcher/transcripts">Source on GitHub</a>
+  <div class="downloads" id="download">
+    <div class="store-buttons">
+      <a class="store-button" href="https://apps.apple.com/app/transcripts/id6802331047?platform=mac">
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="4" width="26" height="18" rx="2.5"/><path d="M11 28h10M16 22v6M3 18h26"/></svg>
+        <span><small>Download on the App Store</small><strong>Mac</strong></span>
+      </a>
+      <a class="store-button" href="https://apps.apple.com/app/transcripts/id6802331047?platform=iphone">
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="10" y="3" width="19" height="25" rx="2.5"/><rect x="3" y="11" width="12" height="19" rx="2.5" fill="var(--store-bg)"/><path d="M7 26h4M18 24h3"/></svg>
+        <span><small>Download on the App Store</small><strong>iPhone &amp; iPad</strong></span>
+      </a>
+    </div>
+    <div class="download-links">
+      <a href="/{{DMG}}">Direct download for Mac <span aria-hidden="true">↓</span></a>
+      <a href="https://github.com/doughatcher/transcripts">Source on GitHub <span aria-hidden="true">↗</span></a>
+    </div>
+    <p class="download-meta">Direct download {{VERSION}} · macOS 14+<br>
+      <a href="/guide/install/#mac-app-store-or-download">Compare the Mac editions</a></p>
+    <details class="homebrew">
+      <summary>Install with Homebrew</summary>
+      <code>brew install --cask doughatcher/tap/transcripts</code>
+    </details>
   </div>
-  <p class="brew">Direct download {{VERSION}} · macOS 14 or later<br>
-     or <code>brew install --cask doughatcher/tap/transcripts</code></p>
-  <p class="brew">Version 1.1.0 is available now on the App Store for Mac, iPhone and iPad.
-     <a href="/guide/install/#mac-app-store-or-download">Compare the Mac editions</a>.</p>
   <details class="mdm">
     <summary>Advice for MDM-managed Macs</summary>
     <p>On a work Mac with no admin rights, open <strong>Transcripts.app</strong>
