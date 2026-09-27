@@ -8,3 +8,5 @@ The purple/black cards use native captures from invented meeting data.
 4. Inspect the exported images, then run `just store-upload --dir dist/store-artwork` against editable drafts.
 
 The website uses the plain images in `docs/guide/images`, not these cards. The Mac template clips the native menu and overlay captures into drawn desktop context; it uses no retouched UI text. Keep its clip coordinates in sync if the native capture dimensions change.
+
+The iOS galleries lead with the shared Mac workflow and include a companion card pairing native Mac and mobile captures. iPad cards remain landscape.

@@ -9,7 +9,8 @@ const output = path.join(root, 'dist/store-artwork');
 const uri = p => pathToFileURL(path.join(root, p)).href;
 const esc = s => s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;');
 const copy = {
-  transcript: ['Your meetings.\nReady to read.', 'A transcript, summary, and action items in one place.'],
+  transcript: ['Record here.\nContinue on Mac.', 'Your recordings and Mac transcripts, together through iCloud Drive.'],
+  'mac-companion': ['Meet your\nMac companion.', 'The Mac app captures calls and creates summaries. Share recordings through iCloud Drive.'],
   take: ['From recording\nto next steps.', 'Keep the audio, transcript, and summary together.'],
   library: ['Every conversation,\nclose at hand.', 'Browse your recordings and shared transcripts.'],
   recorder: ['Record wherever\nyou are.', 'Capture a conversation or a voice note on your device.'],
@@ -19,6 +20,10 @@ function mobile(kind, file) {
   const key = file.replace(/^\d+-/, '').replace('.png','');
   if (!copy[key]) throw new Error('Missing caption for '+file);
   const [title,sub] = copy[key];
+  const companion = key === 'mac-companion';
+  const screens = companion
+    ? `<figure class="mac"><figcaption>TRANSCRIPTS FOR MAC</figcaption><img src="${uri('docs/guide/images/document-summary.webp')}" alt="Mac recording summary"></figure><figure class="device"><figcaption>${kind==='ipad'?'IPAD':'IPHONE'}</figcaption><img src="${uri('dist/appstore/'+kind+'/01-transcript.png')}" alt="${kind} transcript"></figure>`
+    : `<img src="${uri('dist/appstore/'+kind+'/'+file)}" alt="${esc(key)}">`;
   return `<!doctype html><meta charset="utf-8"><style>
   *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#f7f4ff}
   .frame{width:${w}px;height:${h}px;position:relative;overflow:hidden;background:radial-gradient(ellipse at 80% 55%,#39224f,transparent 65%),linear-gradient(140deg,#14101c,#050407)}
@@ -26,7 +31,9 @@ function mobile(kind, file) {
   .copy{position:absolute;top:9.8%;left:7%;right:7%}h1{font-size:${kind==='iphone'?110:132}px;line-height:1.05;letter-spacing:-5px;margin:0 0 32px;font-weight:650}h1 em{font-style:normal;color:#bc9fff}p{color:#bcb3cd;font-size:${kind==='iphone'?44:50}px;line-height:1.4;margin:0;max-width:1500px}
   .screen{position:absolute;top:28%;bottom:5%;left:7%;right:7%;display:flex;justify-content:center;align-items:center}.screen img{max-width:100%;max-height:100%;object-fit:contain;border:2px solid #ffffff33;border-radius:${kind==='iphone'?52:30}px;box-shadow:0 40px 90px #0009}
   ${kind==='ipad'?'.brand{top:4%}.copy{top:12%;left:7%;right:7%}h1{font-size:118px;margin-bottom:20px;line-height:1.1}p{font-size:46px;max-width:none}.screen{top:25%;bottom:4%}':''}
-  </style><section class="frame"><div class="brand"><img src="${uri('docs/assets/icon.png')}" alt="">Transcripts</div><div class="copy"><h1>${esc(title).replace('\n',kind==='ipad'?' <em>':'<br><em>')}</em></h1><p>${esc(sub)}</p></div><div class="screen"><img src="${uri('dist/appstore/'+kind+'/'+file)}" alt="${esc(key)}"></div></section>`;
+  .companion{gap:36px}.companion figure{margin:0;min-width:0;min-height:0;display:flex;flex-direction:column;align-items:center;gap:22px}.companion figcaption{font-size:28px;letter-spacing:4px;color:#bcb3cd}.companion img{min-height:0;object-fit:contain;border-radius:24px}.companion .mac{flex:1.5}.companion .device{flex:1}
+  ${kind==='iphone'?'.companion{top:32%;bottom:4%;flex-direction:column}.companion .mac{flex:none;width:100%;height:43%}.companion .device{height:53%;flex:none}.companion figure img{max-height:calc(100% - 56px)}':'.companion{top:29%;bottom:5%;align-items:center}.companion .mac{width:60%}.companion .device{width:40%}.companion img{max-height:1150px}'}
+  </style><section class="frame"><div class="brand"><img src="${uri('docs/assets/icon.png')}" alt="">Transcripts</div><div class="copy"><h1>${esc(title).replace('\n',kind==='ipad'?' <em>':'<br><em>')}</em></h1><p>${esc(sub)}</p></div><div class="screen${companion?' companion':''}">${screens}</div></section>`;
 }
 (async()=>{
   const browser=await chromium.launch({channel:'msedge',headless:true});
@@ -44,6 +51,8 @@ function mobile(kind, file) {
       fs.mkdirSync(path.join(output,kind),{recursive:true});
       const files=fs.readdirSync(path.join(root,'dist/appstore',kind)).filter(f=>f.endsWith('.png')).sort();
       if(files.length<3)throw new Error('Missing native captures for '+kind);
+      files.push('02-mac-companion.png');
+      files.sort();
       for(const file of files) {
         const html=path.join(output,kind,file.replace('.png','.html'));
         fs.writeFileSync(html,mobile(kind,file));
