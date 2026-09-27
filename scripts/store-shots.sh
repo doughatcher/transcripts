@@ -83,7 +83,7 @@ PY
 )
 echo "▶ Runtime $RUNTIME"
 
-# App Store Connect's required sizes, portrait. A function rather than an
+# App Store Connect's required sizes: portrait iPhone, landscape iPad. A function rather than an
 # associative array: macOS ships bash 3.2, which has none.
 # Simulators this run made, removed on the way out however the run ends. An
 # EXIT trap rather than a RETURN one: bash keeps a RETURN trap set inside a
@@ -99,7 +99,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-want() { case "$1" in iphone) echo 1320x2868 ;; ipad) echo 2064x2752 ;; esac; }
+want() { case "$1" in iphone) echo 1320x2868 ;; ipad) echo 2752x2064 ;; esac; }
 
 shoot_device() {
   local kind="$1" type="$2"
@@ -117,7 +117,25 @@ shoot_device() {
     --dataNetwork wifi --wifiMode active --wifiBars 3 \
     --cellularMode active --cellularBars 4 \
     --batteryState charged --batteryLevel 100
-  xcrun simctl install "$dev" "$APP"
+  local capture_app="$APP"
+  if [[ "$kind" == "ipad" ]]; then
+    # The iPad window manager can ignore orientation requests for resizable
+    # scenes. Constrain only this unsigned simulator copy for landscape shots.
+    capture_app="$DERIVED/ipad-landscape/Transcripts.app"
+    mkdir -p "$DERIVED/ipad-landscape"
+    ditto "$APP" "$capture_app"
+    python3 - "$capture_app/Info.plist" <<'PYPLIST'
+import plistlib, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+info = plistlib.loads(p.read_bytes())
+info["UIRequiresFullScreen"] = True
+info["UISupportedInterfaceOrientations"] = ["UIInterfaceOrientationLandscapeLeft", "UIInterfaceOrientationLandscapeRight"]
+info["UISupportedInterfaceOrientations~ipad"] = info["UISupportedInterfaceOrientations"]
+p.write_bytes(plistlib.dumps(info))
+PYPLIST
+  fi
+  xcrun simctl install "$dev" "$capture_app"
   # Granted up front, or the first screen is the permission explainer rather
   # than the app — needsPermissionPriming reads the microphone state alone.
   xcrun simctl privacy "$dev" grant microphone "$BUNDLE_ID"
@@ -139,7 +157,11 @@ shoot_device() {
     local name="$1"; shift
     n=$((n + 1))
     xcrun simctl terminate "$dev" "$BUNDLE_ID" > /dev/null 2>&1 || true
-    xcrun simctl launch "$dev" "$BUNDLE_ID" --seed-workspace "$@" > /dev/null
+    if [[ "$kind" == "ipad" ]]; then
+      xcrun simctl launch "$dev" "$BUNDLE_ID" --seed-workspace --seed-landscape "$@" > /dev/null
+    else
+      xcrun simctl launch "$dev" "$BUNDLE_ID" --seed-workspace "$@" > /dev/null
+    fi
     # The library is filled by a detached scan and re-scanned at +4s, and a
     # transcript is selected 2s after that. Shooting sooner photographs a list
     # that is still arriving.
@@ -149,10 +171,17 @@ shoot_device() {
     xcrun simctl io "$dev" screenshot --type=png "$file" > /dev/null 2>&1
     local size
     size="$(sips -g pixelWidth -g pixelHeight "$file" | awk '/pixelWidth/{w=$2} /pixelHeight/{h=$2} END{print w "x" h}')"
+    # simctl saves the physical portrait framebuffer even when the app has
+    # laid out in landscapeLeft. Normalize those pixels for store upload.
+    if [[ "$kind" == "ipad" && "$size" == "2064x2752" ]]; then
+      sips -r 90 "$file" > /dev/null
+      size="$(sips -g pixelWidth -g pixelHeight "$file" | awk '/pixelWidth/{w=$2} /pixelHeight/{h=$2} END{print w "x" h}')"
+    fi
     if [[ "$size" == "$(want "$kind")" ]]; then
       echo "  ✓ $file ($size)"
     else
       echo "  ! $file is $size, App Store Connect wants $(want "$kind")" >&2
+      return 1
     fi
   }
 
@@ -169,7 +198,11 @@ shoot_device() {
   fi
 }
 
-shoot_device iphone "$IPHONE_TYPE"
-shoot_device ipad "$IPAD_TYPE"
+case "${DEVICES:-all}" in
+  all) shoot_device iphone "$IPHONE_TYPE"; shoot_device ipad "$IPAD_TYPE" ;;
+  iphone) shoot_device iphone "$IPHONE_TYPE" ;;
+  ipad) shoot_device ipad "$IPAD_TYPE" ;;
+  *) echo "DEVICES must be all, iphone, or ipad" >&2; exit 1 ;;
+esac
 
 echo "✓ Screenshots in $OUT — upload with: python3 scripts/asc-screenshots.py"

@@ -3,7 +3,7 @@
 The purple/black cards use native captures from invented meeting data.
 
 1. `just shots` rebuilds the Mac app in staging and renders guide screenshots.
-2. `just store-shots` captures iPhone and iPad using temporary simulators.
+2. `just store-shots` captures portrait iPhone and landscape iPad using temporary simulators. Use `DEVICES=ipad just store-shots` to refresh only the iPad.
 3. `node scripts/store-artwork/render.cjs` composes all three families into `dist/store-artwork/`. It needs the `playwright` Node package and Microsoft Edge. Set `NODE_PATH` if Playwright is provided by an external runtime.
 4. Inspect the exported images, then run `just store-upload --dir dist/store-artwork` against editable drafts.
 

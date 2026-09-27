@@ -307,6 +307,13 @@ struct ContentView: View {
         .onAppear(perform: openingSelection)
         .task {
             #if DEBUG
+            // Capture the iPad's actual wide layout without UI automation.
+            // This argument is only used by the temporary screenshot simulator.
+            if CommandLine.arguments.contains("--seed-landscape"),
+               UIDevice.current.userInterfaceIdiom == .pad,
+               let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeLeft))
+            }
             // Open on a recording rather than the recorder, for screenshots.
             // The detail pane is the half of this screen worth showing — the
             // transcript and its scrubber — and nothing but a tap reaches it,
