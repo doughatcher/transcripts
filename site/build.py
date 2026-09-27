@@ -274,7 +274,11 @@ def asset_version() -> str:
     return hashlib.sha256(css).hexdigest()[:10]
 
 
-def page(title: str, body: str, *, nav: str = "", cls: str = "") -> str:
+def page(title: str, body: str, *, nav: str = "", cls: str = "", url_path: str = "/") -> str:
+    canonical = "https://transcripts.doughatcher.com" + url_path
+    social_version = hashlib.sha256((ROOT / "site/social-card.png").read_bytes()).hexdigest()[:10]
+    social_image = f"https://transcripts.doughatcher.com/social-card.png?v={social_version}"
+    description = "Record on Mac, iPhone and iPad. Transcribe on device, create meeting notes on your Mac, and keep the files in a folder you choose."
     open_body = '<article class="guide-body">' if cls == "guide" else ""
     close_body = "</article>" if cls == "guide" else ""
     return f"""<!doctype html>
@@ -283,7 +287,23 @@ def page(title: str, body: str, *, nav: str = "", cls: str = "") -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)}</title>
-<meta name="description" content="Live transcripts of every meeting, recorded, transcribed and summarized entirely on your own Mac, iPhone and iPad.">
+<meta name="description" content="{description}">
+<link rel="canonical" href="{html.escape(canonical)}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Transcripts">
+<meta property="og:title" content="{html.escape(title)}">
+<meta property="og:description" content="{description}">
+<meta property="og:url" content="{html.escape(canonical)}">
+<meta property="og:image" content="{social_image}">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Transcripts for Mac, iPhone and iPad — live transcripts entirely on device, with a Mac recording and summary.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{html.escape(title)}">
+<meta name="twitter:description" content="{description}">
+<meta name="twitter:image" content="{social_image}">
+<meta name="twitter:image:alt" content="Transcripts — live transcripts entirely on device.">
 <link rel="stylesheet" href="/style.css?v={ASSET_V}">
 <link rel="icon" href="/icon.png">
 {ANALYTICS}
@@ -315,6 +335,7 @@ def build():
     (OUT / "guide").mkdir(parents=True)
 
     # Assets
+    shutil.copy(ROOT / "site/social-card.png", OUT / "social-card.png")
     shutil.copy(ROOT / "site" / "style.css", OUT / "style.css")
     icon = ROOT / "Sources/Transcripts/Assets.xcassets/AppIcon.appiconset/icon-1024.png"
     if icon.exists():
@@ -340,7 +361,7 @@ def build():
     # does not exist got HTML, failed to decode it, and reported "the manifest
     # could not be read" instead of "no stable release yet".
     (OUT / "404.html").write_text(
-        page("Not found — Transcripts", (ROOT / "site" / "404.html").read_text(), cls="landing"))
+        page("Not found — Transcripts", (ROOT / "site" / "404.html").read_text(), cls="landing", url_path="/404.html"))
 
     # Guide
     def sidebar(current: str) -> str:
@@ -370,7 +391,8 @@ def build():
         dest = OUT / "guide" / ("index.html" if slug == "index" else f"{slug}/index.html")
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(page(f"{title} — Transcripts guide", body,
-                             nav=sidebar(slug), cls="guide"))
+                             nav=sidebar(slug), cls="guide",
+                             url_path="/guide/" + ("" if slug == "index" else slug + "/")))
         print(f"  ✓ /guide/{'' if slug == 'index' else slug + '/'}")
 
     # Cloudflare Pages redirects. /privacy is the URL given to App Store Connect
