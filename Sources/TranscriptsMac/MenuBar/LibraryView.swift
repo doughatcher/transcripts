@@ -12,7 +12,7 @@ struct LibraryView: View {
         NavigationSplitView {
             List(selection: $controller.selectedRecordIDs) {
                 ForEach(controller.groupedByDay(controller.allRecents)) { group in
-                    Section(group.label) {
+                    Section {
                         ForEach(group.calls) { call in
                             if call.isSingle {
                                 row(call.items[0])
@@ -24,6 +24,9 @@ struct LibraryView: View {
                                 }
                             }
                         }
+                    } header: {
+                        Text(group.label)
+                            .foregroundStyle(DocCapture.isRequested ? Color(white: 0.65) : Color.secondary)
                     }
                 }
             }
@@ -149,8 +152,14 @@ private struct RecordingRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.isEmpty ? "No audio captured" : item.title)
                     .lineLimit(1)
-                    .foregroundStyle(item.isEmpty ? .secondary : .primary)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .foregroundStyle(DocCapture.isRequested
+                        ? Color(white: item.isEmpty ? 0.65 : 0.92)
+                        : (item.isEmpty ? Color.secondary : Color.primary))
+                // Offscreen captures cannot composite sidebar vibrancy. Use its
+                // resolved dark-mode label color only in the capture process.
+                Text(subtitle).font(.caption)
+                    .foregroundStyle(DocCapture.isRequested ? Color(white: 0.65) : Color.secondary)
+                    .lineLimit(1)
             }
         }
         .padding(.vertical, 2)
@@ -189,8 +198,14 @@ private struct CallHeaderRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(call.allEmpty ? "No audio captured" : call.title)
                     .lineLimit(1)
-                    .foregroundStyle(call.allEmpty ? .secondary : .primary)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .foregroundStyle(DocCapture.isRequested
+                        ? Color(white: call.allEmpty ? 0.65 : 0.92)
+                        : (call.allEmpty ? Color.secondary : Color.primary))
+                // Offscreen captures cannot composite sidebar vibrancy. Use its
+                // resolved dark-mode label color only in the capture process.
+                Text(subtitle).font(.caption)
+                    .foregroundStyle(DocCapture.isRequested ? Color(white: 0.65) : Color.secondary)
+                    .lineLimit(1)
             }
         }
         .padding(.vertical, 2)

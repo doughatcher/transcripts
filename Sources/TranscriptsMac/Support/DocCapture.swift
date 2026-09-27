@@ -191,7 +191,12 @@ enum DocCapture {
         // TabView/Form/Toggle/Picker), unlike ImageRenderer which draws an
         // "unsupported" placeholder for AppKit-backed controls. All in-process,
         // no Screen Recording permission.
-        let hosting = NSHostingView(rootView: shot.view())
+        // Offscreen AppKit appearance does not reliably propagate into SwiftUI's
+        // sidebar hosting views. Pin the environment too, so primary/secondary
+        // row labels resolve against the same dark surface as native controls.
+        let hosting = NSHostingView(rootView: shot.view()
+            .environment(\.colorScheme, .dark)
+            .preferredColorScheme(.dark))
         hosting.appearance = NSAppearance(named: .darkAqua)
         hosting.frame = NSRect(origin: .zero, size: shot.size ?? hosting.fittingSize)
 
@@ -221,9 +226,19 @@ enum DocCapture {
         window.displayIfNeeded()
 
         let bounds = hosting.bounds
+        // Do not inherit the current display scale: a headless/remote run can
+        // report 1x and silently halve every published screenshot's resolution.
         guard bounds.width > 1, bounds.height > 1,
-              let rep = hosting.bitmapImageRepForCachingDisplay(in: bounds) else { return false }
-        hosting.cacheDisplay(in: bounds, to: rep)
+              let rep = NSBitmapImageRep(bitmapDataPlanes: nil,
+                  pixelsWide: Int((bounds.width * 2).rounded()),
+                  pixelsHigh: Int((bounds.height * 2).rounded()),
+                  bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                  isPlanar: false, colorSpaceName: .deviceRGB,
+                  bytesPerRow: 0, bitsPerPixel: 0) else { return false }
+        rep.size = bounds.size
+        hosting.effectiveAppearance.performAsCurrentDrawingAppearance {
+            hosting.cacheDisplay(in: bounds, to: rep)
+        }
 
         guard let png = rep.representation(using: .png, properties: [:]) else { return false }
         // A view that laid out but never drew comes back as one flat colour, and

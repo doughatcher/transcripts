@@ -35,6 +35,11 @@ store-shots:
 mac-store-shots:
     python3 scripts/mac-store-shots.py
 
+# Compose matched Mac/iPhone/iPad cards from the native captures above.
+# Requires Playwright and Microsoft Edge; writes dist/store-artwork/.
+store-artwork:
+    node scripts/store-artwork/render.cjs
+
 # Replace the App Store screenshots on the version being prepared, from
 # dist/appstore/. Refuses a version that is waiting for review or live.
 # `just store-upload --dry-run` says what it would do.
