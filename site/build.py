@@ -278,7 +278,7 @@ def page(title: str, body: str, *, nav: str = "", cls: str = "", url_path: str =
     canonical = "https://transcripts.doughatcher.com" + url_path
     social_version = hashlib.sha256((ROOT / "site/social-card.png").read_bytes()).hexdigest()[:10]
     social_image = f"https://transcripts.doughatcher.com/social-card.png?v={social_version}"
-    description = "Record on Mac, iPhone and iPad. Transcribe on device, create meeting notes on your Mac, and keep the files in a folder you choose."
+    description = "Automatically record meetings on your Mac. Get rich transcripts, speaker names and summaries, all processed on device. With iPhone and iPad companions."
     open_body = '<article class="guide-body">' if cls == "guide" else ""
     close_body = "</article>" if cls == "guide" else ""
     return f"""<!doctype html>
@@ -298,12 +298,12 @@ def page(title: str, body: str, *, nav: str = "", cls: str = "", url_path: str =
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Transcripts for Mac, iPhone and iPad — live transcripts entirely on device, with a Mac recording and summary.">
+<meta property="og:image:alt" content="Transcripts for Mac, iPhone and iPad — automatic meeting recording and rich transcripts, entirely on device.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{html.escape(title)}">
 <meta name="twitter:description" content="{description}">
 <meta name="twitter:image" content="{social_image}">
-<meta name="twitter:image:alt" content="Transcripts — live transcripts entirely on device.">
+<meta name="twitter:image:alt" content="Transcripts — record meetings automatically. Rich transcripts, entirely on device.">
 <link rel="stylesheet" href="/style.css?v={ASSET_V}">
 <link rel="icon" href="/icon.png">
 {ANALYTICS}
@@ -352,7 +352,7 @@ def build():
     landing = landing.replace("{{ZIP}}", f"Transcripts-{version}.zip")
     # The button hands out the disk image; the zip is for the updater and brew.
     landing = landing.replace("{{DMG}}", f"Transcripts-{version}.dmg")
-    (OUT / "index.html").write_text(page("Transcripts — live meeting transcripts, entirely on device",
+    (OUT / "index.html").write_text(page("Transcripts — automatic meeting recording, entirely on device",
                                          landing, cls="landing"))
     print(f"  · version {version}")
 
