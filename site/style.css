@@ -155,6 +155,51 @@ main { padding: 0 1.5rem; }
   .how figure.devices img { max-width: none; }
 }
 
+/* App captures sit in a quiet gallery, with captions outside the image. */
+.app-gallery {
+  display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr);
+  gap: 1.5rem; margin-bottom: 4rem;
+}
+.how .app-shot {
+  display: flex; flex-direction: column; align-items: stretch; gap: 0;
+  min-width: 0; margin: 0; overflow: hidden; border-radius: 20px;
+  border: 1px solid var(--line); background: var(--code-bg);
+}
+.app-shot.full { grid-column: 1 / -1; }
+.screenshot-stage {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  height: 29rem; padding: 2rem; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 35%, #8b5cf614, transparent 75%);
+}
+.how .screenshot-stage img {
+  display: block; width: auto; height: auto; max-width: 100%; max-height: 100%;
+  object-fit: contain; border: 0; border-radius: 10px;
+  box-shadow: 0 12px 32px #00000020;
+}
+.how .full .screenshot-stage { height: auto; padding: clamp(1rem, 4vw, 3rem); }
+.how .full .screenshot-stage img { width: 100%; max-height: none; }
+.how .app-shot figcaption {
+  max-width: none; margin: 0; padding: 1.4rem 1.65rem 1.65rem;
+  border-top: 1px solid var(--line); text-align: left; font-size: .9rem; line-height: 1.65;
+}
+.how .app-shot figcaption strong { display: block; margin-bottom: .3rem; font-size: 1.05rem; font-weight: 600; letter-spacing: -.015em; }
+.expand-shot {
+  position: absolute; right: .8rem; top: .8rem; display: grid; place-items: center;
+  width: 2rem; height: 2rem; border: 1px solid var(--line); border-radius: 50%;
+  background: var(--bg); color: var(--muted); font-size: 1rem;
+}
+.screenshot-stage:hover { text-decoration: none; }
+.screenshot-stage:hover .expand-shot { color: var(--accent); border-color: var(--accent); }
+.screenshot-stage:focus-visible { outline: 3px solid var(--accent); outline-offset: -4px; }
+@media (max-width: 40rem) {
+  .how { padding: 0; }
+  .app-gallery { grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+  .screenshot-stage { height: auto; min-height: 16rem; padding: 2rem 1.25rem; }
+  .how .screenshot-stage img { max-width: 100%; margin: 0; }
+  .how .shot-1 img { max-height: 25rem; }
+  .how .app-shot figcaption { padding: 1.1rem 1.25rem 1.25rem; }
+}
+
 /* Collapsed under the download: most visitors own their Mac, and the ones who
    don't need three sentences, not a page. */
 details.mdm {
