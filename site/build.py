@@ -48,6 +48,7 @@ GUIDE_SECTIONS = [
     ("Start here", [
         ("index", "Getting started"),
         ("install", "Installing"),
+        ("automatic-meeting-transcription", "Automatic meeting transcription"),
     ]),
     ("Recording", [
         ("recording", "Recording"),
@@ -263,6 +264,8 @@ def page(title: str, body: str, *, nav: str = "", cls: str = "", url_path: str =
     social_version = hashlib.sha256((ROOT / "site/social-card.png").read_bytes()).hexdigest()[:10]
     social_image = f"https://transcripts.doughatcher.com/social-card.png?v={social_version}"
     description = "Automatically record meetings on your Mac. Get rich transcripts, speaker names and summaries, all processed on device. With iPhone and iPad companions."
+    if url_path == "/guide/automatic-meeting-transcription/":
+        description = "Set up automatic meeting recording on a Mac, test both sides of a call, and save on-device transcripts, summaries and Markdown notes with Transcripts."
     open_body = '<article class="guide-body">' if cls == "guide" else ""
     close_body = "</article>" if cls == "guide" else ""
     return f"""<!doctype html>
@@ -336,6 +339,10 @@ def build():
     if images.exists():
         shutil.copytree(images, OUT / "guide" / "images")
 
+    media = ROOT / "site/media"
+    if media.exists():
+        shutil.copytree(media, OUT / "media")
+
     # Landing page. Version placeholders are filled from project.yml so the
     # download link and the badge always name the build that release.sh made.
     version = mac_version()
@@ -380,6 +387,9 @@ def build():
             print(f"  ! missing {src.relative_to(ROOT)}")
             continue
         body = md(src.read_text())
+        if slug == "automatic-meeting-transcription":
+            video = '<figure><video controls playsinline preload="none" poster="/media/transcripts-walkthrough.png" style="width:100%;border-radius:12px" aria-label="Transcripts workflow preview using sample screenshots"><source src="/media/transcripts-walkthrough.mp4" type="video/mp4"><a href="/media/transcripts-walkthrough.mp4">Download the walkthrough video</a></video><figcaption>28-second screenshot walkthrough. Sample meeting data; steps condensed, not a real-time recording. The written steps below cover setup.</figcaption></figure>'
+            body = body.replace('<h2', video + '<h2', 1)
         dest = OUT / "guide" / ("index.html" if slug == "index" else f"{slug}/index.html")
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(page(f"{title} — Transcripts guide", body,
@@ -396,6 +406,9 @@ def build():
         "/support    /guide/            301\n")
     print("  ✓ /privacy → /guide/privacy/")
 
+    paths = ["/"] + ["/guide/" + ("" if slug == "index" else slug + "/") for slug, _ in GUIDE_PAGES]
+    (OUT / "sitemap.xml").write_text('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + "".join("<url><loc>https://transcripts.doughatcher.com" + path + "</loc></url>" for path in paths) + "</urlset>\n")
+    (OUT / "robots.txt").write_text("User-agent: *\nAllow: /\nSitemap: https://transcripts.doughatcher.com/sitemap.xml\n")
     print(f"✓ built → {OUT.relative_to(ROOT)}")
 
 
