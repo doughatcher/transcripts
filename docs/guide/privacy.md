@@ -74,16 +74,31 @@ exists, and it downloads the speaker-diarization and on-device language models
 once from Hugging Face. If you point it at a local Ollama server, that traffic
 never leaves your machine.
 
-This website counts visits using Cloudflare Web Analytics, which measures page
-views, referrers and rough location **without cookies** and without building a
-profile of you. There is no advertising network involved, nothing is shared with
-Google, and there is nothing here to opt out of because nothing follows you
-anywhere.
+The website uses **Google Analytics only if you choose Allow analytics**. Until
+then, the site does not load Google's analytics script or send analytics requests.
+No thanks leaves analytics off. You can change your choice using **Analytics
+choices** in the footer. We also honor your browser's Global Privacy Control signal.
+
+If you opt in, Google receives website usage information such as page views,
+download-button clicks, browser/device information and a referrer domain. This
+helps us understand how people find Transcripts and which download they choose.
+Google receives the network requests, including your IP address; this is not an
+anonymous or entirely local website feature. See [Google's privacy information](https://policies.google.com/technologies/partner-sites).
+
+We use a dedicated Transcripts Google Analytics property. Advertising personalization and
+Google signals are disabled in the website tag. We omit URL query strings and
+fragments from the page address we send. Analytics cookies are limited to this
+website's hostname and expire after 90 days. Your analytics choice is remembered
+on this browser for 180 days. Withdrawing consent removes this site's GA cookies
+and stops future collection; it does not remove data already sent to Google.
+
+**No recordings, transcripts or app usage are sent to Google Analytics.** This
+website measurement is separate from the Mac, iPhone and iPad apps.
 
 ## Children
 
-Transcripts is not directed at children and collects no data from anyone,
-including children.
+The Transcripts apps are not directed at children and do not collect their data.
+The optional website analytics described above apply to website visitors.
 
 ## Credits
 

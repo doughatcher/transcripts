@@ -241,24 +241,8 @@ def inline(s: str) -> str:
 
 # --- Shell -------------------------------------------------------------------
 
-# Analytics: Cloudflare Web Analytics, not Google.
-#
-# It answers the actual question — who is looking, where from, which pages —
-# without cookies, which means no consent banner and no asterisk beside a
-# product sold on not tracking anyone. GTM was here briefly and did the same job
-# with a cookie obligation attached.
-#
-# The usual way to turn this on is the Pages dashboard (project ▸ Settings ▸ Web
-# Analytics ▸ Enable), which injects the beacon at the edge and needs no code at
-# all — leave BEACON_TOKEN empty for that. Set it only to pin the beacon in the
-# markup instead, e.g. to serve the same build from somewhere other than Pages.
-BEACON_TOKEN = ""
-
-ANALYTICS = (
-    f"""<script defer src="https://static.cloudflareinsights.com/beacon.min.js"
- data-cf-beacon='{{"token": "{BEACON_TOKEN}"}}'></script>"""
-    if BEACON_TOKEN else ""
-)
+# GA4 is loaded only after website analytics consent, independently of the apps.
+ANALYTICS = '<script defer src="/analytics.js?v=' + hashlib.sha256((ROOT / "site/analytics.js").read_bytes()).hexdigest()[:10] + '"></script>'
 
 
 # Content hash of the stylesheet, appended to its URL.
@@ -317,8 +301,15 @@ def page(title: str, body: str, *, nav: str = "", cls: str = "", url_path: str =
 <footer>
   <p>Transcripts is made by <a href="https://doughatcher.com">Doug Hatcher</a>.
      <a href="/guide/privacy/">Privacy</a> ·
+     <button type="button" id="analytics-settings" class="analytics-settings" hidden>Analytics choices</button> ·
      <a href="https://github.com/doughatcher/transcripts-support/issues">Report an issue</a></p>
 </footer>
+<section id="analytics-choice" class="analytics-choice" role="dialog" aria-labelledby="analytics-title" aria-describedby="analytics-description" hidden>
+  <h2 id="analytics-title">Help us understand website visits?</h2>
+  <p id="analytics-description">With your permission, Google Analytics measures page views and download clicks using cookies. This is only for the website; your recordings and transcripts aren't sent to Google. <a href="/guide/privacy/#this-website">Privacy details</a>.</p>
+  <p id="analytics-browser-choice" hidden>Your browser's privacy preference keeps analytics off.</p>
+  <div class="analytics-actions"><button type="button" id="analytics-decline">No thanks</button><button type="button" id="analytics-allow">Allow analytics</button></div>
+</section>
 </body>
 </html>
 """
@@ -335,6 +326,7 @@ def build():
     (OUT / "guide").mkdir(parents=True)
 
     # Assets
+    shutil.copy(ROOT / "site/analytics.js", OUT / "analytics.js")
     shutil.copy(ROOT / "site/social-card.png", OUT / "social-card.png")
     shutil.copy(ROOT / "site" / "style.css", OUT / "style.css")
     icon = ROOT / "Sources/Transcripts/Assets.xcassets/AppIcon.appiconset/icon-1024.png"
