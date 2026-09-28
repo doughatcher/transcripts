@@ -315,6 +315,14 @@ jobs:
           xcrun altool --upload-app -f "$RUNNER_TEMP/export/Transcripts.ipa" -t ios \
             --apiKey ${{ secrets.ASC_KEY_ID }} --apiIssuer ${{ secrets.ASC_ISSUER_ID }}
 
+      - name: Distribute to Early Access after processing
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
+          python3 scripts/testflight-sync.py --platform IOS --build "${{ steps.build.outputs.number }}" --wait 1200
+
       - name: Keep the IPA
         if: always()
         uses: actions/upload-artifact@v4
