@@ -91,18 +91,69 @@ public final class HistoryStore {
         return d
     }
 
-    private let url = HistoryStore.dir.appendingPathComponent("history.json")
+    private let url: URL
     public private(set) var records: [RecordingRecord] = []
 
-    public init() { load() }
+    public convenience init() { self.init(directory: HistoryStore.dir) }
+
+    /// An explicit directory, for tests and for tools that operate on another
+    /// edition's history without adopting its support directory.
+    public init(directory: URL) {
+        url = directory.appendingPathComponent("history.json")
+        load()
+    }
 
     public func load() {
-        guard let data = try? Data(contentsOf: url),
-              let decoded = try? JSONDecoder.iso.decode([RecordingRecord].self, from: data) else {
+        guard let data = try? Data(contentsOf: url), !data.isEmpty else {
             records = []
             return
         }
+        // Not one decode of the whole array: a single record this build cannot
+        // read — a status case added later, a hand-edit, a truncated write —
+        // must cost that record, not all of them. The store edition once opened
+        // a migrated history this way, kept none of its 22 records, and then
+        // saved over the file, which is why the failures below also preserve
+        // the original before any save can happen.
+        let (decoded, dropped) = Self.decodeRecords(from: data)
+        if dropped > 0 {
+            preserveUnreadable(data)
+            Log.write("history: loaded \(decoded.count) record(s), " +
+                      "could not decode \(dropped) — original preserved")
+        }
         records = decoded.sorted { $0.recordedAt > $1.recordedAt }
+    }
+
+    /// Decodes as many records as the data yields: the whole-array fast path
+    /// first, then record by record. `dropped` counts what didn't decode.
+    public static func decodeRecords(from data: Data) -> (records: [RecordingRecord], dropped: Int) {
+        if let decoded = try? JSONDecoder.iso.decode([RecordingRecord].self, from: data) {
+            return (decoded, 0)
+        }
+        guard let array = (try? JSONSerialization.jsonObject(with: data)) as? [Any] else {
+            // Not even an array: nothing salvageable, but very much a failure.
+            return ([], 1)
+        }
+        var out: [RecordingRecord] = []
+        var dropped = 0
+        for element in array {
+            guard element is [String: Any],
+                  let fragment = try? JSONSerialization.data(withJSONObject: element),
+                  let record = try? JSONDecoder.iso.decode(RecordingRecord.self, from: fragment) else {
+                dropped += 1
+                continue
+            }
+            out.append(record)
+        }
+        return (out, dropped)
+    }
+
+    /// Keeps the bytes a load couldn't fully read beside the file, once — the
+    /// first failure is the interesting one, and the next save would otherwise
+    /// be the last anyone saw of them.
+    private func preserveUnreadable(_ data: Data) {
+        let keep = url.appendingPathExtension("rejected")
+        guard !FileManager.default.fileExists(atPath: keep.path) else { return }
+        try? data.write(to: keep, options: .atomic)
     }
 
     public func record(_ id: UUID) -> RecordingRecord? { records.first { $0.id == id } }

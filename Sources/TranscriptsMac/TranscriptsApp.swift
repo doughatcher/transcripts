@@ -1,6 +1,16 @@
 import SwiftUI
 
 @main
+enum Main {
+    static func main() {
+        // The export/import subcommands run headless and exit, under the same
+        // rule as the probes below: nothing on this path may boot the
+        // controller. They are checked before SwiftUI is even entered.
+        if CommandLineTool.run() { return }
+        TranscriptsApp.main()
+    }
+}
+
 struct TranscriptsApp: App {
     // The menu bar is a real NSStatusItem owned by the delegate (see StatusBarController)
     // so the icon can pulse with the live input level — SwiftUI's MenuBarExtra can't.

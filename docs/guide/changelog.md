@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+**Mac**
+
+- Moving between the two Mac editions is now the app's own job: Settings ▸
+  Sorting ▸ "Import from another copy of Transcripts…" brings the recordings
+  list and remembered voices over, and the binary gained `export` / `import`
+  subcommands so the same move can be scripted or piped between editions.
+  Importing never replaces anything already there.
+- A `history.json` the app cannot fully read now costs only the records that
+  don't decode, not all of them — and the untouched original is preserved
+  beside the file as `history.json.rejected` before anything is saved over it.
+  Previously a single unreadable record silently emptied the whole list.
+
 ## 1.1.2
 
 **Mac**

@@ -64,6 +64,7 @@ GUIDE_SECTIONS = [
     ]),
     ("Going further", [
         ("worked-example", "A worked example"),
+        ("migrating", "Moving your data"),
     ]),
     ("About", [
         ("privacy", "Privacy"),

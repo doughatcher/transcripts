@@ -51,5 +51,6 @@ let package = Package(
             ]
         ),
         .testTarget(name: "TranscriptsCoreTests", dependencies: ["TranscriptsCore"]),
+        .testTarget(name: "TranscriptsEngineTests", dependencies: ["TranscriptsEngine"]),
     ]
 )

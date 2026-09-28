@@ -1787,6 +1787,15 @@ final class AppController: ObservableObject {
     // MARK: - History & recovery
 
     /// Rebuilds the visible lists from the durable history store.
+    /// Settings' "Import from another copy" — merges that copy's history and
+    /// remembered voices into this one (see Migration for what moves and why
+    /// nothing is ever overwritten). Returns the summary the pane shows.
+    func importState(fromSupportDir dir: URL) -> String {
+        let summary = Migration.apply(Migration.read(supportDir: dir), history: history)
+        refreshRecents()
+        return summary.description
+    }
+
     private func refreshRecents() {
         allRecents = history.records.map { r in
             let audioExists = r.audioURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false

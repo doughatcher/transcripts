@@ -40,6 +40,7 @@ struct SettingsView: View {
     @State private var connectedInputs: [AudioInputDevice] = []
     @State private var resolvedInput: AudioInputDevice?
     @State private var launchAtLogin = false
+    @State private var importSummary: String?
 
     /// Off the render path deliberately — this is the call that may write config.
     private func refreshDeviceState() {
@@ -533,6 +534,28 @@ struct SettingsView: View {
                     TextField("Ollama model", text: binding(\.ollama.model))
                 }
                 Text("Transcription is always on-device (Apple Speech). No Whisper or model download needed.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+
+            Section("Moving in") {
+                Button("Import from another copy of Transcripts…") {
+                    // The panel is aimed at the direct download's data folder —
+                    // the usual direction is into the store build — and doubles
+                    // as the sandbox's permission to read whatever is picked.
+                    if let picked = Self.chooseFolder(
+                        title: "Choose the other copy's data folder",
+                        startingAt: URL(fileURLWithPath: Locations.userHome +
+                                        "/Library/Application Support/Transcripts"),
+                        message: "This is where the other copy keeps its recordings list and remembered voices — usually Library ▸ Application Support ▸ Transcripts in your home folder.") {
+                        let summary = controller.importState(
+                            fromSupportDir: URL(fileURLWithPath: picked))
+                        importSummary = summary
+                    }
+                }
+                if let importSummary {
+                    Text(importSummary).font(.caption).foregroundStyle(.secondary)
+                }
+                Text("Brings the recordings list and remembered voices over from the direct-download edition, or any other copy. Nothing already here is replaced, and the transcripts themselves stay where they are — point both copies at the same library folder above.")
                     .font(.caption2).foregroundStyle(.secondary)
             }
         }
