@@ -74,9 +74,16 @@ exists, and it downloads the speaker-diarization and on-device language models
 once from Hugging Face. If you point it at a local Ollama server, that traffic
 never leaves your machine.
 
-The website uses **Google Analytics only if you choose Allow analytics**. Until
+The website uses **Cloudflare Web Analytics** for page-view and performance
+metrics. Its browser script runs independently of the Google Analytics choice
+below and does not use analytics cookies or track people across websites.
+It measures the website, not your recordings, transcripts or activity in the
+Transcripts apps. Browser blocking can prevent measurement. See
+[Cloudflare’s description of its data collection](https://developers.cloudflare.com/web-analytics/data-metrics/data-origin-and-collection/).
+
+The website also uses **Google Analytics only if you choose Allow analytics**. Until
 then, the site does not load Google's analytics script or send analytics requests.
-No thanks leaves analytics off. You can change your choice using **Analytics
+No thanks leaves Google Analytics off. You can change your choice using **Analytics
 choices** in the footer. We also honor your browser's Global Privacy Control signal.
 
 If you opt in, Google receives website usage information such as page views,
@@ -98,7 +105,7 @@ website measurement is separate from the Mac, iPhone and iPad apps.
 ## Children
 
 The Transcripts apps are not directed at children and do not collect their data.
-The optional website analytics described above apply to website visitors.
+The website analytics described above apply to website visitors.
 
 ## Credits
 
