@@ -128,6 +128,30 @@ main { padding: 0 1.5rem; }
    used to show three Settings panes, which is the least informative thing an
    app can show someone who has never used it. Tall menu shots and wide desktop
    shots share one column so the eye reads down, not across. */
+/* The demo video: a poster that becomes the player on request (see the
+   inline script). aspect-ratio holds the box through the swap, so nothing
+   below it moves when the iframe arrives. */
+.demo { max-width: 52rem; margin: 4rem auto; padding: 0 1rem; }
+.demo h2 { text-align: center; font-size: 1.6rem; letter-spacing: -.02em; margin: 0 0 2rem; }
+.demo-video { margin: 0; }
+.demo-video .demo-poster, .demo-video iframe {
+  display: block; width: 100%; aspect-ratio: 16 / 9;
+  border: 1px solid var(--line); border-radius: 12px;
+}
+.demo-video .demo-poster { position: relative; padding: 0; cursor: pointer; background: #0d0a14; overflow: hidden; }
+.demo-video .demo-poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.demo-play {
+  position: absolute; inset: 0; margin: auto; width: 4.5rem; height: 4.5rem;
+  display: grid; place-items: center; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .45);
+  transition: transform .15s ease;
+}
+.demo-video .demo-poster:hover .demo-play, .demo-video .demo-poster:focus-visible .demo-play { transform: scale(1.08); }
+.demo-video .demo-poster:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+.demo-video iframe { border: 0; }
+.demo-video figcaption { color: var(--muted); font-size: 1rem; line-height: 1.5; margin: 1rem auto 0; max-width: 34rem; text-align: center; }
+
 .how { max-width: 62rem; margin: 4rem auto; padding: 0 1rem; }
 .how h2 { text-align: center; font-size: 1.6rem; letter-spacing: -.02em; margin: 0 0 2rem; }
 .how figure {

@@ -52,6 +52,25 @@
   </details>
 </section>
 
+<section class="demo" aria-labelledby="demo-h">
+  <h2 id="demo-h">Watch the demo</h2>
+  <!-- A poster and a button, not an <iframe>: the page makes no request to
+       YouTube until someone chooses to play. The iframe (youtube-nocookie.com)
+       is injected on click, so a visitor who never plays it is never seen by
+       Google — which is the only way a hosted video belongs on a page whose
+       headline says "entirely on device". -->
+  <figure class="demo-video">
+    <button class="demo-poster" type="button" data-video="vg5f4z50FEo"
+            aria-label="Play the demo video (loads YouTube)">
+      <img src="/media/demo-poster.jpg" alt="" loading="lazy" width="2560" height="1440">
+      <span class="demo-play" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg></span>
+    </button>
+    <figcaption>Six minutes: automatic recording from the menu bar, the live
+    overlay, the on-device pipeline, and the iPhone app. Playing the video
+    loads it from YouTube.</figcaption>
+  </figure>
+</section>
+
 <section class="claims">
   <div class="claim">
     <h3>Readable while it's still happening</h3>
@@ -176,6 +195,22 @@
 </section>
 
 <script>
+// The demo video: swap the poster for the player only when asked. The iframe
+// carries allow=autoplay and ?autoplay=1 so the click that loaded it also
+// starts it — without that, the visitor presses play twice.
+(function () {
+  const b = document.querySelector('.demo-poster');
+  if (!b) return;
+  b.addEventListener('click', function () {
+    const f = document.createElement('iframe');
+    f.src = 'https://www.youtube-nocookie.com/embed/' + b.dataset.video + '?autoplay=1&rel=0';
+    f.title = 'Transcripts demo video';
+    f.allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture';
+    f.allowFullscreen = true;
+    b.replaceWith(f);
+  }, { once: true });
+})();
+
 // An ambient waveform behind the hero. It is meant to read as the product
 // rather than as decoration: the app's whole subject is speech arriving over
 // time, so the wave travels left to right and its amplitude is the sum of a few
