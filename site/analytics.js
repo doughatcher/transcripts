@@ -86,7 +86,7 @@
     if (!link) return;
     const url = new URL(link.href, location.href);
     let destination;
-    if (url.hostname === 'apps.apple.com' && url.pathname.includes('6802331047')) destination = url.searchParams.get('platform') === 'mac' ? 'mac_app_store' : 'ios_app_store';
+    if (url.hostname === 'apps.apple.com' && url.pathname.includes('6802331047')) destination = url.searchParams.get('platform') === 'mac' ? 'mac_app_store' : url.searchParams.get('platform') === 'iphone' ? 'ios_app_store' : 'app_store';
     else if (url.origin === location.origin && /\/Transcripts-[^/]+\.(dmg|zip)$/.test(url.pathname)) destination = 'mac_direct';
     if (destination) window.gtag('event', 'download_click', {destination});
   });

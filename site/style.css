@@ -90,10 +90,10 @@ main { padding: 0 1.5rem; }
 .hero .mark { display: block; width: 96px; height: 96px; border-radius: 22px; margin: 0 auto 1.5rem; }
 
 .downloads { max-width: 34rem; margin: 0 auto; scroll-margin-top: 6rem; }
-.store-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+.store-buttons { max-width: 21rem; margin: 0 auto; }
 .store-button {
   --store-bg: #654cda;
-  display: flex; align-items: center; gap: .85rem; padding: .95rem 1.15rem;
+  display: flex; align-items: center; justify-content: center; gap: .85rem; padding: .95rem 1.15rem;
   border: 1px solid #8069ed; border-radius: 14px;
   background: var(--store-bg); color: #fff; text-align: left;
   box-shadow: 0 4px 16px #00000012;
@@ -110,10 +110,6 @@ main { padding: 0 1.5rem; }
 .homebrew summary { cursor: pointer; padding: .5rem; }
 .homebrew code { display: inline-block; max-width: 100%; margin: .4rem 0; overflow-wrap: anywhere; }
 .downloads a:focus-visible, .homebrew summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
-@media (max-width: 34rem) {
-  .store-buttons { grid-template-columns: 1fr; max-width: 20rem; margin: 0 auto; }
-  .store-button { justify-content: flex-start; padding-left: 2rem; }
-}
 .early-access {
   display: inline-block; margin-bottom: 1.25rem; padding: .3rem .7rem;
   border: 1px solid var(--line); border-radius: 999px;
