@@ -2400,10 +2400,29 @@ final class AppController: ObservableObject {
         openDocument(atPath: url.path)
     }
 
+    /// Opens a document with the system default app — unless that default is
+    /// Xcode, which registers itself for Markdown on every Mac that has it
+    /// installed. Nobody chose an IDE to read meeting notes in; it is merely
+    /// what claimed `.md` last. TextEdit ships with every macOS, so it takes
+    /// over for exactly that case — while a default somebody actually picked
+    /// (Obsidian, iA Writer, VS Code set by hand…) is respected as-is.
+    private func openWithDefaultViewer(_ url: URL) {
+        if let handler = NSWorkspace.shared.urlForApplication(toOpen: url),
+           Bundle(url: handler)?.bundleIdentifier == "com.apple.dt.Xcode",
+           let textEdit = NSWorkspace.shared
+               .urlForApplication(withBundleIdentifier: "com.apple.TextEdit") {
+            Log.write("open: default for \(url.lastPathComponent) is Xcode — using TextEdit")
+            NSWorkspace.shared.open([url], withApplicationAt: textEdit,
+                                    configuration: NSWorkspace.OpenConfiguration())
+            return
+        }
+        NSWorkspace.shared.open(url)
+    }
+
     private func openDocument(atPath path: String) {
         let template = (config.openCommand ?? "").trimmingCharacters(in: .whitespaces)
         guard !template.isEmpty else {
-            NSWorkspace.shared.open(URL(fileURLWithPath: path))
+            openWithDefaultViewer(URL(fileURLWithPath: path))
             return
         }
         // obsidian://open resolves a path only if it sits inside a registered
@@ -2414,7 +2433,7 @@ final class AppController: ObservableObject {
         // file normally instead of handing the user an error sheet.
         if template.contains("obsidian://"), Self.obsidianVaultRoot(containing: path) == nil {
             Log.write("open: not inside an Obsidian vault — opening '\(path)' with the default app")
-            NSWorkspace.shared.open(URL(fileURLWithPath: path))
+            openWithDefaultViewer(URL(fileURLWithPath: path))
             return
         }
         // Placeholders supply their own quoting (defaults quote them), so substitute
@@ -2433,7 +2452,7 @@ final class AppController: ObservableObject {
             Log.write("open: \(url.absoluteString)")
             NSWorkspace.shared.open(url)
         } else {
-            NSWorkspace.shared.open(URL(fileURLWithPath: path))
+            openWithDefaultViewer(URL(fileURLWithPath: path))
         }
         #else
         let cmd: String

@@ -13,6 +13,9 @@
   don't decode, not all of them — and the untouched original is preserved
   beside the file as `history.json.rejected` before anything is saved over it.
   Previously a single unreadable record silently emptied the whole list.
+- On Macs where installing Xcode made it the Markdown handler, transcripts
+  open in TextEdit instead of an IDE. A default you set yourself — Obsidian,
+  iA Writer, anything — is respected exactly as before.
 
 ## 1.1.2
 
