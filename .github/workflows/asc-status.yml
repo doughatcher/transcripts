@@ -299,12 +299,17 @@ jobs:
       # REJECTED on 2026-09-15, every scheduled run would have failed every
       # morning — the same cried-wolf failure this step was written to avoid,
       # only self-inflicted.
+      #
+      # It happened anyway: 1.1.x was approved on 2026-09-27 (iOS and Mac) and
+      # every scheduled run from 09-27 to 09-30 failed on a change that was
+      # good news. Parked state is now READY_FOR_SALE, so the next alert is a
+      # new version entering review, or a live version being pulled.
       - name: Watch for a state change
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           BUNDLE_ID: ${{ inputs.bundle_id || 'ltd.hatcher.transcripts' }}
-          WATCH_FOR: WAITING_FOR_REVIEW
+          WATCH_FOR: READY_FOR_SALE
         run: |
           export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
           asc() { python3 scripts/asc.py "$1" 2>/dev/null || echo '{}'; }

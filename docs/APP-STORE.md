@@ -124,8 +124,9 @@ those separately.)*
 > out of the queue and restart the clock. 1.0.6 was submitted 2026-08-30 and
 > came back REJECTED on 2026-09-14 (guideline 5: CallKit linked while China is
 > listed; CallKit was removed in 757bd76). 1.1.0 (build 19) was resubmitted
-> 2026-09-22 and is queued, so leave these alone until it clears review. The old
-> host keeps serving.
+> 2026-09-22 and approved 2026-09-27 on iOS and Mac; 1.1.2 went live on iOS
+> 2026-09-28. The rule still applies to every future submission while it is
+> queued. The old host keeps serving.
 
 **Support URL:** `https://transcripts.doughatcher.com` *(was `transcripts.hatcher.ltd`
 — both hostnames must serve, see below)*
