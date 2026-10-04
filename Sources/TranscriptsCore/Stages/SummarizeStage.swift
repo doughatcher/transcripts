@@ -91,12 +91,13 @@ public struct SummarizeStage: PipelineStage {
     // MARK: - Summarization
 
     /// Character budget for a single prompt. Apple's on-device FoundationModels has
-    /// a ~4,096-token context window (instructions + prompt + response); at roughly
-    /// 4 chars/token, ~12k chars of transcript leaves headroom for the system prompt
-    /// and the generated summary. Anything longer used to throw
-    /// `exceededContextWindowSize`, silently dropping the whole chain down to the
-    /// extractive fallback — which is why long meetings got first-words titles.
-    static let promptCharBudget = 12_000
+    /// a ~4,096-token context window (instructions + prompt + response). 12k chars
+    /// assumed 4 chars/token and left no real margin: conversational transcripts
+    /// tokenize denser than that, the condense calls overflowed the window, and the
+    /// cascade quietly handed a 77-minute interview to the 3B MLX fallback — which
+    /// answered with a refusal instead of a summary (2026-10-04). 9k chars keeps
+    /// every call inside the window with room for the system prompt and response.
+    static let promptCharBudget = 9_000
 
     static let summarySystemPrompt = """
     You summarize the transcript of a conversation — a meeting, an interview, a

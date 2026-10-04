@@ -84,6 +84,33 @@ struct CrossChannelEchoTests {
     }
 }
 
+/// Over-clustered call tracks: artifact voices holding seconds of speech fold
+/// into the dominant far-side cluster; real voices and named ones never move.
+struct FoldMinorClustersTests {
+    private func span(_ s: String, _ start: Double, _ end: Double) -> SpeakerSpan {
+        SpeakerSpan(speaker: s, start: start, end: end)
+    }
+
+    @Test func artifactClustersFoldIntoTheDominantVoice() {
+        let spans = [span("1", 0, 2000), span("2", 100, 103), span("3", 200, 201.5)]
+        let folded = SpeakerTurns.foldMinorClusters(spans)
+        #expect(Set(folded.map(\.speaker)) == ["1"])
+        #expect(folded.count == 3)
+    }
+
+    @Test func aRealSecondVoiceIsKept() {
+        let spans = [span("1", 0, 2000), span("2", 100, 400)]
+        let folded = SpeakerTurns.foldMinorClusters(spans)
+        #expect(Set(folded.map(\.speaker)) == ["1", "2"])
+    }
+
+    @Test func namedVoicesAreNeverFolded() {
+        let spans = [span("1", 0, 2000), span("Tracy", 100, 102)]
+        let folded = SpeakerTurns.foldMinorClusters(spans)
+        #expect(folded.contains { $0.speaker == "Tracy" })
+    }
+}
+
 /// Long-transcript summarization must reduce oversized notes with further model
 /// passes, never by cutting them off — the title is derived from the whole
 /// conversation or not at all.

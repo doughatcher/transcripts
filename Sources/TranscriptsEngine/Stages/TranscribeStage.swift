@@ -328,11 +328,14 @@ public struct TranscribeStage: PipelineStage {
             if let diarizer, !theirs.isEmpty {
                 do {
                     let outcome = try await diarizer.diarize(track: sysURL, enrollSelfFrom: micURL)
+                    // Phone-quality call audio over-clusters; collapse the
+                    // few-second artifact voices before they become speakers.
+                    let folded = SpeakerTurns.foldMinorClusters(outcome.spans)
                     // Named voices (from our matcher) pass through; anonymous
                     // clusters become "Speaker N". Re-key embeddings/confidence to
                     // the display labels so downstream speaks the same language.
-                    let map = SpeakerTurns.labelMap(outcome.spans)
-                    spans = SpeakerTurns.renumber(outcome.spans)
+                    let map = SpeakerTurns.labelMap(folded)
+                    spans = SpeakerTurns.renumber(folded)
                     for (id, emb) in outcome.embeddings { embeddings[map[id] ?? id] = emb }
                     for (id, c) in outcome.confidence { confidence[map[id] ?? id] = c }
                     for (id, a) in outcome.affiliations { affiliations[map[id] ?? id] = a }

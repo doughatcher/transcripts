@@ -157,6 +157,31 @@ public enum SpeakerTurns {
 
     /// Labels each transcribed segment with the diarized speaker whose span
     /// overlaps it the most; `fallback` when nothing overlaps (or no spans at all).
+    /// Folds trivial anonymous diarization clusters into the dominant one.
+    ///
+    /// A phone-quality call track over-clusters: 77 minutes of one father came
+    /// back as four voices, three of them holding a couple of seconds each —
+    /// echo tails and line noise, not people. Any anonymous cluster with less
+    /// speech than `minSeconds` (or `minShare` of all diarized speech,
+    /// whichever is larger) is relabeled as the biggest anonymous cluster.
+    /// Named voices are never touched, and this is for call tracks only: at a
+    /// room table a nearly-silent guest is a real person, not an artifact.
+    public static func foldMinorClusters(_ spans: [SpeakerSpan],
+                                         minSeconds: Double = 10,
+                                         minShare: Double = 0.01) -> [SpeakerSpan] {
+        var totals: [String: Double] = [:]
+        for s in spans { totals[s.speaker, default: 0] += max(0, s.end - s.start) }
+        let anonymous = totals.filter { isAnonymousLabel($0.key) }
+        guard let dominant = anonymous.max(by: { $0.value < $1.value })?.key else { return spans }
+        let floor = max(minSeconds, totals.values.reduce(0, +) * minShare)
+        let minor = Set(anonymous.filter { $0.key != dominant && $0.value < floor }.map(\.key))
+        guard !minor.isEmpty else { return spans }
+        return spans.map {
+            minor.contains($0.speaker)
+                ? SpeakerSpan(speaker: dominant, start: $0.start, end: $0.end) : $0
+        }
+    }
+
     /// Removes cross-channel echo from a two-track call.
     ///
     /// When the call plays out loud near the Mac — speakerphone, an iPhone on
