@@ -19,6 +19,11 @@ enum MeetingDetector {
         ("com.cisco.webex", "Webex"),
         ("com.google.Chrome", "Google Meet (Chrome)"), // Meet runs in a browser
         ("com.apple.FaceTime", "FaceTime"),
+        ("com.apple.mobilephone", "Phone"),           // iPhone calls answered on the Mac (macOS 26+)
+        // Continuity calls: the FaceTime/Phone *UI* rarely holds the mic itself —
+        // these daemons do the audio IO, so CallDetector must match them too.
+        ("com.apple.avconferenced", "FaceTime call"),
+        ("com.apple.telephonyutilities", "iPhone call"), // callservicesd
         ("com.hnc.Discord", "Discord"),
         ("com.tinyspeck.slackmacgap", "Slack Huddle"),
         ("com.microsoft.SkypeForBusiness", "Skype for Business"),

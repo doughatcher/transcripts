@@ -11,7 +11,8 @@ thought you don't want to lose, or a conversation in the room.
 ## Recording calls
 
 Leave **Auto** on and Transcripts watches for calls. When you join a Teams, Zoom,
-Webex or Meet call and your microphone goes live, it starts recording — and it
+Webex, Meet, Slack huddle or Discord call and your microphone goes live, it
+starts recording — and it
 records **both sides**: your microphone and the audio of the call, as two
 separate tracks mixed into one file.
 

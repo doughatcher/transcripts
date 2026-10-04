@@ -93,7 +93,13 @@ struct LibraryView: View {
     private var detail: some View {
         if let id = controller.selectedRecordID,
            let item = controller.allRecents.first(where: { $0.id == id }) {
-            if let path = item.path {
+            if item.status == .recording, let live = controller.liveTranscriptURL {
+                // While this item is still recording, its document (if any) is a
+                // stale snapshot — show the live view, which refreshes as turns
+                // land. A static page here reads as "transcription is broken".
+                MarkdownViewerView(url: live, autoRefresh: true)
+                    .id(live)
+            } else if let path = item.path {
                 MarkdownViewerView(url: path)
                     .id(path)   // reload when selection changes
             } else {

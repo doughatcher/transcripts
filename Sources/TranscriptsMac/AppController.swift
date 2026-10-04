@@ -330,12 +330,51 @@ final class AppController: ObservableObject {
         if case .recording = state { return }
         // Meetings are handled precisely by CallDetector; skip them here so we don't
         // double-trigger. This path is for generic (non-meeting) mic auto-record.
-        if MeetingDetector.isMeetingAppRunning { return }
+        // The check is "a meeting app is capturing", not "a meeting app is running":
+        // Chrome and Slack are in the meeting list and are effectively always open,
+        // and a merely-running match here would disable generic auto-record for good.
+        if CallDetector.meetingAppUsingInput() != nil { return }
         if !config.autoRecordAppAllowlist.isEmpty {
             let active = ActiveAppProvider.current()
             guard let bid = active.bundleID, config.autoRecordAppAllowlist.contains(bid) else { return }
         }
         startRecording()
+        startGenericStopWatch()
+    }
+
+    /// Ends a mic-activation recording when whatever woke the mic lets it go.
+    /// `MicActivityWatcher`'s deactivation can't do this: once we record, our own
+    /// capture keeps the device "running somewhere" and the off transition never
+    /// comes — the recording that out-lives its cause and runs all afternoon.
+    /// So poll, process-level, for anyone else still capturing. Two consecutive
+    /// quiet polls to ride out brief route changes, same rhythm as CallDetector.
+    private var genericStopTimer: Timer?
+    private var genericOffStreak = 0
+
+    private func startGenericStopWatch() {
+        genericStopTimer?.invalidate()
+        genericOffStreak = 0
+        let t = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                guard case .recording = self.state, !self.recordingIsCall else {
+                    self.genericStopTimer?.invalidate(); self.genericStopTimer = nil
+                    return
+                }
+                if CallDetector.anyOtherProcessUsingInput() {
+                    self.genericOffStreak = 0
+                } else {
+                    self.genericOffStreak += 1
+                    if self.genericOffStreak >= 2 {
+                        self.genericStopTimer?.invalidate(); self.genericStopTimer = nil
+                        Log.write("mic released by every other app → stopping recording")
+                        self.stopRecordingAndProcess()
+                    }
+                }
+            }
+        }
+        RunLoop.main.add(t, forMode: .common)
+        genericStopTimer = t
     }
 
     private func handleMicDeactivation() {
@@ -2390,9 +2429,18 @@ final class AppController: ObservableObject {
         return FileManager.default.fileExists(atPath: local.path) ? local : nil
     }
 
-    /// Opens the live transcript in the configured viewer — the "watch the call
-    /// transcribe itself" button.
+    /// Opens the live transcript in the app's own viewer — the "watch the call
+    /// transcribe itself" button. The Recordings window's live view refreshes as
+    /// turns land; an external default like TextEdit shows the file once and
+    /// never updates, which reads as "live transcription is broken". A viewer
+    /// the user picked themselves (Obsidian et al., via openCommand) does
+    /// follow the file, so an explicit choice is still respected.
     func openLiveTranscript() {
+        let hasCustomViewer = !(config.openCommand ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+        if !hasCustomViewer {
+            openRecordings(currentRecordID)
+            return
+        }
         guard let url = liveTranscriptURL else {
             lastError = "No live transcript yet — it appears a few seconds into a recording."
             return

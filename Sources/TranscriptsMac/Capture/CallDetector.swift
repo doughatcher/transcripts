@@ -73,6 +73,29 @@ final class CallDetector {
         return uids
     }
 
+    /// True when any process other than Transcripts itself is capturing input.
+    /// The device-level "is running somewhere" signal can't end a generic
+    /// auto-recording — our own capture keeps it true forever — so the stop
+    /// side has to ask process-by-process, the way call detection does.
+    static func anyOtherProcessUsingInput() -> Bool {
+        let me = ProcessInfo.processInfo.processIdentifier
+        for proc in processObjects() where isRunningInput(proc) {
+            if processPID(proc) != me { return true }
+        }
+        return false
+    }
+
+    private static func processPID(_ proc: AudioObjectID) -> pid_t? {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioProcessPropertyPID,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var value: pid_t = -1
+        var size = UInt32(MemoryLayout<pid_t>.size)
+        guard AudioObjectGetPropertyData(proc, &addr, 0, nil, &size, &value) == noErr else { return nil }
+        return value
+    }
+
     // MARK: - CoreAudio process objects
 
     private static func processObjects() -> [AudioObjectID] {

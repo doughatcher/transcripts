@@ -38,8 +38,12 @@ recording can be missing one side even though its timer is running.
 
 In Settings, open **General** and choose the automatic recording behavior you
 want. Keep **Auto** enabled in the menu. Transcripts watches for supported Teams,
-Zoom, Webex and Google Meet calls. Detection depends on the call app and its
-microphone activity, so test the combination you actually use.
+Zoom, Webex, Google Meet, Slack huddle and Discord calls. Detection depends on
+the call app and its microphone activity, so test the combination you actually
+use. FaceTime and iPhone calls answered on the Mac are detected too, but macOS
+call privacy withholds their audio from every app other than the call itself —
+record those on your iPhone instead, and the recording lands in the same
+library.
 
 In ask-first mode, confirm the notification before recording begins. Automatic
 mode starts recording when the supported call is detected. Choose the behavior
