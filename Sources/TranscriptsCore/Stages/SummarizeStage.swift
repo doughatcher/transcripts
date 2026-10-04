@@ -99,8 +99,11 @@ public struct SummarizeStage: PipelineStage {
     static let promptCharBudget = 12_000
 
     static let summarySystemPrompt = """
-    You summarize a meeting transcript. Respond in Markdown with EXACTLY this shape:
-    First line: `TITLE: <3-7 word title>`
+    You summarize the transcript of a conversation — a meeting, an interview, a
+    phone call, or a voice note; match your summary to what it actually is, and
+    never force meeting language (decisions, agendas) onto something that isn't one.
+    Respond in Markdown with EXACTLY this shape:
+    First line: `TITLE: <3-7 word title naming the conversation's actual subject>`
     Then a blank line, then `**TL;DR:** <one sentence>`,
     then `**Key Points:**` as a short bullet list,
     then `**Action Items:**` as a bullet list (owner + task when stated, else `N/A`).
@@ -122,26 +125,39 @@ public struct SummarizeStage: PipelineStage {
             return try await model.chat(system: summarySystemPrompt, user: user, jsonFormat: false, maxTokens: 1024)
         }
 
-        let chunks = chunk(transcript, budget: promptCharBudget)
         let condenseSystem = """
-        You condense one part of a longer meeting transcript. Respond with 3-6 terse
-        Markdown bullets covering the topics discussed, decisions made, and any action
-        items (owner + task when stated). No preamble, no headings — bullets only.
+        You condense one part of a longer conversation transcript. Respond with 3-6
+        terse Markdown bullets covering the topics discussed, the stories or facts
+        related, and any decisions or action items (owner + task when stated). No
+        preamble, no headings — bullets only.
         Be faithful to the transcript; do not invent.
         """
-        var notes: [String] = []
-        for (i, part) in chunks.enumerated() {
-            let user = "TRANSCRIPT PART \(i + 1) OF \(chunks.count):\n\n\(part)\n\nWrite the bullets now."
-            let condensed = try await model.chat(system: condenseSystem, user: user, jsonFormat: false, maxTokens: 300)
-            notes.append(condensed.trimmingCharacters(in: .whitespacesAndNewlines))
+        func condense(_ text: String) async throws -> String {
+            let chunks = chunk(text, budget: promptCharBudget)
+            var notes: [String] = []
+            for (i, part) in chunks.enumerated() {
+                let user = "TRANSCRIPT PART \(i + 1) OF \(chunks.count):\n\n\(part)\n\nWrite the bullets now."
+                let condensed = try await model.chat(system: condenseSystem, user: user, jsonFormat: false, maxTokens: 300)
+                notes.append(condensed.trimmingCharacters(in: .whitespacesAndNewlines))
+            }
+            return notes.joined(separator: "\n")
         }
 
-        var combined = notes.joined(separator: "\n")
+        // Reduce until the notes fit: a 77-minute recording can produce more
+        // condensed notes than one prompt holds, and prefix-truncating them
+        // summarized whichever half survived — the title and summary then
+        // described a slice of the conversation as if it were the whole.
+        var combined = try await condense(transcript)
+        var rounds = 0
+        while combined.count > promptCharBudget, rounds < 3 {
+            combined = try await condense(combined)
+            rounds += 1
+        }
         if combined.count > promptCharBudget {
-            combined = String(combined.prefix(promptCharBudget))
+            combined = String(combined.prefix(promptCharBudget))  // last resort, should be unreachable
         }
         let user = """
-        CONDENSED NOTES FROM A MEETING (in chronological order):
+        CONDENSED NOTES FROM A CONVERSATION (in chronological order):
 
         \(combined)
 

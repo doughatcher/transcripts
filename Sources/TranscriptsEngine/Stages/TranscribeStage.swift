@@ -346,9 +346,19 @@ public struct TranscribeStage: PipelineStage {
             // assuming, because the protocol lets an engine be swapped underneath
             // this and the untimed default would otherwise stamp every turn 0:00.
             let timed = Self.isTimed(mine) || Self.isTimed(theirs)
-            let labeled = mine.map { AttributedSegment(speaker: "Me", start: $0.start, text: $0.text) }
-                + SpeakerTurns.assign(theirs, spans: spans, fallback: "Others")
-                    .map { AttributedSegment(speaker: $0.speaker, start: $0.start + offset, text: $0.text) }
+            let mineLabeled = mine.map { AttributedSegment(speaker: "Me", start: $0.start, text: $0.text) }
+            let theirsLabeled = SpeakerTurns.assign(theirs, spans: spans, fallback: "Others")
+                .map { AttributedSegment(speaker: $0.speaker, start: $0.start + offset, text: $0.text) }
+            // Speakerphone bleed: the same words on both tracks is one person
+            // heard twice, not two people — keep one copy per utterance.
+            let deduped = SpeakerTurns.dedupeCrossChannel(mine: mineLabeled, theirs: theirsLabeled,
+                                                          fallback: "Others")
+            let droppedMine = mineLabeled.count - deduped.mine.count
+            let droppedTheirs = theirsLabeled.count - deduped.theirs.count
+            if droppedMine + droppedTheirs > 0 {
+                Log.write("transcribe: cross-channel echo — dropped \(droppedMine) mic / \(droppedTheirs) system duplicate segment(s)")
+            }
+            let labeled = deduped.mine + deduped.theirs
             let turns = SpeakerTurns.turns(labeled)
             guard !turns.isEmpty else { return nil }
             Log.write("transcribe: attributed \(turns.count) turn(s) across \(SpeakerTurns.speakers(turns).count) speaker(s)")

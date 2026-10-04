@@ -157,6 +157,67 @@ public enum SpeakerTurns {
 
     /// Labels each transcribed segment with the diarized speaker whose span
     /// overlaps it the most; `fallback` when nothing overlaps (or no spans at all).
+    /// Removes cross-channel echo from a two-track call.
+    ///
+    /// When the call plays out loud near the Mac — speakerphone, an iPhone on
+    /// the desk — each voice lands on *both* tracks: the far side bleeds into
+    /// the microphone, and the near side echoes back through the call audio.
+    /// Transcribed independently, the same sentence then appears twice at the
+    /// same moment under two different speakers, and a two-person call reads
+    /// as six people interrupting each other (2026-10-04, the 77-minute
+    /// interview that shook this out).
+    ///
+    /// For each near-duplicate pair the copy backed by evidence survives:
+    /// a system-side copy that diarization assigned to a real voice beats the
+    /// mic's by-construction "Me" (it was them, bleeding in); a system-side
+    /// copy left on the fallback label — no diarized span stood behind it —
+    /// loses to "Me" (it was you, echoing back). Unison speech is the knowingly
+    /// accepted loss, and it costs one caption of "happy birthday".
+    public static func dedupeCrossChannel(
+        mine: [AttributedSegment], theirs: [AttributedSegment], fallback: String,
+        window: Double = 5
+    ) -> (mine: [AttributedSegment], theirs: [AttributedSegment]) {
+        var dropMine = Set<Int>()
+        var dropTheirs = Set<Int>()
+        // One echo is one pair: a segment that has already resolved a duplicate
+        // is out of the running, whichever side of it was dropped — otherwise a
+        // single system copy would eat every similar mic segment in the window.
+        var pairedTheirs = Set<Int>()
+        for (i, m) in mine.enumerated() {
+            for (j, t) in theirs.enumerated() where !pairedTheirs.contains(j) {
+                guard abs(m.start - t.start) <= window else { continue }
+                guard duplicateText(m.text, t.text, tight: abs(m.start - t.start) <= window / 2) else { continue }
+                pairedTheirs.insert(j)
+                if t.speaker == fallback { dropTheirs.insert(j) } else { dropMine.insert(i) }
+                break
+            }
+        }
+        return (mine.enumerated().filter { !dropMine.contains($0.offset) }.map(\.element),
+                theirs.enumerated().filter { !dropTheirs.contains($0.offset) }.map(\.element))
+    }
+
+    /// Whether two transcriptions are the same utterance heard twice. Long
+    /// texts tolerate engine-to-engine drift (token overlap); short ones —
+    /// "Yeah.", "Right." — are said by everybody constantly, so they only count
+    /// as echo when the words match exactly and the clocks nearly agree.
+    static func duplicateText(_ a: String, _ b: String, tight: Bool) -> Bool {
+        let na = normalizeForEcho(a), nb = normalizeForEcho(b)
+        guard !na.isEmpty, !nb.isEmpty else { return false }
+        let ta = Set(na.split(separator: " ")), tb = Set(nb.split(separator: " "))
+        if min(ta.count, tb.count) >= 4 {
+            let overlap = Double(ta.intersection(tb).count) / Double(ta.union(tb).count)
+            return overlap >= 0.75
+        }
+        return tight && na == nb
+    }
+
+    static func normalizeForEcho(_ text: String) -> String {
+        text.lowercased()
+            .replacingOccurrences(of: "[^a-z0-9 ]", with: "", options: .regularExpression)
+            .replacingOccurrences(of: " +", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+    }
+
     public static func assign(
         _ segments: [TranscriptSegment], spans: [SpeakerSpan], fallback: String
     ) -> [AttributedSegment] {
