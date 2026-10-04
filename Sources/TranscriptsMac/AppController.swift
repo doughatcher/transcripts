@@ -1841,7 +1841,12 @@ final class AppController: ObservableObject {
             return RecentItem(
                 id: r.id, title: r.title, destination: r.destination, when: r.recordedAt,
                 status: r.status, path: r.documentURL,
-                retryable: r.status == .failed && audioExists,
+                // Any finished recording with surviving audio can be reprocessed,
+                // not just failed ones: the pipeline improves (attribution,
+                // summarization), and rerunning it over kept audio is how an
+                // already-filed recording benefits. Recording/processing states
+                // are excluded by status, not by this flag.
+                retryable: r.status != .recording && r.status != .processing && audioExists,
                 isCall: r.isCall, callKey: r.callKey, isEmpty: r.isEmpty)
         }
         let limit = max(1, config.recentsLimit)
