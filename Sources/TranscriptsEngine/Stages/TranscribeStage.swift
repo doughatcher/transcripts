@@ -336,9 +336,12 @@ public struct TranscribeStage: PipelineStage {
                     // the display labels so downstream speaks the same language.
                     let map = SpeakerTurns.labelMap(folded)
                     spans = SpeakerTurns.renumber(folded)
-                    for (id, emb) in outcome.embeddings { embeddings[map[id] ?? id] = emb }
-                    for (id, c) in outcome.confidence { confidence[map[id] ?? id] = c }
-                    for (id, a) in outcome.affiliations { affiliations[map[id] ?? id] = a }
+                    // Only ids that survived the fold: a folded artifact's
+                    // embedding would otherwise reach the voice harvest as a
+                    // phantom speaker to name.
+                    for (id, emb) in outcome.embeddings { if let label = map[id] { embeddings[label] = emb } }
+                    for (id, c) in outcome.confidence { if let label = map[id] { confidence[label] = c } }
+                    for (id, a) in outcome.affiliations { if let label = map[id] { affiliations[label] = a } }
                 } catch {
                     Log.write("transcribe: diarization unavailable (\(error)) — labeling the other side as one voice")
                 }
