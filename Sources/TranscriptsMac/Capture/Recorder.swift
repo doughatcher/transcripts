@@ -36,6 +36,14 @@ final class Recorder {
     private var activeApp: ActiveAppContext?
     private var windowTitles: [String] = []
 
+    /// The format the CAF was opened with. Every tap buffer is delivered in this
+    /// format, through a converter when the device has moved on — so a mid-call
+    /// device reconfiguration never changes what the file or the live
+    /// transcriber sees.
+    private var fileFormat: AVAudioFormat?
+    private var configChangeObserver: (any NSObjectProtocol)?
+    private var rebuildPending: DispatchWorkItem?
+
     private let meter = NSLock()
     private var peak: Float = 0
     private var currentLevel: Float = 0
@@ -108,15 +116,11 @@ final class Recorder {
         // hot path (an encoder config error can stop the whole engine; LPCM can't
         // fail that way, and it's what makes the CAF readable mid-write).
         audioFile = try AVAudioFile(forWriting: url, settings: format.settings)
+        fileFormat = audioFile?.processingFormat
         peak = 0
         currentLevel = 0
 
-        input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
-            guard let self else { return }
-            self.measure(buffer)
-            if let file = self.audioFile { try? file.write(from: buffer) }
-            self.onBuffer?(buffer)
-        }
+        installTap(tapFormat: format)
 
         engine.prepare()
         do {
@@ -125,6 +129,22 @@ final class Recorder {
             input.removeTap(onBus: 0)
             audioFile = nil
             throw RecorderError.engineStart(error.localizedDescription)
+        }
+
+        // When a call app takes the mic in voice-processing mode (FaceTime
+        // dropping the device to its 3ch call format), the engine reconfigures
+        // and this tap stops receiving buffers — silently, no error, the track
+        // just turns to digital zero for the rest of the call. The notification
+        // is the only signal, and reconfiguration storms post it several times
+        // back-to-back, so rebuild once after a short quiet gap.
+        configChangeObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
+        ) { [weak self] _ in
+            guard let self, self.isRecording else { return }
+            self.rebuildPending?.cancel()
+            let work = DispatchWorkItem { [weak self] in self?.rebuildAfterConfigurationChange() }
+            self.rebuildPending = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
         }
 
         isRecording = true
@@ -163,6 +183,10 @@ final class Recorder {
         guard isRecording, let url = currentURL, let startedAt else {
             throw RecorderError.notRecording
         }
+        if let configChangeObserver { NotificationCenter.default.removeObserver(configChangeObserver) }
+        configChangeObserver = nil
+        rebuildPending?.cancel()
+        rebuildPending = nil
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         audioFile = nil
@@ -180,6 +204,77 @@ final class Recorder {
         self.startedAt = nil
         self.activeApp = nil
         return recording
+    }
+
+    // MARK: - Surviving device reconfiguration
+
+    /// Taps the input in whatever format the device speaks right now, delivering
+    /// downstream (file, meter, live transcriber) in `fileFormat` — converted
+    /// when the two differ, passed straight through when they don't.
+    private func installTap(tapFormat: AVAudioFormat) {
+        let converter: AVAudioConverter?
+        if let fileFormat, fileFormat != tapFormat {
+            converter = AVAudioConverter(from: tapFormat, to: fileFormat)
+        } else {
+            converter = nil
+        }
+        let outFormat = fileFormat
+        engine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: tapFormat) { [weak self] buffer, _ in
+            guard let self else { return }
+            let delivered: AVAudioPCMBuffer
+            if let converter, let outFormat {
+                let ratio = outFormat.sampleRate / buffer.format.sampleRate
+                let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 16
+                guard let out = AVAudioPCMBuffer(pcmFormat: outFormat, frameCapacity: capacity) else { return }
+                var fed = false
+                var err: NSError?
+                converter.convert(to: out, error: &err) { _, status in
+                    if fed { status.pointee = .noDataNow; return nil }
+                    fed = true
+                    status.pointee = .haveData
+                    return buffer
+                }
+                guard err == nil, out.frameLength > 0 else { return }
+                delivered = out
+            } else {
+                delivered = buffer
+            }
+            self.measure(delivered)
+            if let file = self.audioFile { try? file.write(from: delivered) }
+            self.onBuffer?(delivered)
+        }
+    }
+
+    /// Rebuilds the engine and tap after the input device changed shape under us.
+    /// The tap format is re-read from the device, and the converter bridges it
+    /// back to the format the file was opened with.
+    private func rebuildAfterConfigurationChange() {
+        guard isRecording else { return }
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
+
+        // Re-bind the chosen device: a reconfiguration can also reset the
+        // engine's input back to the system default.
+        if let unit = engine.inputNode.audioUnit {
+            var dev = device.deviceID
+            AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice,
+                                 kAudioUnitScope_Global, 0, &dev,
+                                 UInt32(MemoryLayout<AudioDeviceID>.size))
+        }
+
+        let newFormat = engine.inputNode.outputFormat(forBus: 0)
+        guard newFormat.sampleRate > 0, newFormat.channelCount > 0 else {
+            Log.write("recorder: ⚠️ device reconfigured to an unusable format — mic track paused until it recovers")
+            return
+        }
+        Log.write("recorder: input device reconfigured (now \(Int(newFormat.sampleRate))Hz \(newFormat.channelCount)ch) — rebuilding tap")
+        installTap(tapFormat: newFormat)
+        engine.prepare()
+        do {
+            try engine.start()
+        } catch {
+            Log.write("recorder: ⚠️ engine restart after reconfiguration failed: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Metering

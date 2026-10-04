@@ -77,10 +77,18 @@ final class CallDetector {
     /// The device-level "is running somewhere" signal can't end a generic
     /// auto-recording — our own capture keeps it true forever — so the stop
     /// side has to ask process-by-process, the way call detection does.
+    ///
+    /// System capture daemons are not conversations: replayd (screen recording)
+    /// has been observed holding an input stream open for hours, which would
+    /// pin every generic recording on just like our own capture did.
+    private static let ignoredCapturers = ["com.apple.replayd"]
+
     static func anyOtherProcessUsingInput() -> Bool {
         let me = ProcessInfo.processInfo.processIdentifier
         for proc in processObjects() where isRunningInput(proc) {
-            if processPID(proc) != me { return true }
+            if processPID(proc) == me { continue }
+            if let bid = bundleID(proc), ignoredCapturers.contains(bid) { continue }
+            return true
         }
         return false
     }

@@ -2200,6 +2200,9 @@ final class AppController: ObservableObject {
         Log.write("relaunch: resuming '\(marker.title)' with \(carriedFragments.count) fragment(s) carried")
         recordingIsCall = marker.isCall
         startRecording(continuing: true)
+        // A resumed non-call recording needs the same way out a fresh one gets,
+        // or it out-lives whatever woke the mic and runs until someone notices.
+        if !marker.isCall { startGenericStopWatch() }
     }
 
     // MARK: - Restarting under a live recording
