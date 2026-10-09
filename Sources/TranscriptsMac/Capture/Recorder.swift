@@ -267,6 +267,21 @@ final class Recorder {
             Log.write("recorder: ⚠️ device reconfigured to an unusable format — mic track paused until it recovers")
             return
         }
+        // installTap raises an ObjC exception — uncatchable from Swift, so it
+        // aborts the whole app — when the tap's rate differs from the hardware
+        // side of the input node. That is exactly the state a call app's echo
+        // canceller leaves behind: a webcam mic held at 32k by Teams while the
+        // engine still reports 48k. Crashed twice on 2026-10-09, and the
+        // relaunch resumed the call straight back into the same abort. Leave
+        // the mic track paused instead; the next configuration change retries,
+        // and the dead-mic watchdog can swap to a working input.
+        let hardwareFormat = engine.inputNode.inputFormat(forBus: 0)
+        guard abs(hardwareFormat.sampleRate - newFormat.sampleRate) <= 1 else {
+            Log.write("recorder: ⚠️ device reconfigured with mismatched rates (hardware \(Int(hardwareFormat.sampleRate))Hz, "
+                      + "engine \(Int(newFormat.sampleRate))Hz) — another app is probably holding '\(device.name)' in "
+                      + "echo-cancellation mode; mic track paused until it recovers")
+            return
+        }
         Log.write("recorder: input device reconfigured (now \(Int(newFormat.sampleRate))Hz \(newFormat.channelCount)ch) — rebuilding tap")
         installTap(tapFormat: newFormat)
         engine.prepare()
