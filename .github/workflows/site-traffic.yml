@@ -1,0 +1,33 @@
+name: Site traffic report
+# Runs only on the traffic-report branch. Pulls Cloudflare analytics for the
+# marketing site and commits the result encrypted to scripts/traffic-report-cert.pem,
+# since this repo is public.
+on:
+  push:
+    branches: [traffic-report]
+    paths: [scripts/site-traffic.py, .github/workflows/site-traffic.yml, scripts/traffic-report-cert.pem]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: site-traffic
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Query Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: python3 scripts/site-traffic.py /tmp/traffic
+      - name: Encrypt and commit
+        run: |
+          mkdir -p reports
+          for f in /tmp/traffic/*.json; do
+            openssl smime -encrypt -aes256 -binary -outform DER -in "$f" \
+              -out "reports/$(basename "$f").enc" scripts/traffic-report-cert.pem
+          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports
+          git commit -m "Encrypted site traffic report [skip ci]" || echo "nothing to commit"
+          git push
