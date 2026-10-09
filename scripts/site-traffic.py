@@ -16,7 +16,7 @@ HOSTS = ["transcripts.doughatcher.com", "transcripts.hatcher.ltd"]
 TOKEN = os.environ["CLOUDFLARE_API_TOKEN"]
 OUT = sys.argv[1] if len(sys.argv) > 1 else "traffic"
 TODAY = dt.date.today()
-SINCE = os.environ.get("SINCE", "2026-09-20")
+SINCE = os.environ.get("SINCE", "2026-09-20")  # launch window starts before the Sept 27 release
 
 
 def call(path, body=None):
