@@ -40,10 +40,8 @@ public struct FluidAudioDiarizer: Diarizer {
     /// FluidAudio's own CLI. Setting it does nothing at all, which is worse than
     /// not having it.
     public let clusteringThreshold: Float?
-    /// Loosen the gates for a room recording. The defaults are tuned for a call,
-    /// where every participant talks at length; round a table someone may say
-    /// two things all evening, and the stock one-second floor throws exactly
-    /// those away.
+    /// Loosen the clustering for a room recording, where a table of people
+    /// leans in and out over an evening and the call threshold merges them.
     public let roomMode: Bool
 
     public init(rememberVoices: Bool = true, matchThreshold: Float = 0.65,
@@ -56,17 +54,24 @@ public struct FluidAudioDiarizer: Diarizer {
 
     /// Diarizer settings for this run.
     ///
-    /// Two things move, and only for a room. The minimum speech duration drops,
-    /// because the one-second default is tuned for a call where everyone talks
-    /// at length and it discards the person who said two things all evening.
-    /// And the clustering threshold is exposed, because it is the only setting
-    /// that changes how many people come out the other end.
+    /// The minimum speech duration drops to half a second for every recording,
+    /// call or room. A "yeah, do it" is about 0.6s, and the stock one-second
+    /// floor discards it. That was only ever lowered for rooms, on the theory
+    /// that on a call everyone talks at length, and the theory was wrong: on a
+    /// 40-minute Teams call (2026-10-14) 86 of 466 system-audio lines, nearly
+    /// all backchannel ("Yeah.", "Okay, what do we got?"), had no diarized span
+    /// under them and printed as "Others" between "Speaker 1" and "Speaker 2".
+    /// At 0.5s that fell to 30, the rescued lines split between both voices
+    /// rather than piling onto the loudest, and no new clusters appeared. 0.3s
+    /// rescued more but minted empty phantom voices. The live diarizer already
+    /// used 0.5s, so the two passes now agree.
+    ///
+    /// The clustering threshold moves only for a room, and is exposed, because
+    /// it is the only setting that changes how many people come out the other end.
     var diarizerConfig: DiarizerConfig {
         var config = DiarizerConfig.default
+        config.minSpeechDuration = Self.minSpeechDuration
         if roomMode {
-            // A "yeah, do it" is about 0.6s. One second discards it, and with it
-            // the only evidence that person was ever in the room.
-            config.minSpeechDuration = 0.5
             config.clusteringThreshold = Self.roomClusteringThreshold
         }
         if let clusteringThreshold {
@@ -97,6 +102,9 @@ public struct FluidAudioDiarizer: Diarizer {
     /// still on the splitting side of the library's 0.7 default, just not
     /// recklessly so.
     public static let roomClusteringThreshold: Float = 0.75
+
+    /// Shortest stretch of speech the diarizer will attribute. See `diarizerConfig`.
+    public static let minSpeechDuration: Float = 0.5
 
     public func diarize(track: URL, enrollSelfFrom: URL?) async throws -> DiarizationOutcome {
         // Pre-staged models (scripts/fetch-diarizer-models.sh, for machines whose

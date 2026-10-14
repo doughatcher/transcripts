@@ -123,8 +123,8 @@ public final class LiveDiarizer: @unchecked Sendable {
             }
             let models = try await DiarizerModels.downloadIfNeeded()
             var config = DiarizerConfig.default
-            // A "yeah, do it" is about 0.6 s — the same floor the room batch uses.
-            config.minSpeechDuration = 0.5
+            // A "yeah, do it" is about 0.6 s — the same floor the batch pass uses.
+            config.minSpeechDuration = FluidAudioDiarizer.minSpeechDuration
             config.clusteringThreshold = threshold
             let manager = DiarizerManager(config: config)
             manager.initialize(models: models)
