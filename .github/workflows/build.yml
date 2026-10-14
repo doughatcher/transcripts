@@ -72,3 +72,31 @@ jobs:
             -scheme TranscriptsMac \
             -destination 'generic/platform=macOS' \
             CODE_SIGNING_ALLOWED=NO
+
+  # Tell the Blue Acorn composition (BlueAcornInc/scribe) that main moved, once
+  # main is known to build. Its watch-upstream workflow composes the new commit
+  # and opens a reviewed PR there; nothing merges on its own. Without this the
+  # only signal Scribe got was a weekly poll, so a fix made here could sit
+  # unshipped downstream for days.
+  #
+  # Needs DOWNSTREAM_DISPATCH_TOKEN: a fine-grained PAT scoped to
+  # BlueAcornInc/scribe with Contents: read and write. Without it this warns
+  # and passes, because a missing downstream must never turn upstream red.
+  notify-scribe:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch upstream-push to Scribe
+        env:
+          GH_TOKEN: ${{ secrets.DOWNSTREAM_DISPATCH_TOKEN }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::No DOWNSTREAM_DISPATCH_TOKEN — Scribe was not told about $SHA."
+            exit 0
+          fi
+          gh api repos/BlueAcornInc/scribe/dispatches \
+            -f event_type=upstream-push \
+            -f "client_payload[sha]=$SHA" \
+            -f "client_payload[ref]=main"

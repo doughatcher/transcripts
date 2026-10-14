@@ -196,6 +196,26 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: gh workflow run testflight.yml -f version="${VERSION%%-*}"
 
+      # Every published release becomes a Scribe release: BlueAcornInc/scribe's
+      # upstream-release workflow composes this exact commit, tags the same
+      # version and publishes it. Same DOWNSTREAM_DISPATCH_TOKEN as build.yml's
+      # notify-scribe job; without it this warns and the release still stands.
+      - name: Dispatch upstream-release to Scribe
+        if: steps.mode.outputs.publish == '1'
+        env:
+          GH_TOKEN: ${{ secrets.DOWNSTREAM_DISPATCH_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::No DOWNSTREAM_DISPATCH_TOKEN — Scribe will not mirror $VERSION."
+            exit 0
+          fi
+          sha=$(git rev-list -n 1 "v$VERSION")
+          gh api repos/BlueAcornInc/scribe/dispatches \
+            -f event_type=upstream-release \
+            -f "client_payload[version]=$VERSION" \
+            -f "client_payload[sha]=$sha"
+
       # Survives a cancel or a timeout, which is exactly when it is wanted: the
       # streamed step log is lost if the job never ends on its own.
       - name: Keep the build log
