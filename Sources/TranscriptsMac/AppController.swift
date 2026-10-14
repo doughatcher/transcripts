@@ -1483,7 +1483,7 @@ final class AppController: ObservableObject {
                     r.errorText = nil
                 }
                 self.sessions.noteActivity(recordingID: recordID)
-                self.cleanupCrashSafeCaptures(recordID: recordID, result: result)
+                await self.cleanupCrashSafeCaptures(recordID: recordID, result: result)
                 self.harvestVoiceSuggestions(from: result, recordID: recordID)
             } catch let pipelineError as PipelineError
                 where { if case .stageTimedOut = pipelineError { return true }; return false }()
@@ -1538,21 +1538,47 @@ final class AppController: ObservableObject {
     /// calls, the mix). Point the record's backup at the m4a and delete the CAFs
     /// so 30-day retention holds hours of AAC, not gigabytes of PCM. If nothing
     /// finalized exists, the CAFs stay (they're the only recoverable audio).
-    private func cleanupCrashSafeCaptures(recordID: UUID?, result: PipelineContext) {
+    ///
+    /// A call keeps its two sides apart first, as `meeting-mic.m4a` and
+    /// `meeting-system.m4a` — the names reprocessing already looks for. The mix
+    /// alone cannot say who spoke: deleting the separate tracks meant that
+    /// naming a voice and reprocessing (2026-10-14) came back with no speakers
+    /// at all, not even "Me". A side whose AAC copy fails keeps its CAF.
+    private func cleanupCrashSafeCaptures(recordID: UUID?, result: PipelineContext) async {
         let fm = FileManager.default
         let finalized = [result.archivedAudioURL, result.recording.audioURL]
             .compactMap { $0 }
             .first { $0.pathExtension.lowercased() == "m4a" && fm.fileExists(atPath: $0.path) }
         guard let finalized else { return }
+        var keep: Set<URL> = []
+        let rec = result.recording
+        if let mic = rec.micAudioURL, let system = rec.systemAudioURL,
+           [mic, system].allSatisfy({ $0.pathExtension.lowercased() == "caf" && fm.fileExists(atPath: $0.path) }) {
+            let dir = mic.deletingLastPathComponent()
+            // The system offset is baked into its timeline, as stitching does,
+            // because reprocessing reads these with an offset of zero.
+            let sides: [(URL, String, TimeInterval)] = [
+                (mic, "meeting-mic.m4a", 0),
+                (system, "meeting-system.m4a", rec.systemAudioStartOffset ?? 0),
+            ]
+            for (caf, name, at) in sides {
+                let kept = await AudioMixer.assemble([AudioMixer.Placement(url: caf, at: at)],
+                                                     into: dir.appendingPathComponent(name),
+                                                     log: { Log.write($0) })
+                if kept == nil { keep.insert(caf) }
+            }
+        }
         var removed = 0
-        for caf in [result.recording.audioURL, result.recording.micAudioURL, result.recording.systemAudioURL] {
-            guard let caf, caf.pathExtension.lowercased() == "caf", fm.fileExists(atPath: caf.path) else { continue }
+        for caf in [rec.audioURL, rec.micAudioURL, rec.systemAudioURL] {
+            guard let caf, !keep.contains(caf), caf.pathExtension.lowercased() == "caf",
+                  fm.fileExists(atPath: caf.path) else { continue }
             try? fm.removeItem(at: caf)
             removed += 1
         }
         if removed > 0 {
             updateRecord(recordID) { $0.audioPath = finalized.path }
-            Log.write("backups: replaced \(removed) crash-safe CAF(s) with \(finalized.lastPathComponent)")
+            Log.write("backups: replaced \(removed) crash-safe CAF(s) with \(finalized.lastPathComponent)"
+                      + (keep.isEmpty && rec.systemAudioURL != nil ? ", keeping both call sides as AAC" : ""))
         }
     }
 
