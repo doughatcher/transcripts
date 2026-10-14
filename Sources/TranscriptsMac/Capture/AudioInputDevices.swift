@@ -82,7 +82,8 @@ enum AudioInputDevices {
         let devices = selectable()
         let defID = defaultInput()
         let candidates = devices.map {
-            AudioInputCandidate(uid: $0.uid, name: $0.name, isSystemDefault: $0.deviceID == defID)
+            AudioInputCandidate(uid: $0.uid, name: $0.name, isSystemDefault: $0.deviceID == defID,
+                                isVirtual: transportType($0.deviceID) == kAudioDeviceTransportTypeVirtual)
         }
         guard let chosen = InputSelection.resolve(devices: candidates,
                                                   favorites: favorites,

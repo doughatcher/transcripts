@@ -63,6 +63,25 @@ import AVFoundation
         #expect(chosen?.uid == brio.uid)
     }
 
+    @Test func virtualLoopbackIsNeverTakenForTheCallsMic() {
+        // Teams keeps its loopback driver open as an input; on a FaceTime call
+        // (2026-10-14) it outranked the favorites and recorded silence.
+        let teamsLoopback = AudioInputCandidate(uid: "MSLoopbackDriverDevice_UID",
+                                                name: "Microsoft Teams Audio", isVirtual: true)
+        let chosen = InputSelection.resolve(devices: [builtIn, teamsLoopback, brio],
+                                            favorites: [brio.uid],
+                                            callDeviceUIDs: [teamsLoopback.uid])
+        #expect(chosen?.uid == brio.uid)
+    }
+
+    @Test func virtualMicStillWorksAsAFavorite() {
+        let krisp = AudioInputCandidate(uid: "KrispMic", name: "Krisp Microphone", isVirtual: true)
+        let chosen = InputSelection.resolve(devices: [builtIn, krisp],
+                                            favorites: [krisp.uid],
+                                            callDeviceUIDs: [krisp.uid])
+        #expect(chosen?.uid == krisp.uid)
+    }
+
     @Test func unknownCallDeviceUIDsAreIgnored() {
         // The meeting app's device list can include its *output* device — a UID
         // that matches no input candidate must not derail selection.

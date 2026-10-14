@@ -9,11 +9,16 @@ public struct AudioInputCandidate: Equatable, Sendable {
     public let name: String
     /// True when this device is the current macOS default input.
     public let isSystemDefault: Bool
+    /// True for a software (virtual-transport) device — a call app's loopback
+    /// driver, a noise-suppression mic. Never a mic the call should be
+    /// presumed to be on; see `resolve`.
+    public let isVirtual: Bool
 
-    public init(uid: String, name: String, isSystemDefault: Bool = false) {
+    public init(uid: String, name: String, isSystemDefault: Bool = false, isVirtual: Bool = false) {
         self.uid = uid
         self.name = name
         self.isSystemDefault = isSystemDefault
+        self.isVirtual = isVirtual
     }
 }
 
@@ -33,9 +38,9 @@ public enum InputSelection {
     /// 1. the explicit **override**, when connected — set by clicking a mic in
     ///    Settings; beats everything,
     /// 2. else the **call's own device** — the input the meeting app is actively
-    ///    capturing from (`callDeviceUIDs`). During a call this is ground truth:
-    ///    if Teams is talking through the AirPods, favorites don't matter, that's
-    ///    where the conversation is,
+    ///    capturing from (`callDeviceUIDs`), if it is real hardware. During a
+    ///    call this is ground truth: if Teams is talking through the AirPods,
+    ///    favorites don't matter, that's where the conversation is,
     /// 3. else the highest-priority connected **favorite**, top to bottom, with
     ///    external favorites beating built-in ones (the built-in is the fallback),
     /// 4. else the system default — unless that's the built-in mic and an external
@@ -66,8 +71,14 @@ public enum InputSelection {
 
         // The device the meeting app is capturing from is where the call actually
         // is — follow it even when it isn't a favorite (e.g. AirPods joined ad hoc).
+        // Real hardware only: Teams holds its own "Microsoft Teams Audio" loopback
+        // driver open as an input all the time, so it looked like the call's mic
+        // and won outright — a FaceTime call (2026-10-14) recorded four minutes
+        // of digital zero from it while the user's own voice went nowhere. A
+        // virtual mic someone really talks through can still be a favorite or the
+        // override; it just never wins by being open.
         for uid in callDeviceUIDs {
-            if let live = devices.first(where: { $0.uid == uid }) { return live }
+            if let live = devices.first(where: { $0.uid == uid && !$0.isVirtual }) { return live }
         }
 
         // Favorites present right now, in the user's priority order.
