@@ -38,7 +38,7 @@ let package = Package(
         // Constraint only (no product consumed): swift-transformers 1.0.x
         // declares Jinja `from: 2.0.0` but does not compile against 2.4.0's
         // reworked value types — hold Jinja at 2.3.x until it catches up.
-        .package(url: "https://github.com/huggingface/swift-jinja.git", "2.0.0"..."2.3.6"),
+        .package(url: "https://github.com/huggingface/swift-jinja.git", "2.0.0"..."2.5.1"),
     ],
     targets: [
         .target(name: "TranscriptsCore"),
