@@ -16,11 +16,6 @@ updates:
     open-pull-requests-limit: 3
     commit-message:
       prefix: "deps"
-    ignore:
-      # Capped at 2.3.x in Package.swift on purpose: swift-transformers 1.0.x
-      # declares `from: 2.0.0` but does not compile against 2.4.0's reworked
-      # value types. Lift the cap and this together.
-      - dependency-name: "swift-jinja"
 
   - package-ecosystem: github-actions
     directory: "/"

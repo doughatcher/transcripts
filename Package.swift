@@ -35,10 +35,11 @@ let package = Package(
         // In-process LLM inference (Apple MLX) — the summarization tier used
         // when Apple Intelligence is unavailable. No daemon, nothing to install.
         .package(url: "https://github.com/ml-explore/mlx-swift-examples.git", from: "2.29.1"),
-        // Constraint only (no product consumed): swift-transformers 1.0.x
-        // declares Jinja `from: 2.0.0` but does not compile against 2.4.0's
-        // reworked value types — hold Jinja at 2.3.x until it catches up.
-        .package(url: "https://github.com/huggingface/swift-jinja.git", "2.0.0"..."2.5.1"),
+        // Constraint only (no product consumed). Jinja was capped at 2.3.x
+        // while swift-transformers 1.0.x failed to compile against 2.4.0's
+        // reworked value types; 2.5.1 builds clean (both CI builds, Mac app
+        // included), so the cap became a floor. Package.resolved pins the rest.
+        .package(url: "https://github.com/huggingface/swift-jinja.git", from: "2.5.1"),
     ],
     targets: [
         .target(name: "TranscriptsCore"),
