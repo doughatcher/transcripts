@@ -220,7 +220,7 @@ jobs:
       # streamed step log is lost if the job never ends on its own.
       - name: Keep the build log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: xcodebuild-log-${{ inputs.version }}
           path: .build/xcodebuild.log
@@ -228,7 +228,7 @@ jobs:
 
       - name: Keep the zip and the disk image
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Transcripts-${{ inputs.version }}
           path: |
