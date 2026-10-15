@@ -34,7 +34,7 @@ jobs:
     name: Test
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Xcode
         run: xcodebuild -version
@@ -47,7 +47,7 @@ jobs:
     needs: test
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # A beta Xcode builds against a beta SDK, and App Store Connect refuses
       # those outright. Better to fail here, before signing, than to find out
