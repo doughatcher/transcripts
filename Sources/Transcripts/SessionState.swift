@@ -63,10 +63,7 @@ final class SessionState: ObservableObject {
         guard let root = destination.root else { return [] }
         var found: [SessionProfile] = []
         try? destination.withAccess { _ in
-            let url = root.appendingPathComponent(".transcripts/routing.json")
-            guard let data = try? Data(contentsOf: url),
-                  let cfg = try? JSONDecoder().decode(RoutingConfig.self, from: data)
-            else { return }
+            guard let cfg = RoutingStore.read(in: root) else { return }
             found = cfg.sessions
         }
         return found

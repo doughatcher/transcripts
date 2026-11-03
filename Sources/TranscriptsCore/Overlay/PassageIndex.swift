@@ -127,8 +127,7 @@ public final class PassageIndex: @unchecked Sendable {
 
     /// Folder names never indexed. `Inbox`/`Processed` are the device-capture
     /// staging areas — the same recordings that are already filed properly
-    /// elsewhere, so indexing them would double-count. Dot-directories cover
-    /// `.transcripts/`, where the live transcript of *this* call lives: without
+    /// elsewhere, so indexing them would double-count. The live files under Recordings are excluded by filename below: without
     /// this the overlay could "answer" a question by quoting the question back
     /// out of the file it is itself writing.
     static let skippedDirectories: Set<String> = ["Inbox", "Processed"]

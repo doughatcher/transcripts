@@ -53,7 +53,7 @@ already exists:
 - **Trigger** — which turns wake it. `question`, `solicitation`, `topicChange`
   (`TopicSegmenter` is built), `manual`, `timer`.
 - **Context** — what it gets. A transcript window from `live.md`, passage
-  retrieval from `PassageIndex`, the case folder that `.transcripts/routing.json`
+  retrieval from `PassageIndex`, the case folder that `Recordings/routing.json`
   already resolves, or the output of a command.
 - **Engine** — who reasons. In-process (FoundationModels, MLX) or a spawned
   `claude -p` for the views that need the whole machine.

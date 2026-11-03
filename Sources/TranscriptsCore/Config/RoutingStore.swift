@@ -1,6 +1,6 @@
 import Foundation
 
-/// Loads/saves the routing config from `<knowledgeRoot>/.transcripts/routing.json`,
+/// Loads/saves the routing config from `<knowledgeRoot>/Recordings/routing.json`,
 /// seeding it on first use by discovering `*/transcripts/` folders in the vault.
 public final class RoutingStore {
     private let knowledgeRoot: URL
@@ -8,15 +8,27 @@ public final class RoutingStore {
 
     public init(knowledgeRoot: URL) {
         self.knowledgeRoot = knowledgeRoot
-        self.url = knowledgeRoot.appendingPathComponent(".transcripts/routing.json")
+        self.url = knowledgeRoot.appendingPathComponent("Recordings/routing.json")
     }
 
     public var fileURL: URL { url }
 
+    /// Preferred file first; the legacy file remains readable during upgrades.
+    public static func read(in root: URL) -> RoutingConfig? {
+        for path in ["Recordings/routing.json", ".transcripts/routing.json"] {
+            if let data = try? Data(contentsOf: root.appendingPathComponent(path)),
+               let config = try? JSONDecoder().decode(RoutingConfig.self, from: data) {
+                return config
+            }
+        }
+        return nil
+    }
+
+    /// Copies legacy rules forward without deleting the rollback copy.
     /// Returns the config, creating a seeded file if none exists.
     public func loadOrSeed() -> RoutingConfig {
-        if let data = try? Data(contentsOf: url),
-           let cfg = try? JSONDecoder().decode(RoutingConfig.self, from: data) {
+        if let cfg = Self.read(in: knowledgeRoot) {
+            if !FileManager.default.fileExists(atPath: url.path) { try? save(cfg) }
             return cfg
         }
         var seeded = RoutingConfig.default

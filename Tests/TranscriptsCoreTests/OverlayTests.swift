@@ -126,6 +126,8 @@ private struct FailingModel: ChatModel {
     @Test func skipsTheLiveTranscriptAndStagingFolders() throws {
         let root = try vault([
             "Transcripts Live.md": "Someone asked about the widget throughput numbers just now.\n",
+            "Recordings/Transcripts Live.md": "Someone asked about the widget throughput numbers just now.\n",
+            "Recordings/live.md": "Someone asked about the widget throughput numbers just now.\n",
             ".transcripts/live.md": "Someone asked about the widget throughput numbers just now.\n",
             "Inbox/dropped.md": "Someone asked about the widget throughput numbers just now.\n",
             "Processed/old.md": "Someone asked about the widget throughput numbers just now.\n",

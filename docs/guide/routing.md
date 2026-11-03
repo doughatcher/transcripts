@@ -11,7 +11,7 @@ there.
 ## Where it lives
 
 ```
-<your folder>/.transcripts/routing.json
+<your folder>/Recordings/routing.json
 ```
 
 Beside your recordings rather than inside the app, so it travels with the vault
@@ -209,3 +209,7 @@ still making.
 For every key and its default, see the [routing.json reference](/guide/reference/).
 
 Next: [iPhone, iPad and Mac](/guide/handoff/)
+
+### Existing libraries
+
+Routing rules now live at `<your folder>/Recordings/routing.json`. On first load, an existing `.transcripts/routing.json` is copied forward, preserving its fallback, destinations, script and session profiles. The original remains for older app versions; once the new file exists, edit that file. Do not remove the legacy folder until every app sharing the library has upgraded. This changes configuration storage, not the paths of existing recordings.

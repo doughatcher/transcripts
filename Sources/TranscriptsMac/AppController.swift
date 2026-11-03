@@ -71,7 +71,7 @@ final class AppController: ObservableObject {
     @Published var config: AppConfig {
         didSet { persistConfig(); refreshRecents() }
     }
-    /// Sorting rules, persisted to `<vault>/.transcripts/routing.json`.
+    /// Sorting rules, persisted to `<vault>/Recordings/routing.json`.
     @Published var routing: RoutingConfig {
         didSet { try? makeRoutingStore().save(routing) }
     }
@@ -2370,12 +2370,10 @@ final class AppController: ObservableObject {
         openDocument(atPath: path)
     }
 
-    /// The live (mid-call) transcript, preferring the *visible* vault note —
-    /// Obsidian live-refreshes it but refuses paths under dot-folders, so the
-    /// human view is `Transcripts Live.md`, not `.transcripts/live.md`.
+    /// The live transcript under Recordings, falling back to the durable local copy.
     var liveTranscriptURL: URL? {
         let vault = config.destinations.resolvedRoot
-            .appendingPathComponent("Transcripts Live.md")
+            .appendingPathComponent("Recordings/Transcripts Live.md")
         if FileManager.default.fileExists(atPath: vault.path) { return vault }
         let local = HistoryStore.dir.appendingPathComponent("live.md")
         return FileManager.default.fileExists(atPath: local.path) ? local : nil
@@ -2597,7 +2595,7 @@ final class AppController: ObservableObject {
         RoutingStore(knowledgeRoot: config.destinations.resolvedRoot)
     }
 
-    /// Ensures `.transcripts/routing.json` exists and reveals it in Finder for hand-editing.
+    /// Ensures `Recordings/routing.json` exists and reveals it in Finder for hand-editing.
     func revealRoutingConfig() {
         let store = makeRoutingStore()
         _ = store.loadOrSeed()

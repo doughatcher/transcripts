@@ -7,7 +7,7 @@ sessions have no UI for creating them yet.
 
 ```bash
 # Where it lives. Written on first run; safe to hand-edit while the app runs.
-<your folder>/.transcripts/routing.json
+<your folder>/Recordings/routing.json
 ```
 
 ## Top level

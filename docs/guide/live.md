@@ -11,9 +11,9 @@ anything at — including an AI assistant, mid-meeting.
 While recording, three files are kept in step, rewritten every time someone
 finishes a sentence:
 
-- `<your folder>/Transcripts Live.md` — the human view. Open it in Obsidian, a
+- `<your folder>/Recordings/Transcripts Live.md` — the human view. Open it in Obsidian, a
   text editor, anything.
-- `<your folder>/.transcripts/live.md` — the same content, where an agent
+- `<your folder>/Recordings/live.md` — the same content, where an agent
   session working in your vault will look.
 - `~/Library/Application Support/Transcripts/live.md` — a copy that survives
   even if your folder is unavailable.

@@ -444,7 +444,7 @@ struct SettingsView: View {
                 }
 
                 HStack {
-                    Text("Advanced rules: .transcripts/routing.json").font(.caption2).foregroundStyle(.secondary)
+                    Text("Advanced rules: Recordings/routing.json").font(.caption2).foregroundStyle(.secondary)
                     Spacer()
                     Button("Reveal…") { controller.revealRoutingConfig() }
                 }
