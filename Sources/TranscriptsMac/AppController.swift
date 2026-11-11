@@ -114,6 +114,10 @@ final class AppController: ObservableObject {
     /// Inputs that produced pure silence while recording this session — excluded
     /// from device selection so a dead-mic recovery can't re-pick them.
     private var deadInputUIDs: Set<String> = []
+    /// The input actually bound to the running recorder, including recovery routes.
+    @Published private(set) var recordingInput: AudioInputDevice?
+    /// Invalidated by a deliberate stop, so a pending switch cannot resume it.
+    private var captureRestartID: UUID?
     /// A specific device to bind on the next recovery restart, bypassing the
     /// resolver. Set when we've identified the exact input carrying the signal —
     /// e.g. the Voice-Processing aggregate that swallowed the built-in mic — which
@@ -393,7 +397,7 @@ final class AppController: ObservableObject {
     /// `isRecovery` it keeps the fragments already set aside, because the whole
     /// point is that this is the same meeting.
     func startRecording(isRecovery: Bool = false, continuing: Bool = false) {
-        guard recorder == nil else { return }
+        guard recorder == nil, captureRestartID == nil else { return }
         if !isRecovery && !continuing {
             deadInputUIDs.removeAll(); pendingRecoveryDevice = nil; carriedFragments.removeAll()
         }
@@ -454,6 +458,7 @@ final class AppController: ObservableObject {
             do {
                 try rec.start(into: dir)
                 self.recorder = rec
+                self.recordingInput = device
                 self.currentRecordID = recordID
                 // Joins the running session, and keeps its idle clock alive:
                 // a three-hour take must not age out mid-recording.
@@ -504,7 +509,13 @@ final class AppController: ObservableObject {
     /// Ends the capture and files it. `carryForward` is the mic-recovery case: the
     /// meeting is still going, so instead of running the pipeline we set this slice
     /// aside and let the fragment that finally ends the meeting absorb it.
-    func stopRecordingAndProcess(carryForward: Bool = false) {
+    func stopRecordingAndProcess(carryForward: Bool = false, onCarriedForward: (() -> Void)? = nil) {
+        if !carryForward, captureRestartID != nil {
+            captureRestartID = nil
+            relaunch.clearMarker()
+            resumedFragmentCount = 0
+        }
+        let restartID = captureRestartID
         guard let rec = recorder else { return }
         stopLevelTimer()
         micSilentWhileCallAudible = false
@@ -521,6 +532,7 @@ final class AppController: ObservableObject {
         do {
             var recording = try rec.stop()
             recorder = nil
+            recordingInput = nil
             state = .processing
             // Near-zero peak = the mic captured nothing (dead/muted). Mark it so the UI
             // shows it as empty instead of a hallucinated title from a blank transcript.
@@ -540,7 +552,10 @@ final class AppController: ObservableObject {
                         capturer?.firstSampleAt?.timeIntervalSince(recording.startedAt)
                 }
 
-                if carryForward {
+                // A deliberate stop while a switch was finalizing saves this
+                // slice normally instead of letting the queued switch resume it.
+                let keepRecording = carryForward && (restartID == nil || self.captureRestartID == restartID)
+                if keepRecording {
                     // Hold this slice — no pipeline, no note, no history row. The
                     // recording that ends the meeting stitches it back in.
                     self.carriedFragments.append(CarriedFragment(
@@ -552,6 +567,7 @@ final class AppController: ObservableObject {
                     self.refreshRecents()
                     let secs = Int(recording.endedAt?.timeIntervalSince(recording.startedAt) ?? 0)
                     Log.write("recovery: holding \(secs)s fragment to stitch into this meeting (\(self.carriedFragments.count) held)")
+                    onCarriedForward?()
                     return
                 }
 
@@ -593,6 +609,8 @@ final class AppController: ObservableObject {
         } catch {
             lastError = "Recording could not be saved: \(Self.shortError(error))"
             recorder = nil
+            recordingInput = nil
+            captureRestartID = nil
             updateRecord(recordID) { $0.status = .failed; $0.errorText = "stop failed: \(error)" }
             refreshRecents()
             Task { _ = await capturer?.stop() }
@@ -1242,14 +1260,17 @@ final class AppController: ObservableObject {
     /// pins the exact input to use (an aggregate the resolver would never pick);
     /// nil lets the resolver choose, minus everything already proved dead.
     private func restartCapture(on device: AudioInputDevice?) {
+        guard recorder != nil else { return }
+        let restartID = UUID()
+        let wasCall = recordingIsCall
+        captureRestartID = restartID
         pendingRecoveryDevice = device
-        stopRecordingAndProcess(carryForward: true)
-        Task { @MainActor in
-            // Give the engine a beat to release the old device before rebinding.
-            try? await Task.sleep(for: .milliseconds(400))
-            // stopRecordingAndProcess cleared the call flag; re-derive it so the
-            // recovered fragment is still treated (titled, grouped) as a call.
-            self.recordingIsCall = CallDetector.meetingAppUsingInput() != nil
+        stopRecordingAndProcess(carryForward: true) { [weak self] in
+            // Finalize both tracks and hold the old slice BEFORE starting another.
+            // A fixed delay alone can race a slow system-audio shutdown.
+            guard let self, self.captureRestartID == restartID else { return }
+            self.captureRestartID = nil
+            self.recordingIsCall = wasCall || CallDetector.meetingAppUsingInput() != nil
             self.startRecording(isRecovery: true)
         }
     }
@@ -3062,10 +3083,10 @@ final class AppController: ObservableObject {
         }
     }
 
-    /// The device that recording will actually use right now (override if connected,
-    /// else the top connected favorite, else the smart default).
+    /// The next recording's input, using the same call-aware policy as startRecording.
     var resolvedInput: AudioInputDevice? {
-        AudioInputDevices.resolve(favorites: config.favoriteInputUIDs, override: config.overrideInputUID)
+        AudioInputDevices.resolve(favorites: config.favoriteInputUIDs, override: config.overrideInputUID,
+                                  callDeviceUIDs: CallDetector.meetingAppDeviceUIDs())
     }
 
     func isFavoriteInput(_ uid: String) -> Bool { config.favoriteInputUIDs.contains(uid) }
@@ -3074,8 +3095,27 @@ final class AppController: ObservableObject {
     func setInputOverride(_ uid: String?) {
         config.overrideInputUID = uid
         Log.write("input override = \(uid ?? "(cleared — using favorites)")")
+        applyInputSelection()
     }
     var hasInputOverride: Bool { config.overrideInputUID != nil }
+
+    /// A choice in Settings applies to the current meeting as well as the next.
+    /// Resolve again at restart so rapid edits use the latest preference.
+    private func applyInputSelection() {
+        if captureRestartID != nil {
+            pendingRecoveryDevice = nil
+            deadInputUIDs.removeAll()
+            return
+        }
+        guard let recorder,
+              let selected = AudioInputDevices.resolve(
+                favorites: config.favoriteInputUIDs, override: config.overrideInputUID,
+                callDeviceUIDs: CallDetector.meetingAppDeviceUIDs()),
+              selected.uid != recorder.device.uid else { return }
+        deadInputUIDs.removeAll()
+        Log.write("input selection: switching '\(recorder.device.name)' → '\(selected.name)' within this recording")
+        restartCapture(on: nil)
+    }
 
     func toggleFavoriteInput(_ uid: String) {
         if let i = config.favoriteInputUIDs.firstIndex(of: uid) {
@@ -3087,10 +3127,12 @@ final class AppController: ObservableObject {
                 config.favoriteInputNamesByUID[uid] = device.name
             }
         }
+        applyInputSelection()
     }
 
     func moveFavoriteInputs(from offsets: IndexSet, to destination: Int) {
         config.favoriteInputUIDs.move(fromOffsets: offsets, toOffset: destination)
+        applyInputSelection()
     }
 
     func moveFavoriteInput(uid: String, by delta: Int) {
@@ -3099,6 +3141,7 @@ final class AppController: ObservableObject {
         guard destination >= 0, destination < config.favoriteInputUIDs.count else { return }
         let moved = config.favoriteInputUIDs.remove(at: index)
         config.favoriteInputUIDs.insert(moved, at: destination)
+        applyInputSelection()
     }
 
     /// One-time migration of the old docked/undocked single prefs into favorites.

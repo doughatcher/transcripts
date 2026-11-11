@@ -38,14 +38,15 @@ struct SettingsView: View {
     /// itself is not a view body; it settles only because the names stop
     /// changing.
     @State private var connectedInputs: [AudioInputDevice] = []
-    @State private var resolvedInput: AudioInputDevice?
+    @State private var nextInput: AudioInputDevice?
+    private var resolvedInput: AudioInputDevice? { controller.recordingInput ?? nextInput }
     @State private var launchAtLogin = false
     @State private var importSummary: String?
 
     /// Off the render path deliberately — this is the call that may write config.
     private func refreshDeviceState() {
         connectedInputs = controller.availableInputs()
-        resolvedInput = controller.resolvedInput
+        nextInput = controller.resolvedInput
         launchAtLogin = controller.launchAtLoginEnabled
     }
 
@@ -98,6 +99,8 @@ struct SettingsView: View {
         // list refreshes when the window comes forward rather than never.
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didBecomeActiveNotification)) { _ in refreshDeviceState() }
+        .onChange(of: controller.config.overrideInputUID) { _, _ in refreshDeviceState() }
+        .onChange(of: controller.config.favoriteInputUIDs) { _, _ in refreshDeviceState() }
     }
 
     // MARK: - Drawn tab bar (screenshots)
@@ -600,7 +603,7 @@ struct SettingsView: View {
 
         HStack(spacing: 6) {
             Image(systemName: "mic")
-            Text("Recording from:")
+            Text(controller.recordingInput == nil ? "Next recording:" : "Recording from:")
             if let r = resolvedInput {
                 Text(r.name).foregroundStyle(.secondary)
             } else {
@@ -644,7 +647,7 @@ struct SettingsView: View {
                 .font(.caption)
         }
 
-        Text("★ favorites are always listed here, even when unplugged. Transcripts records from the highest-priority favorite that's connected, top to bottom. Click a connected mic to force it for now; that beats favorites.")
+        Text("★ favorites are always listed here, even when unplugged. Transcripts records from the highest-priority favorite that's connected, top to bottom. Click a connected mic to force it; that beats favorites. Changes also apply to a recording in progress.")
             .font(.caption2).foregroundStyle(.secondary)
     }
 

@@ -34,6 +34,22 @@ import AVFoundation
         #expect(chosen?.uid == dock.uid)
     }
 
+    @Test func clearingForcedZoomRestoresBuiltInFavoriteDuringCall() {
+        // A real support case: the built-in mic is starred, but Zoom's loopback
+        // was forced. Clearing the override must not keep following that virtual
+        // input just because the call app still has it open.
+        let mic = AudioInputCandidate(uid: "built-in-air", name: "MacBook Air Microphone")
+        let zoom = AudioInputCandidate(uid: "zoom", name: "ZoomAudioDevice", isVirtual: true)
+        let teams = AudioInputCandidate(uid: "teams", name: "Microsoft Teams Audio", isVirtual: true)
+        let devices = [mic, teams, zoom]
+        let forced = InputSelection.resolve(devices: devices, favorites: [mic.uid],
+                                            override: zoom.uid, callDeviceUIDs: [zoom.uid, teams.uid])
+        #expect(forced?.uid == zoom.uid)
+        let cleared = InputSelection.resolve(devices: devices, favorites: [mic.uid],
+                                             override: nil, callDeviceUIDs: [zoom.uid, teams.uid])
+        #expect(cleared?.uid == mic.uid)
+    }
+
     @Test func unpluggedOverrideIsIgnored() {
         // The override device was unplugged — fall back to favorites rather than
         // recording nothing.
