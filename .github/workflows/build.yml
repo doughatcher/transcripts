@@ -26,7 +26,7 @@ concurrency:
 jobs:
   build:
     name: Build and test
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS, ARM64, transcripts-mini-validation]
     steps:
       - uses: actions/checkout@v7
 
@@ -37,7 +37,7 @@ jobs:
         run: swift test
 
       - name: Install xcodegen
-        run: brew install xcodegen
+        run: command -v xcodegen >/dev/null || brew install xcodegen
 
       - name: Generate project
         run: xcodegen generate
