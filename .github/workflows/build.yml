@@ -23,18 +23,25 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build and test
-    runs-on: [self-hosted, macOS, ARM64, transcripts-mini-validation]
+    # Keep fork PRs on the existing hosted environment; trusted builds use the Mini.
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'macos-26' || fromJSON('["self-hosted", "macOS", "ARM64", "transcripts-macos"]') }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Xcode
         run: xcodebuild -version
 
       - name: Unit tests
-        run: swift test
+        run: swift test --jobs 2
 
       - name: Install xcodegen
         run: command -v xcodegen >/dev/null || brew install xcodegen
@@ -48,7 +55,7 @@ jobs:
       - name: Build for the simulator
         run: |
           set -o pipefail
-          xcodebuild build \
+          xcodebuild build -jobs 2 \
             -project Transcripts.xcodeproj \
             -scheme Transcripts \
             -destination 'generic/platform=iOS Simulator' \
@@ -67,7 +74,7 @@ jobs:
       - name: Build the Mac app
         run: |
           set -o pipefail
-          xcodebuild build \
+          xcodebuild build -jobs 2 \
             -project Transcripts.xcodeproj \
             -scheme TranscriptsMac \
             -destination 'generic/platform=macOS' \
