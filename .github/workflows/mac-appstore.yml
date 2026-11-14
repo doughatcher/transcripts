@@ -28,7 +28,7 @@ concurrency:
 jobs:
   upload:
     name: Upload to App Store Connect
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS, ARM64, transcripts-macos, transcripts-mini-validation]
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
@@ -52,13 +52,18 @@ jobs:
           echo "marketing=${VERSION%%-*}" >> "$GITHUB_OUTPUT"
           echo "▶ ${VERSION%%-*}"
 
+      - name: Prepare isolated signing state
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: python3 scripts/ci-signing.py prepare
+
       - name: Install xcodegen
-        run: brew install xcodegen
+        run: command -v xcodegen >/dev/null || { echo "::error::Install xcodegen on the Mini first"; exit 1; }
 
       # Without it the app builds but ships no MLX default.metallib, and the
       # summarizer kills the process at first use. Checked after the archive.
       - name: Metal toolchain
-        run: sudo xcodebuild -downloadComponent MetalToolchain || xcodebuild -downloadComponent MetalToolchain
+        run: xcrun --find metal >/dev/null || xcodebuild -downloadComponent MetalToolchain
 
       - name: Generate project
         run: xcodegen generate
@@ -68,9 +73,9 @@ jobs:
           ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
         run: |
-          mkdir -p ~/.appstoreconnect/private_keys
-          printf '%s' "$ASC_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
-          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
+          mkdir -p "$API_PRIVATE_KEYS_DIR"
+          printf '%s' "$ASC_PRIVATE_KEY" > "$ASC_KEY_PATH"
+          chmod 600 "$ASC_KEY_PATH"
 
       # Highest build number App Store Connect holds for this app, any
       # platform, plus one — the same rule testflight.yml follows, for the same
@@ -81,7 +86,7 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
-          export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
+          export ASC_KEY_PATH
           python3 scripts/asc.py "builds?filter[app]=6802331047&limit=200" | python3 -c '
           import json, sys
           seen = [int(b["attributes"]["version"]) for b in json.load(sys.stdin)["data"]
@@ -176,7 +181,7 @@ jobs:
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
             -exportPath "$RUNNER_TEMP/export" \
             -allowProvisioningUpdates \
-            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8 \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
             -authenticationKeyID ${{ secrets.ASC_KEY_ID }} \
             -authenticationKeyIssuerID ${{ secrets.ASC_ISSUER_ID }}
 
@@ -209,7 +214,7 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
-          export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
+          export ASC_KEY_PATH
           python3 scripts/testflight-sync.py --platform MAC_OS --build "${{ steps.build.outputs.number }}" --wait 1200
 
       - name: Keep the package
@@ -219,3 +224,7 @@ jobs:
           name: Transcripts-mac-${{ steps.version.outputs.marketing }}-${{ steps.build.outputs.number }}
           path: ${{ runner.temp }}/export/Transcripts.pkg
           if-no-files-found: warn
+
+      - name: Remove temporary signing material and restore keychains
+        if: always()
+        run: python3 scripts/ci-signing.py cleanup

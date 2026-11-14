@@ -4,7 +4,7 @@
 # workflow, and that one signs, archives and uploads — far too much machinery to
 # ask "does this compile?", and impossible to run from a machine that is not a
 # Mac. This is the cheap half: xcodegen, a simulator build with signing off, and
-# the Core suite. It needs no secrets, so it also runs on forks.
+# the Core suite. Trusted code runs on the personal Mac mini.
 #
 # main is deliberately included. A release dispatch builds whatever main holds
 # at that moment, and finding out then that it does not compile is finding out
@@ -29,8 +29,9 @@ permissions:
 jobs:
   build:
     name: Build and test
-    # Keep fork PRs on the existing hosted environment; trusted builds use the Mini.
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'macos-26' || fromJSON('["self-hosted", "macOS", "ARM64", "transcripts-macos"]') }}
+    # The personal Mini only executes trusted repository code; no hosted fallback.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS, ARM64, transcripts-macos, transcripts-mini-validation]
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
@@ -40,11 +41,14 @@ jobs:
       - name: Xcode
         run: xcodebuild -version
 
+      - name: CI signing cleanup tests
+        run: python3 scripts/test-ci-signing.py
+
       - name: Unit tests
         run: swift test --jobs 2
 
       - name: Install xcodegen
-        run: command -v xcodegen >/dev/null || brew install xcodegen
+        run: command -v xcodegen >/dev/null || { echo "::error::Install xcodegen on the Mini first"; exit 1; }
 
       - name: Generate project
         run: xcodegen generate
