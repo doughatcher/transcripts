@@ -32,7 +32,7 @@ concurrency:
 jobs:
   test:
     name: Test
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS, ARM64, transcripts-macos, transcripts-mini-validation]
     steps:
       - uses: actions/checkout@v7
 
@@ -45,7 +45,7 @@ jobs:
   testflight:
     name: Upload to TestFlight
     needs: test
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS, ARM64, transcripts-macos, transcripts-mini-validation]
     steps:
       - uses: actions/checkout@v7
 
@@ -74,15 +74,20 @@ jobs:
           echo "marketing=${VERSION%%-*}" >> "$GITHUB_OUTPUT"
           echo "▶ ${VERSION%%-*}"
 
+      - name: Prepare isolated signing state
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: python3 scripts/ci-signing.py prepare
+
       - name: Install xcodegen
-        run: brew install xcodegen
+        run: command -v xcodegen >/dev/null || { echo "::error::Install xcodegen on the Mini first"; exit 1; }
 
       - name: Generate project
         run: xcodegen generate
 
       # A dedicated keychain rather than the login one: it is unlocked with a
       # password that exists only for this run, and it disappears with the
-      # runner. set-key-partition-list is what stops codesign blocking on a UI
+      # job. set-key-partition-list is what stops codesign blocking on a UI
       # prompt that no one is there to answer.
       # Two certificates, not one. The distribution certificate signs the
       # export; the archive step, under automatic signing, wants an Apple
@@ -132,15 +137,15 @@ jobs:
             $(security list-keychains -d user | tr -d '"')
           security find-identity -v -p codesigning "$KEYCHAIN"
 
-      # xcodebuild and altool both look here by convention, so no path flags.
+      # Keep the API key in this job’s temporary directory, including for altool.
       - name: Install App Store Connect API key
         env:
           ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
         run: |
-          mkdir -p ~/.appstoreconnect/private_keys
-          printf '%s' "$ASC_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
-          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
+          mkdir -p "$API_PRIVATE_KEYS_DIR"
+          printf '%s' "$ASC_PRIVATE_KEY" > "$ASC_KEY_PATH"
+          chmod 600 "$ASC_KEY_PATH"
 
       # Ask App Store Connect what it already has rather than assuming. The run
       # number was the obvious choice and the wrong one: uploads from a laptop,
@@ -156,7 +161,7 @@ jobs:
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import base64, json, os, subprocess, time, urllib.request
           kid, iss = os.environ["ASC_KEY_ID"], os.environ["ASC_ISSUER_ID"]
-          key = os.path.expanduser(f"~/.appstoreconnect/private_keys/AuthKey_{kid}.p8")
+          key = os.environ["ASC_KEY_PATH"]
           enc = lambda x: base64.urlsafe_b64encode(x).rstrip(b"=")
           now = int(time.time())
           signing = (enc(json.dumps({"alg":"ES256","kid":kid,"typ":"JWT"},separators=(",",":")).encode())
@@ -200,7 +205,7 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Transcripts.xcarchive" \
             -allowProvisioningUpdates \
-            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8 \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
             -authenticationKeyID ${{ secrets.ASC_KEY_ID }} \
             -authenticationKeyIssuerID ${{ secrets.ASC_ISSUER_ID }} \
             DEVELOPMENT_TEAM=${{ secrets.TEAM_ID }} \
@@ -234,7 +239,7 @@ jobs:
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
             -exportPath "$RUNNER_TEMP/export" \
             -allowProvisioningUpdates \
-            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8 \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
             -authenticationKeyID ${{ secrets.ASC_KEY_ID }} \
             -authenticationKeyIssuerID ${{ secrets.ASC_ISSUER_ID }}
 
@@ -320,7 +325,7 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
-          export ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
+          export ASC_KEY_PATH
           python3 scripts/testflight-sync.py --platform IOS --build "${{ steps.build.outputs.number }}" --wait 1200
 
       - name: Keep the IPA
@@ -330,3 +335,7 @@ jobs:
           name: Transcripts-${{ steps.version.outputs.marketing }}-${{ steps.build.outputs.number }}
           path: ${{ runner.temp }}/export/Transcripts.ipa
           if-no-files-found: warn
+
+      - name: Remove temporary signing material and restore keychains
+        if: always()
+        run: python3 scripts/ci-signing.py cleanup

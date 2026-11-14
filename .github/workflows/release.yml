@@ -1,5 +1,5 @@
 # Cut the Mac release from CI. Runs scripts/release.sh — the same script the
-# laptop runs — on a hosted macos-26 runner, which has carried the macOS 26 SDK
+# laptop runs — on the personal Mac mini runner, which has carried the macOS 26 SDK
 # since the TestFlight workflow moved there. Compilation was never the blocker;
 # the Developer ID certificate living in one laptop's keychain was.
 #
@@ -52,7 +52,7 @@ concurrency:
 
 jobs:
   release:
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS, ARM64, transcripts-macos, transcripts-mini-validation]
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
@@ -66,15 +66,27 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Check GitHub CLI
+        run: command -v gh >/dev/null || { echo "::error::Install GitHub CLI on the Mini first"; exit 1; }
+
+      - name: Prepare isolated signing state
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: python3 scripts/ci-signing.py prepare
+
       - name: Install xcodegen
-        run: brew install xcodegen
+        run: command -v xcodegen >/dev/null || { echo "::error::Install xcodegen on the Mini first"; exit 1; }
 
       # mlx-swift's Metal shaders need Xcode's separately-downloaded Metal
       # Toolchain; without it the app builds but ships no default.metallib and
       # the summarizer kills the process at first use. make-app.sh gates on the
       # shaders being present, so a missing toolchain fails here, loudly.
       - name: Metal toolchain
-        run: sudo xcodebuild -downloadComponent MetalToolchain || xcodebuild -downloadComponent MetalToolchain
+        run: xcrun --find metal >/dev/null || xcodebuild -downloadComponent MetalToolchain
 
       # Secrets cannot be tested in `if:` expressions, so the mode is resolved
       # once, here, and everything downstream reads it.
@@ -235,3 +247,7 @@ jobs:
             site/public/Transcripts-*.zip
             site/public/Transcripts-*.dmg
           if-no-files-found: warn
+
+      - name: Remove temporary signing material and restore keychains
+        if: always()
+        run: python3 scripts/ci-signing.py cleanup
