@@ -8,7 +8,8 @@ meeting notes or sent anywhere.
 The first event includes the capture ID, application/build/OS and process ID.
 Start, stop and 15-second snapshots record requested and actual AudioUnit input,
 Core Audio default input/output, device names/UIDs/rates, aggregate membership,
-mute state, meeting-app device UIDs and whether mic voice processing is enabled.
+mute state, meeting-app device UIDs, active audio processes (capture/render),
+and whether mic voice processing is enabled.
 The system start event identifies Core Audio tap versus ScreenCaptureKit and the
 capture scope. `input-selection` records the preferences and call inputs used to
 choose the microphone.

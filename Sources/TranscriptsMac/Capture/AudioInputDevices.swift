@@ -53,7 +53,7 @@ enum AudioInputDevices {
     static func all() -> [AudioInputDevice] {
         if let staged = staged() { return staged }
         return deviceIDs().compactMap { id in
-            guard inputChannelCount(id) > 0 else { return nil }
+            guard channelCount(id) > 0 else { return nil }
             guard let uid = stringProperty(id, kAudioDevicePropertyDeviceUID),
                   let name = stringProperty(id, kAudioObjectPropertyName) else { return nil }
             guard !uid.hasPrefix(systemAudioTapUIDPrefix) else { return nil }
@@ -249,7 +249,8 @@ enum AudioInputDevices {
                     "uid": uid, "name": name,
                     "nominalSampleRate": nominalSampleRate(id),
                     "transportType": transportType(id),
-                    "inputChannels": inputChannelCount(id),
+                    "inputChannels": channelCount(id),
+                    "outputChannels": channelCount(id, scope: kAudioObjectPropertyScopeOutput),
                     "aggregateSubDeviceUIDs": aggregateSubDeviceUIDs(id),
                 ]
                 let candidate = AudioInputDevice(uid: uid, name: name, deviceID: id)
@@ -276,10 +277,11 @@ enum AudioInputDevices {
         return ids
     }
 
-    private static func inputChannelCount(_ device: AudioDeviceID) -> Int {
+    private static func channelCount(_ device: AudioDeviceID,
+                                     scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeInput) -> Int {
         var addr = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyStreamConfiguration,
-            mScope: kAudioObjectPropertyScopeInput,
+            mScope: scope,
             mElement: kAudioObjectPropertyElementMain)
         var size: UInt32 = 0
         guard AudioObjectGetPropertyDataSize(device, &addr, 0, nil, &size) == noErr, size > 0 else { return 0 }

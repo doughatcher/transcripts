@@ -70,6 +70,7 @@ final class CaptureDiagnostics: @unchecked Sendable {
                                                       requestedInputID: requestedInputID)
         fields["meetingDeviceUIDs"] = CallDetector.meetingAppDeviceUIDs()
         fields["meetingApp"] = CallDetector.meetingAppUsingInput() ?? "none"
+        fields["activeAudioProcesses"] = CallDetector.diagnosticProcesses()
         event(name, fields)
     }
 }
