@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import ScreenCaptureKit
+import TranscriptsCore
 import TranscriptsEngine
 
 /// Captures **system audio** — everything playing out of the Mac's output, which
