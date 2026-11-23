@@ -53,7 +53,7 @@ enum AudioInputDevices {
     static func all() -> [AudioInputDevice] {
         if let staged = staged() { return staged }
         return deviceIDs().compactMap { id in
-            guard inputChannelCount(id) > 0 else { return nil }
+            guard channelCount(id) > 0 else { return nil }
             guard let uid = stringProperty(id, kAudioDevicePropertyDeviceUID),
                   let name = stringProperty(id, kAudioObjectPropertyName) else { return nil }
             guard !uid.hasPrefix(systemAudioTapUIDPrefix) else { return nil }
@@ -229,6 +229,41 @@ enum AudioInputDevices {
 
     // MARK: - CoreAudio plumbing
 
+    /// Include output routes as well as inputs: a Continuity mic listening to
+    /// Mac speakers and an AirPods call have very different echo paths.
+    static func diagnosticRoute(actualInputID: AudioDeviceID?, requestedInputID: AudioDeviceID) -> [String: Any] {
+        var outputAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        var output = AudioDeviceID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        let outputStatus = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),
+                                                     &outputAddress, 0, nil, &size, &output)
+        var fields: [String: Any] = [
+            "requestedInputID": requestedInputID,
+            "devices": deviceIDs().map { id -> [String: Any] in
+                let uid = stringProperty(id, kAudioDevicePropertyDeviceUID) ?? "unknown"
+                let name = stringProperty(id, kAudioObjectPropertyName) ?? "unknown"
+                var device: [String: Any] = [
+                    "id": id,
+                    "uid": uid, "name": name,
+                    "nominalSampleRate": nominalSampleRate(id),
+                    "transportType": transportType(id),
+                    "inputChannels": channelCount(id),
+                    "outputChannels": channelCount(id, scope: kAudioObjectPropertyScopeOutput),
+                    "aggregateSubDeviceUIDs": aggregateSubDeviceUIDs(id),
+                ]
+                let candidate = AudioInputDevice(uid: uid, name: name, deviceID: id)
+                if let muted = isInputMuted(candidate) { device["inputMuted"] = muted }
+                return device
+            },
+        ]
+        fields["actualInputID"] = actualInputID
+        fields["defaultInputID"] = defaultInput()
+        if outputStatus == noErr { fields["defaultOutputID"] = output }
+        return fields
+    }
+
     private static func deviceIDs() -> [AudioDeviceID] {
         var addr = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
@@ -242,10 +277,11 @@ enum AudioInputDevices {
         return ids
     }
 
-    private static func inputChannelCount(_ device: AudioDeviceID) -> Int {
+    private static func channelCount(_ device: AudioDeviceID,
+                                     scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeInput) -> Int {
         var addr = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyStreamConfiguration,
-            mScope: kAudioObjectPropertyScopeInput,
+            mScope: scope,
             mElement: kAudioObjectPropertyElementMain)
         var size: UInt32 = 0
         guard AudioObjectGetPropertyDataSize(device, &addr, 0, nil, &size) == noErr, size > 0 else { return 0 }

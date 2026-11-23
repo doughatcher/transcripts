@@ -67,6 +67,7 @@ enum SelfCheck {
         var sysOK = false
         do {
             try recorder.start(into: scratch)
+            capturer.diagnostics = recorder.diagnostics
             started = await capturer.start(into: sysURL)
             try await Task.sleep(for: .seconds(2))
             if started { sysOK = await capturer.stop() != nil }
@@ -75,6 +76,18 @@ enum SelfCheck {
             print("✗ mic: \(error)")
             return 1
         }
+
+        guard let diagnosticsURL = recorder.diagnostics?.flush(),
+              let lines = try? String(contentsOf: diagnosticsURL, encoding: .utf8).split(separator: "\n"),
+              let events = try? lines.map({ line in
+                  try JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any]
+              }),
+              events.contains(where: { $0?["event"] as? String == "mic-stopped" }),
+              !started || events.contains(where: { $0?["event"] as? String == "system-stopped" }) else {
+            print("✗ capture diagnostics: missing or unreadable final counters")
+            return 1
+        }
+        print("✓ capture diagnostics: \(events.count) JSON events, routes and final counters saved")
 
         let attrs = try? FileManager.default.attributesOfItem(atPath: recording.audioURL.path)
         let size = (attrs?[.size] as? Int) ?? 0

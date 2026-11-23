@@ -89,6 +89,13 @@ struct MenuBarView: View {
             }
 
             HStack {
+                Button { SupportReporter.report() } label: {
+                    Label("Report a Problem…", systemImage: "ladybug")
+                }
+                Spacer()
+                Button("Save Diagnostics…") { SupportReporter.saveDiagnostics() }
+            }
+            HStack {
                 Button("Settings…") { controller.openSettings() }
                 Button("Recordings…") { controller.openRecordings(nil) }
                 Spacer()

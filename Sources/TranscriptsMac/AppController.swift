@@ -457,6 +457,14 @@ final class AppController: ObservableObject {
             let dir = HistoryStore.capturesDir.appendingPathComponent(recordID.uuidString, isDirectory: true)
             do {
                 try rec.start(into: dir)
+                rec.diagnostics?.event("input-selection", [
+                    "requestedUID": device.uid, "requestedName": device.name,
+                    "overrideUID": self.config.overrideInputUID ?? "none",
+                    "favoriteUIDs": self.config.favoriteInputUIDs,
+                    "callDeviceUIDs": callUIDs, "inMeeting": inMeeting,
+                    "isRecovery": isRecovery, "continuing": continuing,
+                    "systemAudioEnabled": self.config.captureSystemAudio,
+                ])
                 self.recorder = rec
                 self.recordingInput = device
                 self.currentRecordID = recordID
@@ -551,6 +559,20 @@ final class AppController: ObservableObject {
                     recording.systemAudioStartOffset =
                         capturer?.firstSampleAt?.timeIntervalSince(recording.startedAt)
                 }
+                rec.diagnostics?.event("capture-stopped", [
+                    "carryForward": carryForward,
+                    "micFile": recording.audioURL.lastPathComponent,
+                    "systemFile": sysURL?.lastPathComponent ?? "none",
+                    "systemCallbackStartOffsetSeconds": recording.systemAudioStartOffset ?? 0,
+                    "startedAt": recording.startedAt.timeIntervalSince1970,
+                    "endedAt": recording.endedAt?.timeIntervalSince1970 ?? 0,
+                    "carriedFragments": self.carriedFragments.map { fragment -> [String: Any] in
+                        ["micPath": fragment.micAudioURL.path,
+                         "systemPath": fragment.systemAudioURL?.path ?? "none",
+                         "startedAt": fragment.startedAt.timeIntervalSince1970,
+                         "systemStartOffsetSeconds": fragment.systemAudioStartOffset ?? 0]
+                    },
+                ])
 
                 // A deliberate stop while a switch was finalizing saves this
                 // slice normally instead of letting the queued switch resume it.
@@ -578,11 +600,20 @@ final class AppController: ObservableObject {
 
                 if let sysURL, let micURL = recording.micAudioURL {
                     let mixed = micURL.deletingLastPathComponent().appendingPathComponent("call-mixed.m4a")
+                    rec.diagnostics?.event("archive-mix", [
+                        "micPath": micURL.path, "systemPath": (recording.systemAudioURL ?? sysURL).path,
+                        "outputPath": mixed.path, "micPlacementSeconds": 0, "systemPlacementSeconds": 0,
+                        "transcriptionSystemOffsetSeconds": recording.systemAudioStartOffset ?? 0,
+                        "assembledFragments": hadFragments,
+                    ])
                     if let mixedURL = await AudioMixer.mix([micURL, recording.systemAudioURL ?? sysURL],
                                                            into: mixed, log: { Log.write($0) }) {
                         recording.audioURL = mixedURL
                         self.updateRecord(recordID) { $0.audioPath = mixedURL.path }
                         Log.write("call: mixed your mic + the other participants for transcription")
+                        rec.diagnostics?.event("archive-mix-completed", ["file": mixedURL.lastPathComponent])
+                    } else {
+                        rec.diagnostics?.event("archive-mix-failed")
                     }
                 }
                 // Both sides came back empty: the mic read digital zero and the
@@ -681,11 +712,15 @@ final class AppController: ObservableObject {
         guard config.captureSystemAudio, MeetingDetector.isMeetingAppRunning else { return }
         guard explainSystemAudioPermissionIfNeeded() else { return }
         let capturer = SystemAudioCapturer()
+        capturer.diagnostics = recorder?.diagnostics
         systemCapturer = capturer
         let sysURL = scratchDir.appendingPathComponent("system.caf")
         Task { @MainActor in
             let ok = await capturer.start(into: sysURL)
-            if !ok { self.systemCapturer = nil; return }
+            if !ok {
+                capturer.diagnostics?.event("system-unavailable")
+                self.systemCapturer = nil; return
+            }
             if #available(macOS 26, *) { self.attachLiveSystemTranscriber(to: capturer) }
         }
     }
@@ -1027,7 +1062,11 @@ final class AppController: ObservableObject {
                     self.micSilentWhileCallAudible = micQuiet >= Self.deadMicSeconds && farSideLive
                     // Window titles improve mid-call (join screen → the real
                     // meeting window) — re-sample every ~15s and upgrade.
-                    if self.tick % 15 == 0 { self.refreshMeetingContext() }
+                    if self.tick % 15 == 0 {
+                        self.refreshMeetingContext()
+                        rec.snapshotDiagnostics()
+                        self.systemCapturer?.snapshotDiagnostics()
+                    }
                     // Keeps the relaunch marker fresh, so a three-hour session
                     // stays resumable rather than ageing out of the window.
                     if self.tick % 30 == 0 { self.relaunch.heartbeat() }

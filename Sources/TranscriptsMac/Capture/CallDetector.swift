@@ -106,6 +106,25 @@ final class CallDetector {
 
     // MARK: - CoreAudio process objects
 
+    /// Active audio clients, including renderers outside the meeting app. A
+    /// monitor/loopback renderer is relevant when a global system tap contains
+    /// a second copy. Device UIDs can include both inputs and outputs.
+    static func diagnosticProcesses() -> [[String: Any]] {
+        processObjects().compactMap { proc in
+            let input = isRunningInput(proc)
+            var addr = AudioObjectPropertyAddress(
+                mSelector: kAudioProcessPropertyIsRunningOutput,
+                mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+            var output: UInt32 = 0
+            var size = UInt32(MemoryLayout<UInt32>.size)
+            let status = AudioObjectGetPropertyData(proc, &addr, 0, nil, &size, &output)
+            guard input || (status == noErr && output != 0) else { return nil }
+            return ["processObjectID": proc, "bundleID": bundleID(proc) ?? "unknown",
+                    "runningInput": input, "runningOutput": output != 0,
+                    "deviceUIDs": processDevices(proc).compactMap { deviceUID($0) }]
+        }
+    }
+
     private static func processObjects() -> [AudioObjectID] {
         var addr = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyProcessObjectList,
