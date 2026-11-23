@@ -34,6 +34,26 @@ final class SystemAudioCapturer: NSObject, SCStreamOutput, SCStreamDelegate, @un
     private var startedSession = false
     private let queue = DispatchQueue(label: "ltd.hatcher.transcripts.sysaudio")
     private let lock = NSLock()
+    var diagnostics: CaptureDiagnostics?
+    private var captureMetrics = AudioCaptureMetrics()
+    private var sourceSampleRate: Double = 0
+    private var sourceChannels: UInt32 = 0
+    private var sourceFormatFlags: UInt32 = 0
+    private var sourceBitsPerChannel: UInt32 = 0
+
+    func snapshotDiagnostics(_ event: String = "system-progress") {
+        lock.lock()
+        let metrics = captureMetrics
+        let extra: [String: Any] = ["sampleRate": sourceSampleRate, "channels": sourceChannels,
+            "formatFlags": sourceFormatFlags, "bitsPerChannel": sourceBitsPerChannel,
+            "clock": "source-presentation-seconds", "writerStatus": writer?.status.rawValue ?? -1,
+            "writerError": writer?.error?.localizedDescription ?? "none",
+            "latestPeak": levelValue,
+            "firstWrittenCallbackAt": firstSampleAt?.timeIntervalSince1970 ?? 0,
+            "lastAudibleAt": lastAudibleAt?.timeIntervalSince1970 ?? 0]
+        lock.unlock()
+        diagnostics?.metrics(event, metrics, extra: extra)
+    }
     private(set) var outputURL: URL?
     private(set) var wroteAnySamples = false
     /// Wall-clock time of the first written sample — aligns this track's timeline
@@ -67,6 +87,8 @@ final class SystemAudioCapturer: NSObject, SCStreamOutput, SCStreamDelegate, @un
     /// on success; false means we couldn't start (no permission / no display) —
     /// caller continues mic-only.
     func start(into url: URL) async -> Bool {
+        diagnostics?.event("system-requested", ["screenRecordingGranted": CGPreflightScreenCaptureAccess(),
+                                                "excludesCurrentProcessAudio": true])
         // The tap is preferred — but not when the Screen Recording grant already
         // exists. ScreenCaptureKit then starts silently, and moving a working
         // setup onto a new permission dialog would be a regression wearing a
@@ -103,6 +125,8 @@ final class SystemAudioCapturer: NSObject, SCStreamOutput, SCStreamDelegate, @un
             return false
         }
         lock.lock(); self.tapEngine = tap; lock.unlock()
+        diagnostics?.event("system-started", ["engine": "core-audio-process-tap", "file": url.lastPathComponent,
+                                              "scope": "global-except-current-process"])
         Log.write("sysaudio: capturing system audio (other participants) via Core Audio tap → \(url.lastPathComponent)")
         return true
     }
@@ -140,9 +164,12 @@ final class SystemAudioCapturer: NSObject, SCStreamOutput, SCStreamDelegate, @un
             self.firstSampleAt = nil
             lock.unlock()
 
+            diagnostics?.event("system-started", ["engine": "screen-capture-kit", "file": url.lastPathComponent,
+                                                  "scope": "display-audio-except-current-process"])
             Log.write("sysaudio: capturing system audio (other participants) → \(url.lastPathComponent)")
             return true
         } catch {
+            diagnostics?.event("system-start-failed", ["engine": "screen-capture-kit", "error": String(describing: error)])
             Log.write("sysaudio: ⚠️ could not start (\(error.localizedDescription)). Likely Screen Recording not granted — recording mic only. Grant it in System Settings ▸ Privacy & Security ▸ Screen Recording.")
             return false
         }
@@ -185,12 +212,15 @@ final class SystemAudioCapturer: NSObject, SCStreamOutput, SCStreamDelegate, @un
         let writer = self.writer
         let input = self.input
         let url = self.outputURL
-        let wrote = self.wroteAnySamples
-        let audible = self.lastAudibleAt
         lock.unlock()
 
         if #available(macOS 14.2, *), let tap = tapEngine as? SystemAudioTap { tap.stop() }
         if let stream { try? await stream.stopCapture() }
+        // Both engines deliver on this queue. Drain callbacks already in flight
+        // before marking the writer finished or reading the final counters.
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            queue.async { continuation.resume() }
+        }
         // markAsFinished() raises unless the writer is actually .writing, and
         // the writer only gets there when the first sample reaches ingest(). A
         // recording that captured no system audio at all — a mic-only note in a
@@ -204,7 +234,11 @@ final class SystemAudioCapturer: NSObject, SCStreamOutput, SCStreamDelegate, @un
             await writer.finishWriting()
         }
 
+        snapshotDiagnostics("system-stopped")
+
         lock.lock()
+        let wrote = self.wroteAnySamples
+        let audible = self.lastAudibleAt
         self.stream = nil; self.tapEngine = nil; self.writer = nil; self.input = nil
         lock.unlock()
 
@@ -225,6 +259,23 @@ final class SystemAudioCapturer: NSObject, SCStreamOutput, SCStreamDelegate, @un
     /// buffer, appends, and keeps the level/audibility bookkeeping.
     private func ingest(_ sampleBuffer: CMSampleBuffer) {
         guard CMSampleBufferDataIsReady(sampleBuffer) else { return }
+        let arrival = Date()
+        let frames = CMSampleBufferGetNumSamples(sampleBuffer)
+        let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
+        let format = CMSampleBufferGetFormatDescription(sampleBuffer)
+            .flatMap { CMAudioFormatDescriptionGetStreamBasicDescription($0)?.pointee }
+        var written = false
+        var writeFailed = false
+        defer {
+            lock.lock()
+            if let format {
+                sourceSampleRate = format.mSampleRate; sourceChannels = format.mChannelsPerFrame
+                sourceFormatFlags = format.mFormatFlags; sourceBitsPerChannel = format.mBitsPerChannel
+            }
+            captureMetrics.observe(frames: frames, sampleRate: format?.mSampleRate ?? 0,
+                                   captureSeconds: pts, arrivalAt: arrival, written: written, writeFailed: writeFailed)
+            lock.unlock()
+        }
         lock.lock()
         guard let writer, let input else { lock.unlock(); return }
         if !startedSession {
@@ -238,7 +289,10 @@ final class SystemAudioCapturer: NSObject, SCStreamOutput, SCStreamDelegate, @un
         lock.unlock()
 
         if ready {
-            input.append(sampleBuffer)
+            // A refused append is not captured audio. Retain the error/counters
+            // instead of claiming success and feeding a nonexistent file track.
+            guard input.append(sampleBuffer) else { writeFailed = true; return }
+            written = true
             let level = Self.signalLevel(sampleBuffer)
             lock.lock()
             if !wroteAnySamples { firstSampleAt = Date() }

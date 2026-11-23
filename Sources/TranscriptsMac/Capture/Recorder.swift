@@ -35,6 +35,24 @@ final class Recorder {
     private var startedAt: Date?
     private var activeApp: ActiveAppContext?
     private var windowTitles: [String] = []
+    private(set) var diagnostics: CaptureDiagnostics?
+    private var captureMetrics = AudioCaptureMetrics()
+
+    private var actualInputID: AudioDeviceID? {
+        guard let unit = engine.inputNode.audioUnit else { return nil }
+        var id = AudioDeviceID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        guard AudioUnitGetProperty(unit, kAudioOutputUnitProperty_CurrentDevice,
+                                   kAudioUnitScope_Global, 0, &id, &size) == noErr else { return nil }
+        return id == kAudioObjectUnknown ? nil : id
+    }
+
+    /// Called from the existing UI timer, never the audio thread.
+    func snapshotDiagnostics(_ event: String = "mic-progress") {
+        meter.lock(); let metrics = captureMetrics; let peakSeen = peak; meter.unlock()
+        diagnostics?.metrics(event, metrics, extra: ["peak": peakSeen, "clock": "host-seconds"])
+        diagnostics?.route("audio-route", actualInputID: actualInputID, requestedInputID: device.deviceID)
+    }
 
     /// The format the CAF was opened with. Every tap buffer is delivered in this
     /// format, through a converter when the device has moved on — so a mid-call
@@ -70,6 +88,8 @@ final class Recorder {
         guard !isRecording else { throw RecorderError.alreadyRecording }
 
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        diagnostics = CaptureDiagnostics(directory: directory)
+        captureMetrics = AudioCaptureMetrics()
         // Crash-safe container: LPCM-in-CAF is readable at any truncation point,
         // so a kill/crash/power-loss mid-recording still leaves recoverable audio.
         // (AAC .m4a is worthless without its final header — two live-call
@@ -85,12 +105,18 @@ final class Recorder {
             let status = AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice,
                                               kAudioUnitScope_Global, 0, &dev,
                                               UInt32(MemoryLayout<AudioDeviceID>.size))
+            diagnostics?.event("mic-bind", ["requestedDeviceID": dev, "status": status])
             if status != noErr {
                 Log.write("recorder: ⚠️ could not select device '\(device.name)' (status \(status)); using engine default")
             }
         }
 
         let format = input.outputFormat(forBus: 0)
+        diagnostics?.event("mic-format", ["sampleRate": format.sampleRate,
+                                           "channels": format.channelCount,
+                                           "voiceProcessingEnabled": input.isVoiceProcessingEnabled,
+                                           "hardwareSampleRate": AudioInputDevices.nominalSampleRate(device.deviceID)])
+        diagnostics?.route("audio-route-start", actualInputID: actualInputID, requestedInputID: device.deviceID)
         Log.write("recorder: device='\(device.name)' uid=\(device.uid) format=\(Int(format.sampleRate))Hz \(format.channelCount)ch mic auth=\(Recorder.micAuthDescription)")
         guard format.sampleRate > 0, format.channelCount > 0 else {
             throw RecorderError.engineStart("selected device reports no channels")
@@ -126,6 +152,7 @@ final class Recorder {
         do {
             try engine.start()
         } catch {
+            diagnostics?.event("mic-start-failed", ["error": String(describing: error)])
             input.removeTap(onBus: 0)
             audioFile = nil
             throw RecorderError.engineStart(error.localizedDescription)
@@ -150,6 +177,7 @@ final class Recorder {
         isRecording = true
         currentURL = url
         startedAt = Date()
+        diagnostics?.event("mic-started", ["recordingStartedAt": startedAt?.timeIntervalSince1970 ?? 0])
         activeApp = ActiveAppProvider.current()
         windowTitles = captureWindowTitles ? WindowTitleProvider.meetingWindowTitles() : []
         if !windowTitles.isEmpty { Log.write("recorder: meeting window(s): \(windowTitles.joined(separator: " | "))") }
@@ -189,6 +217,7 @@ final class Recorder {
         rebuildPending = nil
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+        snapshotDiagnostics("mic-stopped")
         audioFile = nil
         isRecording = false
 
@@ -212,6 +241,9 @@ final class Recorder {
     /// downstream (file, meter, live transcriber) in `fileFormat` — converted
     /// when the two differ, passed straight through when they don't.
     private func installTap(tapFormat: AVAudioFormat) {
+        diagnostics?.event("mic-tap-format", ["sampleRate": tapFormat.sampleRate,
+                                               "channels": tapFormat.channelCount,
+                                               "fileSampleRate": fileFormat?.sampleRate ?? 0])
         let converter: AVAudioConverter?
         if let fileFormat, fileFormat != tapFormat {
             converter = AVAudioConverter(from: tapFormat, to: fileFormat)
@@ -219,8 +251,18 @@ final class Recorder {
             converter = nil
         }
         let outFormat = fileFormat
-        engine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: tapFormat) { [weak self] buffer, _ in
+        engine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: tapFormat) { [weak self] buffer, time in
             guard let self else { return }
+            let arrival = Date()
+            var written = false
+            var writeFailed = false
+            defer {
+                self.meter.lock()
+                self.captureMetrics.observe(frames: Int(buffer.frameLength), sampleRate: buffer.format.sampleRate,
+                    captureSeconds: time.isHostTimeValid ? AVAudioTime.seconds(forHostTime: time.hostTime) : nil,
+                    arrivalAt: arrival, written: written, writeFailed: writeFailed)
+                self.meter.unlock()
+            }
             let delivered: AVAudioPCMBuffer
             if let converter, let outFormat {
                 let ratio = outFormat.sampleRate / buffer.format.sampleRate
@@ -240,7 +282,10 @@ final class Recorder {
                 delivered = buffer
             }
             self.measure(delivered)
-            if let file = self.audioFile { try? file.write(from: delivered) }
+            if let file = self.audioFile {
+                do { try file.write(from: delivered); written = true }
+                catch { writeFailed = true }
+            }
             self.onBuffer?(delivered)
         }
     }
@@ -250,6 +295,7 @@ final class Recorder {
     /// back to the format the file was opened with.
     private func rebuildAfterConfigurationChange() {
         guard isRecording else { return }
+        snapshotDiagnostics("mic-reconfiguration")
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
 
@@ -257,9 +303,10 @@ final class Recorder {
         // engine's input back to the system default.
         if let unit = engine.inputNode.audioUnit {
             var dev = device.deviceID
-            AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice,
+            let status = AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice,
                                  kAudioUnitScope_Global, 0, &dev,
                                  UInt32(MemoryLayout<AudioDeviceID>.size))
+            diagnostics?.event("mic-rebind", ["requestedDeviceID": dev, "status": status])
         }
 
         let newFormat = engine.inputNode.outputFormat(forBus: 0)

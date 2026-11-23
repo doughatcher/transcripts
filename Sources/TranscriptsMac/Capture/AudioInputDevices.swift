@@ -229,6 +229,40 @@ enum AudioInputDevices {
 
     // MARK: - CoreAudio plumbing
 
+    /// Include output routes as well as inputs: a Continuity mic listening to
+    /// Mac speakers and an AirPods call have very different echo paths.
+    static func diagnosticRoute(actualInputID: AudioDeviceID?, requestedInputID: AudioDeviceID) -> [String: Any] {
+        var outputAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        var output = AudioDeviceID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        let outputStatus = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),
+                                                     &outputAddress, 0, nil, &size, &output)
+        var fields: [String: Any] = [
+            "requestedInputID": requestedInputID,
+            "devices": deviceIDs().map { id -> [String: Any] in
+                let uid = stringProperty(id, kAudioDevicePropertyDeviceUID) ?? "unknown"
+                let name = stringProperty(id, kAudioObjectPropertyName) ?? "unknown"
+                var device: [String: Any] = [
+                    "id": id,
+                    "uid": uid, "name": name,
+                    "nominalSampleRate": nominalSampleRate(id),
+                    "transportType": transportType(id),
+                    "inputChannels": inputChannelCount(id),
+                    "aggregateSubDeviceUIDs": aggregateSubDeviceUIDs(id),
+                ]
+                let candidate = AudioInputDevice(uid: uid, name: name, deviceID: id)
+                if let muted = isInputMuted(candidate) { device["inputMuted"] = muted }
+                return device
+            },
+        ]
+        fields["actualInputID"] = actualInputID
+        fields["defaultInputID"] = defaultInput()
+        if outputStatus == noErr { fields["defaultOutputID"] = output }
+        return fields
+    }
+
     private static func deviceIDs() -> [AudioDeviceID] {
         var addr = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
